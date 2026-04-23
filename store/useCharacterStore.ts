@@ -14,12 +14,14 @@ export interface CharacterState {
   modelPath: string | null;
   emotion: CharacterEmotion;
   error: string | null;
+  modelConfig: { scale: number; x: number; y: number } | null;
 
   setLoading: (loading: boolean) => void;
   setReady: (ready: boolean) => void;
   setModelPath: (path: string | null) => void;
   setEmotion: (emotion: CharacterEmotion) => void;
   setError: (error: string | null) => void;
+  setModelConfig: (config: { scale: number; x: number; y: number } | null) => void;
   reset: () => void;
 }
 
@@ -30,6 +32,7 @@ const INITIAL_STATE: Omit<
   | "setModelPath"
   | "setEmotion"
   | "setError"
+  | "setModelConfig"
   | "reset"
 > = {
   isLoading: false,
@@ -37,6 +40,7 @@ const INITIAL_STATE: Omit<
   modelPath: null,
   emotion: "idle",
   error: null,
+  modelConfig: null,
 };
 
 export const useCharacterStore = create<CharacterState>((set) => ({
@@ -47,6 +51,7 @@ export const useCharacterStore = create<CharacterState>((set) => ({
   setModelPath: (path) => set({ modelPath: path }),
   setEmotion: (emotion) => set({ emotion }),
   setError: (error) => set({ error }),
+  setModelConfig: (config) => set({ modelConfig: config }),
 
   reset: () => set({ ...INITIAL_STATE }),
 }));

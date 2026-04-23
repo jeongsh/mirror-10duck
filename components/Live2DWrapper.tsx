@@ -45,6 +45,9 @@ export default function Live2DWrapper() {
   const setLoading = useCharacterStore((s) => s.setLoading);
   const setReady = useCharacterStore((s) => s.setReady);
   const setError = useCharacterStore((s) => s.setError);
+  const setModelConfig = useCharacterStore((s) => s.setModelConfig);
+
+  const dragData = useRef({ isDragging: false, lastX: 0, lastY: 0 });
 
   // --------------------------------------------------------------------
   // Effect 1 · Pixi Application 생성 (1회)
@@ -233,10 +236,31 @@ export default function Live2DWrapper() {
         const { width: SW, height: SH } = app.screen;
         const rawW = localModel.width || 1;
         const rawH = localModel.height || 1;
-        const fit = Math.min(SW / rawW, SH / rawH) * 0.95;
-        localModel.scale.set(fit);
-        localModel.x = (SW - localModel.width) / 2;
-        localModel.y = SH - localModel.height;
+        // 상반신 위주 스케일 기본값
+        const fit = Math.max(SW / rawW, SH / rawH) * 1.2;
+        
+        // zustand에 저장된 모델의 뷰 설정이 있다면 우선 반영 (C2C 마켓플레이스 예비 기능)
+        const storedConfig = useCharacterStore.getState().modelConfig;
+        if (storedConfig) {
+          localModel.scale.set(storedConfig.scale);
+          localModel.x = storedConfig.x;
+          localModel.y = storedConfig.y;
+        } else {
+          localModel.scale.set(fit);
+          localModel.x = (SW - localModel.width) / 2;
+          localModel.y = 20;
+          
+          // 기본 렌더링된 값을 store에 기록
+          setTimeout(() => {
+            if (modelRef.current) {
+              setModelConfig({
+                scale: modelRef.current.scale.x,
+                x: modelRef.current.x,
+                y: modelRef.current.y,
+              });
+            }
+          }, 0);
+        }
 
         modelRef.current = localModel;
         setReady(true);
@@ -263,7 +287,53 @@ export default function Live2DWrapper() {
     return () => {
       cancelled = true;
     };
-  }, [modelPath, appReady, setLoading, setReady, setError]);
+  }, [modelPath, appReady, setLoading, setReady, setError, setModelConfig]);
+
+  // 드래그 앤 줌 핸들러 (C2C 환경의 크리에이터 스튜디오 모델 포지셔닝 기능 시뮬레이터겸)
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!modelRef.current) return;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    dragData.current = {
+      isDragging: true,
+      lastX: e.clientX,
+      lastY: e.clientY,
+    };
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragData.current.isDragging || !modelRef.current) return;
+    const dx = e.clientX - dragData.current.lastX;
+    const dy = e.clientY - dragData.current.lastY;
+    
+    modelRef.current.x += dx;
+    modelRef.current.y += dy;
+    
+    dragData.current.lastX = e.clientX;
+    dragData.current.lastY = e.clientY;
+    
+    setModelConfig({
+      scale: modelRef.current.scale.x,
+      x: modelRef.current.x,
+      y: modelRef.current.y,
+    });
+  };
+
+  const handlePointerUp = () => { dragData.current.isDragging = false; };
+  const handlePointerCancel = () => { dragData.current.isDragging = false; };
+
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (!modelRef.current) return;
+    // prevent default 비활성화로 페이지 스크롤이 될 수 있지만 MVP 영역이라 그대로 둠
+    const scaleFactor = e.deltaY > 0 ? 0.95 : 1.05;
+    modelRef.current.scale.x *= scaleFactor;
+    modelRef.current.scale.y *= scaleFactor;
+    
+    setModelConfig({
+      scale: modelRef.current.scale.x,
+      x: modelRef.current.x,
+      y: modelRef.current.y,
+    });
+  };
 
   return (
     <aside
@@ -276,12 +346,19 @@ export default function Live2DWrapper() {
           {CANVAS_W} x {CANVAS_H}
         </span>
       </div>
-      <div className="relative border-2 border-dashed border-gray-500 bg-gray-200/60 p-2">
+      <div 
+        className="relative border-2 border-dashed border-gray-500 bg-gray-200/60 p-2 cursor-grab active:cursor-grabbing"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onWheel={handleWheel}
+      >
         <canvas
           ref={canvasRef}
           width={CANVAS_W}
           height={CANVAS_H}
-          className="block bg-gray-100"
+          className="block bg-gray-100 touch-none"
           style={{ width: CANVAS_W, height: CANVAS_H }}
         />
         <Live2DStatusBadge />
@@ -295,6 +372,7 @@ function Live2DStatusBadge() {
   const isReady = useCharacterStore((s) => s.isReady);
   const emotion = useCharacterStore((s) => s.emotion);
   const error = useCharacterStore((s) => s.error);
+  const cfg = useCharacterStore((s) => s.modelConfig);
 
   const label = error
     ? `ERROR: ${error}`
@@ -305,8 +383,13 @@ function Live2DStatusBadge() {
         : "IDLE (no model)";
 
   return (
-    <div className="absolute left-2 top-2 border border-dashed border-gray-500 bg-white/70 px-2 py-1 text-[10px] tracking-wider text-gray-700 uppercase">
-      {label}
+    <div className="absolute left-2 top-2 pointer-events-none border border-dashed border-gray-500 bg-white/70 px-2 py-1 text-[10px] tracking-wider text-gray-700 uppercase flex flex-col gap-1">
+      <div>{label}</div>
+      {isReady && cfg && (
+        <div className="text-blue-600 font-mono">
+          [Store] scale: {cfg.scale.toFixed(2)} / x: {Math.round(cfg.x)}, y: {Math.round(cfg.y)}
+        </div>
+      )}
     </div>
   );
 }
