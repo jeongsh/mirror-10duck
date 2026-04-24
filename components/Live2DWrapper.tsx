@@ -39,6 +39,7 @@ export default function Live2DWrapper() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const appRef = useRef<Application | null>(null);
   const modelRef = useRef<Live2DModel | null>(null);
+  const originalFocusRef = useRef<((x: number, y: number) => void) | null>(null);
   const [appReady, setAppReady] = useState(false);
 
   const modelPath = useCharacterStore((s) => s.modelPath);
@@ -191,8 +192,8 @@ export default function Live2DWrapper() {
         setError(null);
 
         localModel = await Live2DModel.from(modelPath, {
-          autoHitTest: false,
-          autoFocus: false,
+          autoHitTest: true,
+          autoFocus: true, // 항상 켜두되, 아래에서 focus 함수를 가로채서 제어합니다.
         });
         if (cancelled) {
           localModel?.destroy({ children: true, texture: true, baseTexture: true });
@@ -231,6 +232,23 @@ export default function Live2DWrapper() {
 
         app.stage.addChild(localModel);
 
+        // 클릭 상호작용 이벤트 (mao_pro 샘플 모델 기준 그룹화)
+        localModel.on("hit", (hitAreas: string[]) => {
+          if (hitAreas.includes("HitAreaHead")) { // mao_pro 는 HitAreaHead 를 사용
+            localModel?.motion("", 0); // mtn_02
+            useCharacterStore.getState().setMessage("헤헷!");
+            setTimeout(() => useCharacterStore.getState().setMessage(null), 3000);
+          } else if (hitAreas.includes("HitAreaBody")) { // mao_pro 는 HitAreaBody 를 사용
+            localModel?.motion("", 1); // mtn_03
+            useCharacterStore.getState().setMessage("아앗, 거긴 안돼요!");
+            setTimeout(() => useCharacterStore.getState().setMessage(null), 3000);
+          } else {
+            localModel?.motion("", 2); // mtn_04
+            useCharacterStore.getState().setMessage("응?");
+            setTimeout(() => useCharacterStore.getState().setMessage(null), 3000);
+          }
+        });
+
         // scale 은 app.screen 기준. Live2DModel 의 width/height 는
         // Container.getLocalBounds 경유라 addChild 후에야 유의미한 값이 된다.
         const { width: SW, height: SH } = app.screen;
@@ -263,6 +281,9 @@ export default function Live2DWrapper() {
         }
 
         modelRef.current = localModel;
+        // 원래의 focus 함수를 백업해둡니다 (한 번만)
+        originalFocusRef.current = localModel.focus.bind(localModel);
+        
         setReady(true);
 
         console.info("[Live2DWrapper] model ready", {
@@ -288,6 +309,107 @@ export default function Live2DWrapper() {
       cancelled = true;
     };
   }, [modelPath, appReady, setLoading, setReady, setError, setModelConfig]);
+
+  // --------------------------------------------------------------------
+  // Effect 3 · 전역 이벤트 (타이핑, 유휴 상태 등 기본 애니메이션)
+  // --------------------------------------------------------------------
+  useEffect(() => {
+    if (!appReady || !modelRef.current) return;
+    
+    let idleTimeout: NodeJS.Timeout;
+    
+    const resetIdleTimer = () => {
+      clearTimeout(idleTimeout);
+      idleTimeout = setTimeout(() => {
+        // 10초간 입력이 없으면 유휴 상태 모션
+        if (modelRef.current) {
+          modelRef.current.motion("Idle", 0);
+        }
+      }, 10000);
+    };
+
+    const handleKeyDown = () => {
+      resetIdleTimer();
+      // 아주 짧은 딜레이로 모션 연속 실행 방지 (간단하게 구현)
+      if (modelRef.current && Math.random() > 0.8) { 
+        // 확률적으로 타이핑 반응 (mao_pro 기준 exp_07, mtn_04)
+        modelRef.current.expression("exp_07");
+        modelRef.current.motion("", 2);
+      }
+    };
+
+    const handlePointerMoveGlobal = () => {
+      resetIdleTimer();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("pointermove", handlePointerMoveGlobal);
+    resetIdleTimer();
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("pointermove", handlePointerMoveGlobal);
+      clearTimeout(idleTimeout);
+    };
+  }, [appReady, modelPath]);
+
+  // --------------------------------------------------------------------
+  // Effect 4 · 감정(emotion) 상태 변경 시 표정(expression) 적용
+  // --------------------------------------------------------------------
+  const emotion = useCharacterStore((s) => s.emotion);
+  const isTracking = useCharacterStore((s) => s.isTracking);
+  
+  useEffect(() => {
+    if (!appReady || !modelRef.current) return;
+    
+    // mao_pro 모델의 exp_01 ~ exp_08 에 맞춰 임의 맵핑
+    const emotionMap: Record<string, string> = {
+      idle: "exp_01",
+      happy: "exp_02",
+      sad: "exp_03",
+      angry: "exp_04",
+      surprised: "exp_05",
+      shy: "exp_06",
+    };
+    
+    const targetExp = emotionMap[emotion];
+    if (targetExp) {
+      modelRef.current.expression(targetExp);
+    }
+  }, [emotion, appReady]);
+
+  // --------------------------------------------------------------------
+  // Effect 5 · 트래킹 상태 제어 (focus 함수 인터셉트)
+  // --------------------------------------------------------------------
+  useEffect(() => {
+    if (!appReady || !modelRef.current || !originalFocusRef.current) return;
+    
+    const model = modelRef.current;
+    const originalFocus = originalFocusRef.current;
+    
+    // focus 함수를 오버라이드하여 isTracking 상태에 따라 동작 결정
+    model.focus = (x: number, y: number) => {
+      const { isTracking } = useCharacterStore.getState();
+      if (isTracking) {
+        originalFocus(x, y);
+      } else {
+        // OFF일 때는 어떤 좌표가 들어와도 무시하고 정면 응시
+        originalFocus(0, 0);
+      }
+    };
+    
+    // 상태가 바뀔 때(특히 OFF로 바뀔 때) 즉시 정면을 바라보도록 강제 업데이트
+    if (!isTracking) {
+      originalFocus(0, 0);
+    }
+
+    return () => {
+      // 컴포넌트 언마운트나 모델 교체 시 복구 (불필요할 수 있으나 안전을 위해)
+      if (modelRef.current) {
+        modelRef.current.focus = originalFocus;
+      }
+    };
+  }, [appReady, modelPath, isTracking]);
 
   // 드래그 앤 줌 핸들러 (C2C 환경의 크리에이터 스튜디오 모델 포지셔닝 기능 시뮬레이터겸)
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -362,6 +484,7 @@ export default function Live2DWrapper() {
           style={{ width: CANVAS_W, height: CANVAS_H }}
         />
         <Live2DStatusBadge />
+        <SpeechBubble />
       </div>
     </aside>
   );
@@ -390,6 +513,18 @@ function Live2DStatusBadge() {
           [Store] scale: {cfg.scale.toFixed(2)} / x: {Math.round(cfg.x)}, y: {Math.round(cfg.y)}
         </div>
       )}
+    </div>
+  );
+}
+
+function SpeechBubble() {
+  const message = useCharacterStore((s) => s.message);
+  
+  if (!message) return null;
+  
+  return (
+    <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-white px-4 py-2 rounded-2xl shadow-lg border-2 border-pink-200 text-sm font-semibold text-gray-800 animate-bounce min-w-[120px] text-center pointer-events-none z-10 before:content-[''] before:absolute before:-bottom-2 before:left-1/2 before:-translate-x-1/2 before:w-4 before:h-4 before:bg-white before:rotate-45 before:border-b-2 before:border-r-2 before:border-pink-200">
+      {message}
     </div>
   );
 }
