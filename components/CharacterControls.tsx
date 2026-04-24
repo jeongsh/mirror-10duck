@@ -7,35 +7,20 @@ import { useCharacterStore } from "@/store/useCharacterStore";
 import { ALL_EMOTIONS, type CharacterEmotion } from "@/types/character";
 import CharacterUploader from "./character/CharacterUploader";
 import CharacterLibraryPanel from "./character/CharacterLibraryPanel";
-import MappingPanel from "./character/MappingPanel";
-import MorphPanel from "./character/MorphPanel";
-import OutfitPanel from "./character/OutfitPanel";
-import SoundPanel from "./character/SoundPanel";
 
-type Tab =
-  | "basic"
-  | "library"
-  | "upload"
-  | "mapping"
-  | "morph"
-  | "outfit"
-  | "sound";
+type Tab = "basic" | "library" | "upload";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "basic", label: "기본" },
   { id: "library", label: "라이브러리" },
   { id: "upload", label: "업로드" },
-  { id: "mapping", label: "매핑" },
-  { id: "morph", label: "모핑" },
-  { id: "outfit", label: "옷/파츠" },
-  { id: "sound", label: "사운드" },
 ];
 
 /**
  * 캐릭터 컨트롤 패널.
  *
  * - 마운트 시 내장 캐릭터들을 라이브러리에 등록하고 기본 캐릭터를 활성화한다.
- * - 탭 전환으로 기본 제어 / 라이브러리 / 업로드 / 매핑 / 모핑 / 옷 / 사운드 패널 표시.
+ * - 탭 전환으로 기본 제어 / 라이브러리 / 업로드 패널을 표시한다.
  */
 export default function CharacterControls() {
   const [tab, setTab] = useState<Tab>("basic");
@@ -65,7 +50,7 @@ export default function CharacterControls() {
   }, []);
 
   return (
-    <section className="border-2 border-dashed border-gray-500 bg-gray-200/60 p-4">
+    <section className="border-2 border-dashed border-red-500 bg-gray-200/60 p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <span className="text-[11px] tracking-[0.2em] text-gray-500 uppercase">
           [캐릭터 컨트롤 패널]
@@ -95,10 +80,6 @@ export default function CharacterControls() {
         {tab === "basic" && <BasicPanel />}
         {tab === "library" && <CharacterLibraryPanel />}
         {tab === "upload" && <CharacterUploader />}
-        {tab === "mapping" && <MappingPanel />}
-        {tab === "morph" && <MorphPanel />}
-        {tab === "outfit" && <OutfitPanel />}
-        {tab === "sound" && <SoundPanel />}
       </div>
 
       {profile && tab !== "basic" && (
