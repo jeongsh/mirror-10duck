@@ -149,6 +149,18 @@ async function readMagicBytes(buf: ArrayBuffer, len: number): Promise<string> {
   return String.fromCharCode(...view);
 }
 
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("FileReader 가 문자열을 반환하지 않았습니다."));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("FileReader 오류"));
+    reader.readAsDataURL(blob);
+  });
+}
+
 // ───────────────────────────────────────────────────────────────────────────
 
 /**
@@ -467,13 +479,31 @@ export async function installModelFromZip(
 
   if (hasError) return analysis;
 
-  // -- 6단계: blob URL 매핑 테이블 구축 (상대경로 → blob URL)
+  // -- 6단계: 리소스 URL 매핑 테이블 구축.
+  //
+  // 중요: Pixi v8 의 `Assets.load(url)` 은 URL 확장자/쿼리로 파일 포맷을 추정한다.
+  //       `blob:http://.../<uuid>` 는 확장자가 없어서 PNG 파서를 못 타고 null 을
+  //       돌려주며, 그 결과 `Live2DModel._onRenderCallback` 이 `textures[i]` 를
+  //       null 로 읽어 매 프레임 `Cannot read properties of null (reading 'source')`
+  //       를 뱉어낸다. 한 번 터지면 ticker 루프가 계속 터져서 다른 모델로 전환해도
+  //       복구되지 않는다.
+  //
+  // 해결: 텍스처(PNG)는 blob URL 대신 `data:image/png;base64,...` 데이터 URL 로
+  //       변환한다. 데이터 URL 은 MIME 타입이 URL 안에 명시되어 있어 Pixi 가
+  //       확장자 없이도 곧바로 이미지로 인식한다. moc3/json/audio 는 blob URL 그대로.
   const urlByRefPath = new Map<string, string>();
   const blobUrls: string[] = [];
   for (const [refPath, blob] of blobs) {
-    const u = URL.createObjectURL(blob);
-    urlByRefPath.set(refPath, u);
-    blobUrls.push(u);
+    const ext = extOf(refPath);
+    let url: string;
+    if (ext === ".png") {
+      url = await blobToDataUrl(blob);
+      // 데이터 URL 은 revoke 대상 아님 (GC 로 처리). blobUrls 에는 넣지 않는다.
+    } else {
+      url = URL.createObjectURL(blob);
+      blobUrls.push(url);
+    }
+    urlByRefPath.set(refPath, url);
   }
 
   // -- 7단계: model3.json 재작성 (상대경로 → blob URL)

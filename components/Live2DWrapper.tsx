@@ -292,7 +292,14 @@ export default function Live2DWrapper() {
 
   // --------------------------------------------------------------------
   // Effect 3 · 유휴 / 타이핑 핸들러
+  //
+  // `isReady` 를 의존성에 포함해야 하는 이유:
+  //   Effect 2 가 모델을 비동기로 로드한다. modelPath 만 dep 로 쓰면, 이 effect 가
+  //   실행되는 시점에는 아직 `modelRef.current` 가 null 이라 리스너가 모델과
+  //   연결되지 않는다. Effect 2 가 모델 로드 성공 시 `setReady(true)` 를 호출하는
+  //   것을 트리거로 삼아 재실행한다. (Effect 5/6/7 도 동일)
   // --------------------------------------------------------------------
+  const isReady = useCharacterStore((s) => s.isReady);
   useEffect(() => {
     if (!appReady || !modelRef.current) return;
 
@@ -323,7 +330,7 @@ export default function Live2DWrapper() {
       window.removeEventListener("pointermove", handlePointerMoveGlobal);
       clearTimeout(idleTimeout);
     };
-  }, [appReady, modelPath]);
+  }, [appReady, modelPath, isReady]);
 
   // --------------------------------------------------------------------
   // Effect 4 · 감정 상태 → 표정 + 사운드 + 대사
@@ -386,7 +393,7 @@ export default function Live2DWrapper() {
     } catch (e) {
       console.warn("[Live2DWrapper] part opacity warning:", e);
     }
-  }, [partOpacities, appReady]);
+  }, [partOpacities, appReady, isReady, modelPath]);
 
   // --------------------------------------------------------------------
   // Effect 6 · 파라미터 라이브 모핑
@@ -424,9 +431,9 @@ export default function Live2DWrapper() {
       app.ticker.remove(tick);
     };
     // morphValues 가 바뀔 때 재구독할 필요는 없음 (store 에서 직접 읽음).
-    // 하지만 의존성 명시로 lint 억제.
+    // isReady 는 새 모델 로드 성공 트리거.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appReady, modelPath]);
+  }, [appReady, modelPath, isReady]);
 
   // --------------------------------------------------------------------
   // Effect 7 · 트래킹 제어
@@ -457,7 +464,7 @@ export default function Live2DWrapper() {
     return () => {
       if (modelRef.current) modelRef.current.focus = originalFocus;
     };
-  }, [appReady, modelPath, isTracking]);
+  }, [appReady, modelPath, isTracking, isReady]);
 
   // --------------------------------------------------------------------
   // 공통 헬퍼
