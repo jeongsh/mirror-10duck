@@ -671,6 +671,15 @@ function rewriteModel3Json(
   const out: Model3JsonLike = {
     Version: typeof src.Version === "number" ? src.Version : 3,
     FileReferences: fileRefs,
+    // 중요:
+    //   @naari3/pixi-live2d-display 의 Cubism5ModelSettings 는
+    //   `if (json.HitAreas) this.hitAreas = json.HitAreas;` 처럼 truthy 체크로만
+    //   덮어쓴다. HitAreas 가 아예 없으면 내부 mixin 이 채운 비배열 값이 남아서
+    //   이후 `this.settings.hitAreas?.map(...)` 에서 `_a.map is not a function`
+    //   으로 죽을 수 있다.
+    //   따라서 업로드 모델에는 HitAreas / Groups 를 항상 "배열" 형태로 넣는다.
+    HitAreas: [],
+    Groups: [],
   };
 
   // HitAreas: 배열이고 각 항목이 { Id: string } 형태일 때만 포함.
@@ -686,7 +695,7 @@ function rewriteModel3Json(
         Id: v.Id,
         ...(typeof v.Name === "string" ? { Name: v.Name } : {}),
       }));
-    if (hit.length > 0) out.HitAreas = hit;
+    out.HitAreas = hit;
   }
 
   // Groups: 배열의 배열 형태(각 항목이 { Target, Name, Ids: string[] })일 때만 포함.
@@ -707,7 +716,7 @@ function rewriteModel3Json(
           ? (v.Ids as unknown[]).filter((id): id is string => typeof id === "string")
           : [],
       }));
-    if (groups.length > 0) out.Groups = groups;
+    out.Groups = groups;
   }
 
   // Layout: 객체일 때만 그대로 통과 (숫자 키:값 맵).

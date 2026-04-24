@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MAO_PRO_PROFILE } from "@/lib/live2d/defaultProfile";
+import { MAO_PRO_PROFILE, PICHU_PROFILE } from "@/lib/live2d/defaultProfile";
 import { useCharacterLibraryStore } from "@/store/useCharacterLibraryStore";
 import { useCharacterStore } from "@/store/useCharacterStore";
 import { ALL_EMOTIONS, type CharacterEmotion } from "@/types/character";
@@ -34,8 +34,7 @@ const TABS: { id: Tab; label: string }[] = [
 /**
  * 캐릭터 컨트롤 패널.
  *
- * - 마운트 시 내장 샘플(mao_pro) 을 라이브러리에 등록하고 활성화한다.
- *   (기존 "[Load mao_pro]" 버튼 역할을 자동화)
+ * - 마운트 시 내장 캐릭터들을 라이브러리에 등록하고 기본 캐릭터를 활성화한다.
  * - 탭 전환으로 기본 제어 / 라이브러리 / 업로드 / 매핑 / 모핑 / 옷 / 사운드 패널 표시.
  */
 export default function CharacterControls() {
@@ -49,13 +48,17 @@ export default function CharacterControls() {
   const profile = useCharacterStore((s) => s.profile);
   const setProfile = useCharacterStore((s) => s.setProfile);
 
-  // 최초 1회: 내장 샘플 등록 + 활성화
+  // 최초 1회: 내장 캐릭터 등록 + 기본 캐릭터 활성화
   useEffect(() => {
-    const alreadyRegistered = profiles.some((p) => p.id === MAO_PRO_PROFILE.id);
-    if (!alreadyRegistered) register(MAO_PRO_PROFILE);
+    const hasPichu = profiles.some((p) => p.id === PICHU_PROFILE.id);
+    const hasMao = profiles.some((p) => p.id === MAO_PRO_PROFILE.id);
+
+    if (!hasPichu) register(PICHU_PROFILE);
+    if (!hasMao) register(MAO_PRO_PROFILE);
+
     if (!activeId) {
-      setActive(MAO_PRO_PROFILE.id);
-      setProfile(MAO_PRO_PROFILE);
+      setActive(PICHU_PROFILE.id);
+      setProfile(PICHU_PROFILE);
     }
     // 의도적으로 mount 시 1회만
     // eslint-disable-next-line react-hooks/exhaustive-deps

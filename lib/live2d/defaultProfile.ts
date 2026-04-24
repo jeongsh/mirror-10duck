@@ -153,7 +153,59 @@ export const MAO_PRO_PROFILE: CharacterProfile = {
     },
   },
 
-  defaultView: { scale: 0.25, x: 0, y: 20 },
+  defaultView: { scale: 0.09, x: -96, y: -55 },
+
+  blobUrls: [],
+  isBuiltIn: true,
+  createdAt: 0,
+};
+
+/**
+ * Pichu 모델 기본 내장 프로필.
+ * 사용자가 처음 진입했을 때 기본 캐릭터로 로드된다.
+ */
+export const PICHU_PROFILE: CharacterProfile = {
+  id: "builtin-pichu",
+  name: "피츄",
+  description: "가볍게 사용할 수 있는 기본 내장 캐릭터.",
+  modelPath: "/live2d/Pichu/Pichu.model3.json",
+
+  expressionMap: {
+    idle: null,
+    happy: "Happy",
+    sad: "Sad",
+    angry: "Angry",
+    surprised: "Shock",
+    shy: null,
+    love: null,
+    wink: null,
+  },
+
+  motionMap: {},
+  hitAreaMap: [],
+  outfits: [],
+  morphSliders: [],
+  parameterPresets: [],
+
+  sounds: {
+    emotions: {},
+    actions: {},
+  },
+
+  dialogues: {
+    emotions: {
+      happy: ["좋은 하루 보내요.", "작업 파이팅!"],
+      sad: ["괜찮아요, 다시 하면 돼요."],
+      angry: ["잠깐 쉬고 다시 시작해요."],
+      surprised: ["오, 새로운 변화네요."],
+    },
+    actions: {
+      greet: ["안녕하세요!"],
+      typing: ["집중 중..."],
+    },
+  },
+
+  defaultView: { scale: 0.22, x: -63, y: 15 },
 
   blobUrls: [],
   isBuiltIn: true,

@@ -43,6 +43,8 @@ export default function Live2DWrapper() {
   const appRef = useRef<Application | null>(null);
   const modelRef = useRef<Live2DModel | null>(null);
   const originalFocusRef = useRef<((x: number, y: number) => void) | null>(null);
+  const neutralParametersRef = useRef<number[] | null>(null);
+  const emotionApplySeqRef = useRef(0);
   const [appReady, setAppReady] = useState(false);
 
   const modelPath = useCharacterStore((s) => s.modelPath);
@@ -52,6 +54,57 @@ export default function Live2DWrapper() {
   const setModelConfig = useCharacterStore((s) => s.setModelConfig);
 
   const dragData = useRef({ isDragging: false, lastX: 0, lastY: 0 });
+
+  const captureNeutralParameters = (model: Live2DModel) => {
+    try {
+      const core = (
+        model.internalModel as unknown as {
+          coreModel?: {
+            getParameterCount?: () => number;
+            getParameterValueByIndex?: (index: number) => number;
+          };
+        }
+      ).coreModel;
+      if (!core?.getParameterCount || !core.getParameterValueByIndex) {
+        neutralParametersRef.current = null;
+        return;
+      }
+
+      const count = core.getParameterCount();
+      const snapshot: number[] = [];
+      for (let i = 0; i < count; i++) {
+        snapshot.push(core.getParameterValueByIndex(i));
+      }
+      neutralParametersRef.current = snapshot;
+    } catch (e) {
+      neutralParametersRef.current = null;
+      console.warn("[Live2DWrapper] neutral parameter capture warning:", e);
+    }
+  };
+
+  const restoreNeutralParameters = (model: Live2DModel) => {
+    const snapshot = neutralParametersRef.current;
+    if (!snapshot) return;
+
+    try {
+      const core = (
+        model.internalModel as unknown as {
+          coreModel?: {
+            getParameterCount?: () => number;
+            setParameterValueByIndex?: (index: number, value: number, weight?: number) => void;
+          };
+        }
+      ).coreModel;
+      if (!core?.getParameterCount || !core.setParameterValueByIndex) return;
+
+      const count = Math.min(core.getParameterCount(), snapshot.length);
+      for (let i = 0; i < count; i++) {
+        core.setParameterValueByIndex(i, snapshot[i], 1);
+      }
+    } catch (e) {
+      console.warn("[Live2DWrapper] neutral parameter restore warning:", e);
+    }
+  };
 
   // --------------------------------------------------------------------
   // Effect 1 · Pixi Application 생성 (1회)
@@ -272,6 +325,7 @@ export default function Live2DWrapper() {
 
         modelRef.current = localModel;
         originalFocusRef.current = localModel.focus.bind(localModel);
+        captureNeutralParameters(localModel);
 
         setReady(true);
       } catch (err) {
@@ -346,39 +400,61 @@ export default function Live2DWrapper() {
     if (!appReady || !modelRef.current) return;
     const profile = useCharacterStore.getState().profile;
     if (!profile) return;
+    const model = modelRef.current;
+    let cancelled = false;
 
-    // @naari3/pixi-live2d-display 의 setExpression 은 기존 표정을 큐에 둔 채 1초
-    // 페이드아웃시키고 새 표정을 페이드인한다. Blend="Add" 표정이 많은 모델(예: Pichu)
-    // 에서는 그 크로스페이드 구간 동안 이전 표정의 Add 값이 남아있어 새 표정과 겹쳐
-    // "두세 개가 합쳐진 얼굴" 이 한참 보인다. 전환 직전에 큐를 비우고 새 표정을
-    // 단일 엔트리로 넣어 누적 블렌딩을 차단한다.
-    //
-    // 또 Pichu 처럼 `idle` / `shy` 등 매핑이 null 인 감정은 그대로 두면 이전 표정이
-    // 영구히 남아있으므로, null 일 때도 큐를 비워 중립 얼굴로 복귀시킨다.
-    const expManager = (
-      modelRef.current.internalModel as unknown as {
-        motionManager?: {
-          expressionManager?: {
-            stopAllExpressions?: () => void;
+    // 핵심 포인트:
+    // 1) Cubism 은 표현식 큐를 비워도 직전 프레임에 이미 반영된 파라미터 값은 자동으로
+    //    중립 상태로 되돌리지 않는다. 그래서 "합쳐진 얼굴" 이 계속 남을 수 있다.
+    // 2) expression() 은 내부적으로 비동기 로드/적용을 하므로, happy -> sad 를 빠르게
+    //    누르면 늦게 끝난 이전 요청이 최신 표정을 덮어쓰는 경쟁 상태가 생길 수 있다.
+    const applyEmotionExpression = async (
+      targetEmotion: typeof emotion,
+      seq: number
+    ): Promise<void> => {
+      if (cancelled || modelRef.current !== model) return;
+
+      const activeProfile = useCharacterStore.getState().profile;
+      if (activeProfile?.id !== profile.id) return;
+
+      const expManager = (
+        model.internalModel as unknown as {
+          motionManager?: {
+            expressionManager?: {
+              stopAllExpressions?: () => void;
+            };
           };
-        };
-      }
-    ).motionManager?.expressionManager;
+        }
+      ).motionManager?.expressionManager;
 
-    try {
-      expManager?.stopAllExpressions?.();
-    } catch (e) {
-      console.warn("[Live2DWrapper] expression clear warning:", e);
-    }
-
-    const targetExp = profile.expressionMap[emotion];
-    if (targetExp) {
       try {
-        modelRef.current.expression(targetExp);
+        expManager?.stopAllExpressions?.();
+      } catch (e) {
+        console.warn("[Live2DWrapper] expression clear warning:", e);
+      }
+
+      restoreNeutralParameters(model);
+
+      const targetExp = profile.expressionMap[targetEmotion];
+      if (!targetExp) return;
+
+      try {
+        await model.expression(targetExp);
       } catch (e) {
         console.warn("[Live2DWrapper] expression apply warning:", e);
+        return;
       }
-    }
+
+      if (cancelled || modelRef.current !== model) return;
+      if (seq !== emotionApplySeqRef.current) {
+        const latestEmotion = useCharacterStore.getState().emotion;
+        const latestSeq = ++emotionApplySeqRef.current;
+        void applyEmotionExpression(latestEmotion, latestSeq);
+      }
+    };
+
+    const seq = ++emotionApplySeqRef.current;
+    void applyEmotionExpression(emotion, seq);
 
     // 사운드
     const soundUrl = profile.sounds.emotions[emotion];
@@ -395,7 +471,10 @@ export default function Live2DWrapper() {
         }
       }, 3000);
     }
-  }, [emotion, appReady]);
+    return () => {
+      cancelled = true;
+    };
+  }, [emotion, appReady, isReady, modelPath]);
 
   // --------------------------------------------------------------------
   // Effect 5 · 파츠 opacity (옷/포즈 토글)
