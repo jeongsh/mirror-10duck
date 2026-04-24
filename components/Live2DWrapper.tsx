@@ -386,6 +386,21 @@ export default function Live2DWrapper() {
     
     const model = modelRef.current;
     const originalFocus = originalFocusRef.current;
+
+    // 정면 응시는 model.focus()로는 표현 불가.
+    // model.focus(x, y)는 내부적으로 atan2 로 각도만 계산해서 단위원 위 좌표로
+    // focusController.focus(cos, -sin) 를 호출하기 때문에, 어떤 입력을 줘도
+    // 결과가 단위원 위(±1 부근)로 강제되어 "정면(0, 0)"이 표현되지 않는다.
+    // 따라서 OFF 상태에서는 focusController 를 직접 (0, 0) 으로 세팅한다.
+    const lookForward = () => {
+      const fc = (
+        model.internalModel as unknown as {
+          focusController?: { focus: (x: number, y: number, instant?: boolean) => void };
+        }
+      ).focusController;
+      // instant=false 로 부드럽게 전이
+      fc?.focus(0, 0, false);
+    };
     
     // focus 함수를 오버라이드하여 isTracking 상태에 따라 동작 결정
     model.focus = (x: number, y: number) => {
@@ -394,13 +409,13 @@ export default function Live2DWrapper() {
         originalFocus(x, y);
       } else {
         // OFF일 때는 어떤 좌표가 들어와도 무시하고 정면 응시
-        originalFocus(0, 0);
+        lookForward();
       }
     };
     
     // 상태가 바뀔 때(특히 OFF로 바뀔 때) 즉시 정면을 바라보도록 강제 업데이트
     if (!isTracking) {
-      originalFocus(0, 0);
+      lookForward();
     }
 
     return () => {
