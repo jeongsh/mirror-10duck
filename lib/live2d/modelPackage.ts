@@ -628,6 +628,14 @@ function rewriteModel3Json(
     const resolved = joinPath(modelJsonDir, rel);
     return urlByRefPath.get(resolved) ?? rel;
   };
+  const resolveOptional = (rel: string): string | undefined => {
+    const resolved = joinPath(modelJsonDir, rel);
+    const mapped = urlByRefPath.get(resolved);
+    if (mapped) return mapped;
+    // 절대 URL/데이터 URL 은 그대로 유지
+    if (/^(?:blob:|data:|https?:\/\/|\/)/i.test(rel)) return rel;
+    return undefined;
+  };
 
   const fileRefs: Model3JsonLike["FileReferences"] = {
     Moc: resolve(src.FileReferences.Moc),
@@ -635,34 +643,49 @@ function rewriteModel3Json(
   };
 
   if (typeof src.FileReferences.Physics === "string" && src.FileReferences.Physics) {
-    fileRefs.Physics = resolve(src.FileReferences.Physics);
+    const physics = resolveOptional(src.FileReferences.Physics);
+    if (physics) fileRefs.Physics = physics;
   }
   if (typeof src.FileReferences.Pose === "string" && src.FileReferences.Pose) {
-    fileRefs.Pose = resolve(src.FileReferences.Pose);
+    const pose = resolveOptional(src.FileReferences.Pose);
+    if (pose) fileRefs.Pose = pose;
   }
   if (typeof src.FileReferences.DisplayInfo === "string" && src.FileReferences.DisplayInfo) {
-    fileRefs.DisplayInfo = resolve(src.FileReferences.DisplayInfo);
+    const displayInfo = resolveOptional(src.FileReferences.DisplayInfo);
+    if (displayInfo) fileRefs.DisplayInfo = displayInfo;
   }
   if (typeof src.FileReferences.UserData === "string" && src.FileReferences.UserData) {
-    fileRefs.UserData = resolve(src.FileReferences.UserData);
+    const userData = resolveOptional(src.FileReferences.UserData);
+    if (userData) fileRefs.UserData = userData;
   }
 
   const expressions = normalizeExpressions(src.FileReferences.Expressions);
   if (expressions.length > 0) {
-    fileRefs.Expressions = expressions.map((e) => ({
-      Name: e.Name,
-      File: resolve(e.File),
-    }));
+    const mapped = expressions
+      .map((e) => {
+        const file = resolveOptional(e.File);
+        return file ? { Name: e.Name, File: file } : null;
+      })
+      .filter((v): v is { Name: string; File: string } => v !== null);
+    if (mapped.length > 0) fileRefs.Expressions = mapped;
   }
 
   const motions = normalizeMotions(src.FileReferences.Motions);
   if (Object.keys(motions).length > 0) {
     const m: Record<string, { File: string; Sound?: string }[]> = {};
     for (const [g, arr] of Object.entries(motions)) {
-      const mapped = arr.map((entry) => ({
-        File: resolve(entry.File),
-        ...(typeof entry.Sound === "string" ? { Sound: resolve(entry.Sound) } : {}),
-      }));
+      const mapped = arr
+        .map((entry) => {
+          const file = resolveOptional(entry.File);
+          if (!file) return null;
+          const sound =
+            typeof entry.Sound === "string" ? resolveOptional(entry.Sound) : undefined;
+          return {
+            File: file,
+            ...(sound ? { Sound: sound } : {}),
+          };
+        })
+        .filter((v): v is { File: string; Sound?: string } => v !== null);
       if (mapped.length > 0) m[g] = mapped;
     }
     if (Object.keys(m).length > 0) fileRefs.Motions = m;

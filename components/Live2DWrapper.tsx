@@ -535,7 +535,9 @@ export default function Live2DWrapper() {
 
     app.ticker.add(tick);
     return () => {
-      app.ticker.remove(tick);
+      // StrictMode/언마운트 경합으로 app 이 이미 destroy 된 경우 ticker 가 null 일 수 있다.
+      const ticker = app?.ticker as { remove?: (fn: () => void) => void } | null | undefined;
+      ticker?.remove?.(tick);
     };
     // morphValues 가 바뀔 때 재구독할 필요는 없음 (store 에서 직접 읽음).
     // isReady 는 새 모델 로드 성공 트리거.

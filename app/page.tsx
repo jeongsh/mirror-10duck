@@ -1,4 +1,3 @@
-import Live2DClientOnly from "@/components/Live2DClientOnly";
 import CharacterControls from "@/components/CharacterControls";
 
 const DUMMY_POSTS = [
@@ -131,8 +130,6 @@ export default function HomePage() {
         [푸터 영역 · 회사정보 / 약관 / 문의 / © SSIBDUK]
       </footer>
 
-      {/* Live2D 캐릭터 (우측 하단 고정) */}
-      <Live2DClientOnly />
     </main>
   );
 }
