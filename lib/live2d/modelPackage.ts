@@ -52,16 +52,18 @@ interface Model3JsonLike {
   Version?: number;
   FileReferences: {
     Moc: string;
-    Textures: string[];
+    Textures: unknown;
     Physics?: string;
     Pose?: string;
     DisplayInfo?: string;
     UserData?: string;
-    Expressions?: { Name: string; File: string }[];
-    Motions?: Record<string, { File: string; Sound?: string }[]>;
+    Expressions?: unknown;
+    Motions?: unknown;
   };
   Groups?: unknown;
-  HitAreas?: { Id: string; Name?: string }[];
+  HitAreas?: unknown;
+  Layout?: unknown;
+  [key: string]: unknown;
 }
 
 export interface ValidationIssue {
@@ -147,6 +149,47 @@ function dirOf(path: string): string {
 async function readMagicBytes(buf: ArrayBuffer, len: number): Promise<string> {
   const view = new Uint8Array(buf.slice(0, len));
   return String.fromCharCode(...view);
+}
+
+function ensureArray<T>(value: T | T[] | null | undefined): T[] {
+  if (Array.isArray(value)) return value;
+  if (value == null) return [];
+  return [value];
+}
+
+function normalizeTextures(value: unknown): string[] {
+  return ensureArray(value).filter((v): v is string => typeof v === "string");
+}
+
+function normalizeExpressions(value: unknown): { Name: string; File: string }[] {
+  return ensureArray(value)
+    .filter(
+      (v): v is { Name: string; File: string } =>
+        !!v &&
+        typeof v === "object" &&
+        typeof (v as { Name?: unknown }).Name === "string" &&
+        typeof (v as { File?: unknown }).File === "string"
+    )
+    .map((v) => ({ Name: v.Name, File: v.File }));
+}
+
+function normalizeMotions(value: unknown): Record<string, { File: string; Sound?: string }[]> {
+  if (!value || typeof value !== "object") return {};
+  const out: Record<string, { File: string; Sound?: string }[]> = {};
+  for (const [group, entries] of Object.entries(value as Record<string, unknown>)) {
+    out[group] = ensureArray(entries)
+      .filter(
+        (entry): entry is { File: string; Sound?: string } =>
+          !!entry &&
+          typeof entry === "object" &&
+          typeof (entry as { File?: unknown }).File === "string"
+      )
+      .map((entry) => ({
+        File: entry.File,
+        ...(typeof entry.Sound === "string" ? { Sound: entry.Sound } : {}),
+      }));
+  }
+  return out;
 }
 
 function blobToDataUrl(blob: Blob): Promise<string> {
@@ -256,6 +299,9 @@ export async function installModelFromZip(
   // -- 3단계: 참조 그래프 구성
   // (모두 "루트 제외 상대경로" 기준으로 통일)
   const resolveRef = (rel: string) => joinPath(modelJsonDir, rel);
+  const texturesRef = normalizeTextures(model3.FileReferences.Textures);
+  const expressionsRef = normalizeExpressions(model3.FileReferences.Expressions);
+  const motionsRef = normalizeMotions(model3.FileReferences.Motions);
 
   const requiredRefs = new Set<string>();
   const refKinds = new Map<
@@ -281,7 +327,7 @@ export async function installModelFromZip(
   };
 
   addRef(resolveRef(model3.FileReferences.Moc), "moc3");
-  for (const t of model3.FileReferences.Textures ?? []) addRef(resolveRef(t), "texture");
+  for (const t of texturesRef) addRef(resolveRef(t), "texture");
   if (model3.FileReferences.Physics) addRef(resolveRef(model3.FileReferences.Physics), "physics");
   if (model3.FileReferences.Pose) addRef(resolveRef(model3.FileReferences.Pose), "pose");
   if (model3.FileReferences.DisplayInfo)
@@ -289,7 +335,7 @@ export async function installModelFromZip(
   if (model3.FileReferences.UserData)
     addRef(resolveRef(model3.FileReferences.UserData), "userdata");
 
-  const expressions = (model3.FileReferences.Expressions ?? []).slice(
+  const expressions = expressionsRef.slice(
     0,
     MODEL_PACKAGE_LIMITS.MAX_EXPRESSION_COUNT
   );
@@ -297,7 +343,7 @@ export async function installModelFromZip(
 
   let motionCount = 0;
   const motionRefs: { group: string; index: number; file: string }[] = [];
-  for (const [group, entries] of Object.entries(model3.FileReferences.Motions ?? {})) {
+  for (const [group, entries] of Object.entries(motionsRef)) {
     entries.forEach((m, i) => {
       if (motionCount >= MODEL_PACKAGE_LIMITS.MAX_MOTION_COUNT) return;
       addRef(resolveRef(m.File), "motion");
@@ -340,7 +386,7 @@ export async function installModelFromZip(
   }
 
   // 텍스처 개수 체크
-  const textures = model3.FileReferences.Textures ?? [];
+  const textures = texturesRef;
   if (textures.length > MODEL_PACKAGE_LIMITS.MAX_TEXTURE_COUNT) {
     issues.push({
       level: "error",
@@ -415,8 +461,18 @@ export async function installModelFromZip(
 
   const hasError = issues.some((i) => i.level === "error");
 
-  // 추가 분석 정보 (UI 노출용)
-  const hitAreas = (model3.HitAreas ?? []).map((h) => ({ id: h.Id, name: h.Name ?? h.Id }));
+  // 추가 분석 정보 (UI 노출용).
+  // HitAreas 가 배열이 아니거나 엔트리가 이상하면 그냥 빈 배열 처리.
+  const hitAreas = Array.isArray(model3.HitAreas)
+    ? (model3.HitAreas as unknown[])
+        .filter(
+          (v): v is { Id: string; Name?: string } =>
+            !!v &&
+            typeof v === "object" &&
+            typeof (v as { Id?: unknown }).Id === "string"
+        )
+        .map((h) => ({ id: h.Id, name: h.Name ?? h.Id }))
+    : [];
 
   let poseParts: { groupIndex: number; id: string }[] = [];
   if (model3.FileReferences.Pose) {
@@ -508,6 +564,36 @@ export async function installModelFromZip(
 
   // -- 7단계: model3.json 재작성 (상대경로 → blob URL)
   const rewritten = rewriteModel3Json(model3, modelJsonDir, urlByRefPath);
+  if (typeof console !== "undefined" && console.debug) {
+    console.debug(
+      "[modelPackage] rewritten model3.json",
+      {
+        FileReferences: {
+          Moc: !!rewritten.FileReferences.Moc,
+          Textures: Array.isArray(rewritten.FileReferences.Textures)
+            ? rewritten.FileReferences.Textures.length
+            : `NOT ARRAY: ${typeof rewritten.FileReferences.Textures}`,
+          Physics: !!rewritten.FileReferences.Physics,
+          Pose: !!rewritten.FileReferences.Pose,
+          DisplayInfo: !!rewritten.FileReferences.DisplayInfo,
+          UserData: !!rewritten.FileReferences.UserData,
+          Expressions: Array.isArray(rewritten.FileReferences.Expressions)
+            ? rewritten.FileReferences.Expressions.length
+            : rewritten.FileReferences.Expressions === undefined
+              ? 0
+              : `NOT ARRAY: ${typeof rewritten.FileReferences.Expressions}`,
+          Motions:
+            rewritten.FileReferences.Motions &&
+            typeof rewritten.FileReferences.Motions === "object"
+              ? Object.keys(rewritten.FileReferences.Motions)
+              : 0,
+        },
+        HitAreas: Array.isArray(rewritten.HitAreas) ? rewritten.HitAreas.length : "n/a",
+        Groups: Array.isArray(rewritten.Groups) ? rewritten.Groups.length : "n/a",
+        Layout: rewritten.Layout ? Object.keys(rewritten.Layout as object) : "n/a",
+      }
+    );
+  }
   const modelJsonBlob = new Blob([JSON.stringify(rewritten)], { type: "application/json" });
   const modelUrl = URL.createObjectURL(modelJsonBlob);
   blobUrls.push(modelUrl);
@@ -519,6 +605,20 @@ export async function installModelFromZip(
   };
 }
 
+/**
+ * 재작성된 model3.json 을 Live2DModel 이 안전하게 처리할 수 있도록 **화이트리스트**
+ * 방식으로 재구성한다. (src 를 spread 해서 전달하지 않는다.)
+ *
+ * 이유: 업로드된 model3.json 안의 미지 필드(HitAreas, Groups, Layout, UserData 등)가
+ *   배열이어야 할 곳에 객체/문자열/숫자 등으로 들어있으면 `@naari3/pixi-live2d-display`
+ *   내부 코드가 `?.map(...)` / `.length` / `.every(...)` 같은 배열 연산으로 바로
+ *   터진다 (예: "_a.map is not a function").
+ *
+ * 정책:
+ *   - 필수/선택 모든 필드를 직접 정규화해서 출력 객체에 추가한다.
+ *   - 값이 기대한 shape 이 아니면 통째로 버린다 (= 해당 기능 비활성).
+ *   - 배열이어야 할 것은 반드시 배열로, 객체여야 할 것은 반드시 객체로 보장.
+ */
 function rewriteModel3Json(
   src: Model3JsonLike,
   modelJsonDir: string,
@@ -529,38 +629,90 @@ function rewriteModel3Json(
     return urlByRefPath.get(resolved) ?? rel;
   };
 
-  const out: Model3JsonLike = {
-    ...src,
-    FileReferences: {
-      ...src.FileReferences,
-      Moc: resolve(src.FileReferences.Moc),
-      Textures: (src.FileReferences.Textures ?? []).map(resolve),
-    },
+  const fileRefs: Model3JsonLike["FileReferences"] = {
+    Moc: resolve(src.FileReferences.Moc),
+    Textures: normalizeTextures(src.FileReferences.Textures).map(resolve),
   };
 
-  if (src.FileReferences.Physics) out.FileReferences.Physics = resolve(src.FileReferences.Physics);
-  if (src.FileReferences.Pose) out.FileReferences.Pose = resolve(src.FileReferences.Pose);
-  if (src.FileReferences.DisplayInfo)
-    out.FileReferences.DisplayInfo = resolve(src.FileReferences.DisplayInfo);
-  if (src.FileReferences.UserData)
-    out.FileReferences.UserData = resolve(src.FileReferences.UserData);
+  if (typeof src.FileReferences.Physics === "string" && src.FileReferences.Physics) {
+    fileRefs.Physics = resolve(src.FileReferences.Physics);
+  }
+  if (typeof src.FileReferences.Pose === "string" && src.FileReferences.Pose) {
+    fileRefs.Pose = resolve(src.FileReferences.Pose);
+  }
+  if (typeof src.FileReferences.DisplayInfo === "string" && src.FileReferences.DisplayInfo) {
+    fileRefs.DisplayInfo = resolve(src.FileReferences.DisplayInfo);
+  }
+  if (typeof src.FileReferences.UserData === "string" && src.FileReferences.UserData) {
+    fileRefs.UserData = resolve(src.FileReferences.UserData);
+  }
 
-  if (src.FileReferences.Expressions) {
-    out.FileReferences.Expressions = src.FileReferences.Expressions.map((e) => ({
-      ...e,
+  const expressions = normalizeExpressions(src.FileReferences.Expressions);
+  if (expressions.length > 0) {
+    fileRefs.Expressions = expressions.map((e) => ({
+      Name: e.Name,
       File: resolve(e.File),
     }));
   }
-  if (src.FileReferences.Motions) {
+
+  const motions = normalizeMotions(src.FileReferences.Motions);
+  if (Object.keys(motions).length > 0) {
     const m: Record<string, { File: string; Sound?: string }[]> = {};
-    for (const [g, arr] of Object.entries(src.FileReferences.Motions)) {
-      m[g] = arr.map((entry) => ({
-        ...entry,
+    for (const [g, arr] of Object.entries(motions)) {
+      const mapped = arr.map((entry) => ({
         File: resolve(entry.File),
-        ...(entry.Sound ? { Sound: resolve(entry.Sound) } : {}),
+        ...(typeof entry.Sound === "string" ? { Sound: resolve(entry.Sound) } : {}),
       }));
+      if (mapped.length > 0) m[g] = mapped;
     }
-    out.FileReferences.Motions = m;
+    if (Object.keys(m).length > 0) fileRefs.Motions = m;
+  }
+
+  const out: Model3JsonLike = {
+    Version: typeof src.Version === "number" ? src.Version : 3,
+    FileReferences: fileRefs,
+  };
+
+  // HitAreas: 배열이고 각 항목이 { Id: string } 형태일 때만 포함.
+  if (Array.isArray(src.HitAreas)) {
+    const hit = (src.HitAreas as unknown[])
+      .filter(
+        (v): v is { Id: string; Name?: string } =>
+          !!v &&
+          typeof v === "object" &&
+          typeof (v as { Id?: unknown }).Id === "string"
+      )
+      .map((v) => ({
+        Id: v.Id,
+        ...(typeof v.Name === "string" ? { Name: v.Name } : {}),
+      }));
+    if (hit.length > 0) out.HitAreas = hit;
+  }
+
+  // Groups: 배열의 배열 형태(각 항목이 { Target, Name, Ids: string[] })일 때만 포함.
+  //   Ids 가 배열이 아니거나 Target/Name 이 문자열이 아니면 해당 엔트리 드롭.
+  if (Array.isArray(src.Groups)) {
+    const groups = (src.Groups as unknown[])
+      .filter(
+        (v): v is { Target: string; Name: string; Ids: unknown } =>
+          !!v &&
+          typeof v === "object" &&
+          typeof (v as { Target?: unknown }).Target === "string" &&
+          typeof (v as { Name?: unknown }).Name === "string"
+      )
+      .map((v) => ({
+        Target: v.Target,
+        Name: v.Name,
+        Ids: Array.isArray(v.Ids)
+          ? (v.Ids as unknown[]).filter((id): id is string => typeof id === "string")
+          : [],
+      }));
+    if (groups.length > 0) out.Groups = groups;
+  }
+
+  // Layout: 객체일 때만 그대로 통과 (숫자 키:값 맵).
+  if (src.Layout && typeof src.Layout === "object" && !Array.isArray(src.Layout)) {
+    out.Layout = src.Layout;
   }
 
   return out;

@@ -275,7 +275,11 @@ export default function Live2DWrapper() {
 
         setReady(true);
       } catch (err) {
-        console.error("[Live2DWrapper] model load 실패:", err);
+        console.error(
+          "[Live2DWrapper] model load 실패:",
+          err instanceof Error ? err : String(err),
+          err instanceof Error ? err.stack : undefined
+        );
         setError(err instanceof Error ? err.message : String(err));
         setReady(false);
       } finally {
@@ -342,6 +346,30 @@ export default function Live2DWrapper() {
     if (!appReady || !modelRef.current) return;
     const profile = useCharacterStore.getState().profile;
     if (!profile) return;
+
+    // @naari3/pixi-live2d-display 의 setExpression 은 기존 표정을 큐에 둔 채 1초
+    // 페이드아웃시키고 새 표정을 페이드인한다. Blend="Add" 표정이 많은 모델(예: Pichu)
+    // 에서는 그 크로스페이드 구간 동안 이전 표정의 Add 값이 남아있어 새 표정과 겹쳐
+    // "두세 개가 합쳐진 얼굴" 이 한참 보인다. 전환 직전에 큐를 비우고 새 표정을
+    // 단일 엔트리로 넣어 누적 블렌딩을 차단한다.
+    //
+    // 또 Pichu 처럼 `idle` / `shy` 등 매핑이 null 인 감정은 그대로 두면 이전 표정이
+    // 영구히 남아있으므로, null 일 때도 큐를 비워 중립 얼굴로 복귀시킨다.
+    const expManager = (
+      modelRef.current.internalModel as unknown as {
+        motionManager?: {
+          expressionManager?: {
+            stopAllExpressions?: () => void;
+          };
+        };
+      }
+    ).motionManager?.expressionManager;
+
+    try {
+      expManager?.stopAllExpressions?.();
+    } catch (e) {
+      console.warn("[Live2DWrapper] expression clear warning:", e);
+    }
 
     const targetExp = profile.expressionMap[emotion];
     if (targetExp) {
