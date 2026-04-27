@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { upsertCharacterProfile, deleteCharacterProfileById } from "@/lib/supabase/characters";
+import { deleteCharacterAssets } from "@/lib/supabase/characterStorage";
 import type { CharacterProfile } from "@/types/character";
 
 /**
@@ -12,6 +14,7 @@ interface CharacterLibraryState {
   profiles: CharacterProfile[];
   activeId: string | null;
 
+  setProfiles: (profiles: CharacterProfile[]) => void;
   register: (profile: CharacterProfile) => void;
   unregister: (id: string) => void;
   updateProfile: (id: string, patch: Partial<CharacterProfile>) => void;
@@ -21,8 +24,9 @@ interface CharacterLibraryState {
 export const useCharacterLibraryStore = create<CharacterLibraryState>((set) => ({
   profiles: [],
   activeId: null,
+  setProfiles: (profiles) => set({ profiles }),
 
-  register: (profile) =>
+  register: (profile) => {
     set((s) => {
       const existing = s.profiles.findIndex((p) => p.id === profile.id);
       if (existing >= 0) {
@@ -31,17 +35,23 @@ export const useCharacterLibraryStore = create<CharacterLibraryState>((set) => (
         return { profiles: next };
       }
       return { profiles: [...s.profiles, profile] };
-    }),
+    });
+    void upsertCharacterProfile(profile);
+  },
 
-  unregister: (id) =>
+  unregister: (id) => {
+    let isBuiltIn = false;
     set((s) => {
       const target = s.profiles.find((p) => p.id === id);
-      if (target && !target.isBuiltIn) {
-        for (const url of target.blobUrls) {
-          try {
-            URL.revokeObjectURL(url);
-          } catch (e) {
-            console.warn("[CharacterLibrary] revokeObjectURL warning", e);
+      if (target) {
+        isBuiltIn = target.isBuiltIn;
+        if (!target.isBuiltIn) {
+          for (const url of target.blobUrls) {
+            try {
+              URL.revokeObjectURL(url);
+            } catch (e) {
+              console.warn("[CharacterLibrary] revokeObjectURL warning", e);
+            }
           }
         }
       }
@@ -49,12 +59,26 @@ export const useCharacterLibraryStore = create<CharacterLibraryState>((set) => (
         profiles: s.profiles.filter((p) => p.id !== id),
         activeId: s.activeId === id ? null : s.activeId,
       };
-    }),
+    });
+    if (!isBuiltIn) {
+      void deleteCharacterProfileById(id);
+      void deleteCharacterAssets(id);
+    }
+  },
 
-  updateProfile: (id, patch) =>
+  updateProfile: (id, patch) => {
+    let updated: CharacterProfile | null = null;
     set((s) => ({
-      profiles: s.profiles.map((p) => (p.id === id ? { ...p, ...patch } : p)),
-    })),
+      profiles: s.profiles.map((p) => {
+        if (p.id !== id) return p;
+        updated = { ...p, ...patch };
+        return updated;
+      }),
+    }));
+    if (updated) {
+      void upsertCharacterProfile(updated);
+    }
+  },
 
   setActive: (id) => set({ activeId: id }),
 }));

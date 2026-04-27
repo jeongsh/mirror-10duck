@@ -2,23 +2,13 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect } from "react";
 import LibraryManagerPanel from "@/components/character/LibraryManagerPanel";
-import { MAO_PRO_PROFILE, PICHU_PROFILE } from "@/lib/live2d/defaultProfile";
-import { useCharacterLibraryStore } from "@/store/useCharacterLibraryStore";
+import { useAuthUser } from "@/lib/supabase/useAuthUser";
 
 export default function CharacterManagePage() {
   const params = useParams<{ id: string }>();
-  const profiles = useCharacterLibraryStore((s) => s.profiles);
-  const register = useCharacterLibraryStore((s) => s.register);
   const targetId = decodeURIComponent(params.id);
-
-  useEffect(() => {
-    const hasPichu = profiles.some((p) => p.id === PICHU_PROFILE.id);
-    const hasMao = profiles.some((p) => p.id === MAO_PRO_PROFILE.id);
-    if (!hasPichu) register(PICHU_PROFILE);
-    if (!hasMao) register(MAO_PRO_PROFILE);
-  }, [profiles, register]);
+  const user = useAuthUser();
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-4 p-6 text-gray-700">
@@ -33,7 +23,23 @@ export default function CharacterManagePage() {
           [BACK]
         </Link>
       </div>
-      <LibraryManagerPanel initialTargetId={targetId} />
+      {user === undefined ? (
+        <div className="border border-dashed border-gray-400 bg-white/40 p-3 text-xs text-gray-500">
+          확인 중...
+        </div>
+      ) : !user ? (
+        <div className="border-2 border-dashed border-gray-400 bg-gray-100/60 p-6 text-center text-sm text-gray-600">
+          <div className="mb-3">로그인 후 이용 가능한 페이지입니다.</div>
+          <Link
+            href="/auth"
+            className="inline-block border border-dashed border-gray-500 bg-white px-3 py-1 text-xs tracking-widest uppercase"
+          >
+            [로그인 / 회원가입]
+          </Link>
+        </div>
+      ) : (
+        <LibraryManagerPanel initialTargetId={targetId} />
+      )}
     </main>
   );
 }

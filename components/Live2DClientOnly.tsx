@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useAuthUser } from "@/lib/supabase/useAuthUser";
 
 /**
  * Live2DWrapper 는 window, WebGL, Live2DCubismCore 전역에 의존하므로
@@ -18,5 +19,7 @@ const Live2DWrapper = dynamic(() => import("./Live2DWrapper"), {
 });
 
 export default function Live2DClientOnly() {
+  const user = useAuthUser();
+  if (!user) return null;
   return <Live2DWrapper />;
 }

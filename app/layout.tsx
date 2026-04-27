@@ -15,7 +15,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <head>
+      <body className="min-h-screen antialiased">
         {/*
          * Live2D Cubism Core 전역 로드 (가장 중요)
          * - `beforeInteractive` 로 React hydration 이전에 동기 로드되어야 한다.
@@ -25,8 +25,6 @@ export default function RootLayout({
           src="/live2dcubismcore.min.js"
           strategy="beforeInteractive"
         />
-      </head>
-      <body className="min-h-screen antialiased">
         {children}
         <Live2DClientOnly />
       </body>

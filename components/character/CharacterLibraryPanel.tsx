@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { supabase } from "@/lib/supabase/client";
 import { useCharacterLibraryStore } from "@/store/useCharacterLibraryStore";
 import { useCharacterStore } from "@/store/useCharacterStore";
 
@@ -14,16 +15,29 @@ export default function CharacterLibraryPanel() {
   const unregister = useCharacterLibraryStore((s) => s.unregister);
   const setProfile = useCharacterStore((s) => s.setProfile);
 
-  const loadCharacter = (id: string) => {
+  const savePreferredCharacter = async (characterId: string | null) => {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) return;
+    await supabase.auth.updateUser({
+      data: {
+        ...data.user.user_metadata,
+        activeCharacterId: characterId,
+      },
+    });
+  };
+
+  const loadCharacter = async (id: string) => {
     const p = profiles.find((p) => p.id === id);
     if (!p) return;
     setActive(id);
     setProfile(p);
+    await savePreferredCharacter(id);
   };
 
-  const unloadAll = () => {
+  const unloadAll = async () => {
     setActive(null);
     setProfile(null);
+    await savePreferredCharacter(null);
   };
 
   return (
@@ -34,7 +48,9 @@ export default function CharacterLibraryPanel() {
         </span>
         <button
           type="button"
-          onClick={unloadAll}
+          onClick={() => {
+            void unloadAll();
+          }}
           className="border border-dashed border-gray-600 bg-white/70 px-2 py-1 text-[10px] tracking-widest uppercase text-gray-700"
         >
           [UNLOAD]
@@ -83,7 +99,9 @@ export default function CharacterLibraryPanel() {
               <div className="flex gap-1 pt-1">
                 <button
                   type="button"
-                  onClick={() => loadCharacter(p.id)}
+                  onClick={() => {
+                    void loadCharacter(p.id);
+                  }}
                   disabled={isActive}
                   className="border border-dashed border-gray-600 bg-white/80 px-2 py-0.5 text-[10px] tracking-widest uppercase disabled:opacity-40"
                 >

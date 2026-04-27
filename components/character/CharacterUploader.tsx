@@ -16,6 +16,7 @@ import {
   guessMotionMap,
   guessOutfits,
 } from "@/lib/live2d/autoMap";
+import { uploadCharacterAssets } from "@/lib/supabase/characterStorage";
 import { useCharacterLibraryStore } from "@/store/useCharacterLibraryStore";
 import { useCharacterStore } from "@/store/useCharacterStore";
 import type { CharacterProfile } from "@/types/character";
@@ -23,14 +24,18 @@ import type { CharacterProfile } from "@/types/character";
 /**
  * ZIP 모델 패키지를 받아서:
  *  1) 검증 결과(이슈/요약) 를 보여주고
- *  2) 자동 추정된 매핑을 포함한 CharacterProfile 을 라이브러리에 등록
- *  3) 등록 직후 해당 캐릭터를 활성 모델로 로드
+ *  2) Supabase Storage 에 업로드해 영구 URL 을 확보
+ *  3) 자동 추정된 매핑을 포함한 CharacterProfile 을 라이브러리에 등록
+ *  4) 등록 직후 해당 캐릭터를 활성 모델로 로드
  */
 export default function CharacterUploader() {
   const [pending, setPending] = useState(false);
+  const [committing, setCommitting] = useState(false);
+  const [commitError, setCommitError] = useState<string | null>(null);
   const [result, setResult] = useState<ModelPackageAnalysis | InstalledModelPackage | null>(
     null
   );
+  const [zipFile, setZipFile] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -43,12 +48,16 @@ export default function CharacterUploader() {
   const handleFile = useCallback(async (file: File) => {
     setPending(true);
     setResult(null);
+    setZipFile(null);
+    setCommitError(null);
     try {
       const r = await installModelFromZip(file);
       setResult(r);
-      if (isInstalled(r) && !name) {
-        // 파일명 기반으로 기본 이름 제안
-        setName(file.name.replace(/\.zip$/i, ""));
+      if (isInstalled(r)) {
+        setZipFile(file);
+        if (!name) {
+          setName(file.name.replace(/\.zip$/i, ""));
+        }
       }
     } catch (e) {
       console.error("[CharacterUploader] install 실패:", e);
@@ -92,36 +101,61 @@ export default function CharacterUploader() {
     [handleFile]
   );
 
-  const commit = () => {
-    if (!result || !isInstalled(result)) return;
-    const morphSliders = guessMorphSliders(result);
-    const profile: CharacterProfile = {
-      id: `uploaded-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      name: name || "이름 없는 캐릭터",
-      description: description || undefined,
-      modelPath: result.modelUrl,
-      expressionMap: guessExpressionMap(result),
-      motionMap: guessMotionMap(result),
-      hitAreaMap: guessHitAreaMap(result),
-      outfits: guessOutfits(result),
-      morphSliders,
-      parameterPresets: defaultPresets(morphSliders),
-      sounds: { emotions: {}, actions: {} },
-      dialogues: { emotions: {}, actions: {} },
-      defaultView: { scale: 0.25, x: 0, y: 20 },
-      blobUrls: result.blobUrls,
-      isBuiltIn: false,
-      createdAt: Date.now(),
-    };
-    register(profile);
-    setActive(profile.id);
-    setProfile(profile);
+  const commit = async () => {
+    if (!result || !isInstalled(result) || !zipFile) return;
 
-    // 초기화 (다음 업로드 대비)
-    setResult(null);
-    setName("");
-    setDescription("");
-    if (inputRef.current) inputRef.current.value = "";
+    setCommitting(true);
+    setCommitError(null);
+
+    const characterId = `uploaded-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    try {
+      const { modelUrl } = await uploadCharacterAssets(zipFile, characterId);
+
+      const morphSliders = guessMorphSliders(result);
+      const profile: CharacterProfile = {
+        id: characterId,
+        name: name || "이름 없는 캐릭터",
+        description: description || undefined,
+        modelPath: modelUrl,
+        expressionMap: guessExpressionMap(result),
+        motionMap: guessMotionMap(result),
+        hitAreaMap: guessHitAreaMap(result),
+        outfits: guessOutfits(result),
+        morphSliders,
+        parameterPresets: defaultPresets(morphSliders),
+        sounds: { emotions: {}, actions: {} },
+        dialogues: { emotions: {}, actions: {} },
+        defaultView: { scale: 0.25, x: 0, y: 20 },
+        blobUrls: [],
+        isBuiltIn: false,
+        createdAt: Date.now(),
+      };
+
+      // 미리 만들어진 blob URL 들은 Storage 업로드가 끝난 시점에 더 이상 필요 없으므로 정리.
+      for (const url of result.blobUrls) {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          /* ignore */
+        }
+      }
+
+      register(profile);
+      setActive(profile.id);
+      setProfile(profile);
+
+      setResult(null);
+      setZipFile(null);
+      setName("");
+      setDescription("");
+      if (inputRef.current) inputRef.current.value = "";
+    } catch (e) {
+      console.error("[CharacterUploader] commit 실패:", e);
+      setCommitError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCommitting(false);
+    }
   };
 
   return (
@@ -200,12 +234,20 @@ export default function CharacterUploader() {
               className="w-full border border-dashed border-gray-500 bg-white/70 px-2 py-1 text-xs"
             />
           </label>
+
+          {commitError && (
+            <div className="border border-dashed border-red-500 bg-red-50 px-2 py-1 text-[11px] text-red-700">
+              [업로드 실패] {commitError}
+            </div>
+          )}
+
           <button
             type="button"
-            onClick={commit}
-            className="border border-dashed border-green-700 bg-green-100/70 px-3 py-1 text-xs tracking-widest uppercase text-green-900"
+            onClick={() => void commit()}
+            disabled={committing}
+            className="border border-dashed border-green-700 bg-green-100/70 px-3 py-1 text-xs tracking-widest uppercase text-green-900 disabled:opacity-50"
           >
-            [라이브러리에 등록하고 로드]
+            {committing ? "[Storage 업로드 중...]" : "[라이브러리에 등록하고 로드]"}
           </button>
         </div>
       )}
