@@ -15,6 +15,7 @@ export default function BoardPostDetailPage() {
   const [post, setPost] = useState<CommunityPost | null>(null);
   const [board, setBoard] = useState<Board | null>(null);
   const [userId, setUserId] = useState("");
+  const [isFollowingAuthor, setIsFollowingAuthor] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
@@ -37,7 +38,23 @@ export default function BoardPostDetailPage() {
         setMessage(postResponse.error.message);
         setPost(null);
       } else {
-        setPost(postResponse.data as CommunityPost);
+        const postData = postResponse.data as CommunityPost;
+        setPost(postData);
+
+        // 작성자 팔로우 여부 확인
+        if (authData.user?.id && postData.author_id) {
+          if (authData.user.id === postData.author_id) {
+            // 본인인 경우 체크 생략
+          } else {
+            const { data: followData } = await supabase
+              .from("follows_user")
+              .select("*")
+              .eq("follower_id", authData.user.id)
+              .eq("following_id", postData.author_id)
+              .single();
+            if (followData) setIsFollowingAuthor(true);
+          }
+        }
       }
 
       setLoading(false);
@@ -50,6 +67,28 @@ export default function BoardPostDetailPage() {
     if (!post || !userId) return false;
     return post.author_id === userId;
   }, [post, userId]);
+
+  const toggleFollowUser = async () => {
+    if (!userId) {
+      alert("로그인이 필요합니다.");
+      return;
+    }
+    if (!post || post.author_id === userId) return;
+
+    if (isFollowingAuthor) {
+      await supabase
+        .from("follows_user")
+        .delete()
+        .eq("follower_id", userId)
+        .eq("following_id", post.author_id);
+      setIsFollowingAuthor(false);
+    } else {
+      await supabase
+        .from("follows_user")
+        .insert({ follower_id: userId, following_id: post.author_id });
+      setIsFollowingAuthor(true);
+    }
+  };
 
   const onDelete = async () => {
     if (!canEdit || !post) return;
@@ -84,9 +123,21 @@ export default function BoardPostDetailPage() {
           {post?.is_hot && <span className="mr-2 text-red-500">🔥</span>}
           {post?.title ?? "게시글 없음"}
         </h1>
-        <p className="mt-2 text-sm text-gray-600">
-          {post?.author_email} | {post ? new Date(post.created_at).toLocaleString("ko-KR") : "-"}
-        </p>
+        <div className="mt-2 flex items-center gap-3 text-sm text-gray-600">
+          <span>{post?.author_email}</span>
+          {post && userId && post.author_id !== userId && (
+            <button
+              onClick={toggleFollowUser}
+              className={`rounded-full border border-dashed border-gray-500 px-3 py-0.5 text-xs transition-colors ${
+                isFollowingAuthor ? "bg-gray-200" : "bg-white hover:bg-gray-100"
+              }`}
+            >
+              {isFollowingAuthor ? "팔로잉 취소" : "팔로우"}
+            </button>
+          )}
+          <span>|</span>
+          <span>{post ? new Date(post.created_at).toLocaleString("ko-KR") : "-"}</span>
+        </div>
       </header>
 
       <article className="min-h-[320px] whitespace-pre-wrap border border-dashed border-gray-500 bg-white/70 p-4 text-sm">

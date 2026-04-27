@@ -13,15 +13,33 @@ export default function BoardPage() {
   const [board, setBoard] = useState<Board | null>(null);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchBoardAndPosts = async () => {
       setLoading(true);
+
+      const { data: authData } = await supabase.auth.getUser();
+      const currentUserId = authData.user?.id;
+      if (currentUserId) setUserId(currentUserId);
+
       // 1. 게시판 채널 정보 조회
       const { data: boardData } = await supabase.from("boards").select("*").eq("slug", slug).single();
       
       if (boardData) {
         setBoard(boardData);
+
+        if (currentUserId) {
+          const { data: followData } = await supabase
+            .from("follows_board")
+            .select("*")
+            .eq("user_id", currentUserId)
+            .eq("board_id", boardData.id)
+            .single();
+          if (followData) setIsFollowing(true);
+        }
+
         // 2. 해당 채널의 게시글 목록 조회
         const { data: postsData } = await supabase
           .from("posts")
@@ -37,6 +55,22 @@ export default function BoardPage() {
     if (slug) fetchBoardAndPosts();
   }, [slug]);
 
+  const toggleFollowBoard = async () => {
+    if (!userId) {
+      alert("로그인이 필요합니다.");
+      return;
+    }
+    if (!board) return;
+
+    if (isFollowing) {
+      await supabase.from("follows_board").delete().eq("user_id", userId).eq("board_id", board.id);
+      setIsFollowing(false);
+    } else {
+      await supabase.from("follows_board").insert({ user_id: userId, board_id: board.id });
+      setIsFollowing(true);
+    }
+  };
+
   if (loading) return <main className="p-6 text-center text-gray-500">로딩 중...</main>;
   if (!board) return <main className="p-6 text-center text-red-500">게시판을 찾을 수 없습니다.</main>;
 
@@ -47,8 +81,14 @@ export default function BoardPage() {
           <h1 className="text-lg font-bold">{board.name}</h1>
           <p className="text-sm text-gray-600">{board.description}</p>
         </div>
-        <div className="flex gap-2">
-          <Link href="/board" className="border border-dashed border-gray-500 bg-white px-3 py-2 text-sm">
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={toggleFollowBoard}
+            className={`border border-dashed border-gray-500 px-3 py-2 text-sm transition-colors ${isFollowing ? "bg-red-100 text-red-700" : "bg-white hover:bg-gray-100"}`}
+          >
+            {isFollowing ? "팔로잉 취소" : "게시판 팔로우"}
+          </button>
+          <Link href="/board" className="border border-dashed border-gray-500 bg-white px-3 py-2 text-sm hover:bg-gray-100">
             채널 목록
           </Link>
           <Link href={`/board/${slug}/write`} className="border border-dashed border-gray-500 bg-gray-200 px-3 py-2 text-sm">

@@ -15,15 +15,35 @@ export default function FeedPage() {
     const fetchFeed = async () => {
       setLoading(true);
       
-      const { data } = await supabase
-        .from("posts")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(30);
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData.user?.id;
+
+      let postsData = [];
+
+      if (!userId) {
+        // 비로그인: 전체 최신 글을 임시로 보여줌
+        const { data } = await supabase
+          .from("posts")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(30);
+        if (data) postsData = data;
+      } else {
+        // 로그인 상태: 팔로우 기반 하이브리드 피드 쿼리 (RPC) 호출
+        const { data, error } = await supabase.rpc("get_hybrid_feed", {
+          viewer_id: userId,
+          limit_cnt: 30,
+          offset_cnt: 0
+        });
         
-      if (data) {
-        setPosts(data as CommunityPost[]);
+        if (data) {
+          postsData = data;
+        } else if (error) {
+          console.error("Feed Fetch Error:", error);
+        }
       }
+
+      setPosts(postsData as CommunityPost[]);
       setLoading(false);
     };
 
