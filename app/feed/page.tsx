@@ -3,11 +3,18 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
-import { CommunityPost } from "@/types/community";
+import { CommunityPost, Board } from "@/types/community";
 
 export default function FeedPage() {
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  const [boards, setBoards] = useState<Board[]>([]);
+  const [sharePostId, setSharePostId] = useState<string | null>(null);
+  const [shareBoardId, setShareBoardId] = useState("");
+  const [shareTitle, setShareTitle] = useState("");
+  const [shareLoading, setShareLoading] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
     // Phase 2 MVP: 아직 팔로우 로직 필터가 완전히 구현되기 전이므로
@@ -17,6 +24,11 @@ export default function FeedPage() {
       
       const { data: authData } = await supabase.auth.getUser();
       const userId = authData.user?.id;
+      if (authData.user) setCurrentUser(authData.user);
+
+      // 공유할 타겟을 위해 게시판 목록 조회
+      const { data: boardsData } = await supabase.from("boards").select("*");
+      if (boardsData) setBoards(boardsData as Board[]);
 
       let postsData = [];
 
@@ -50,6 +62,35 @@ export default function FeedPage() {
     fetchFeed();
   }, []);
 
+  const submitShare = async () => {
+    if (!sharePostId || !shareBoardId || !shareTitle.trim() || !currentUser) return;
+    
+    setShareLoading(true);
+    const originPost = posts.find((p) => p.id === sharePostId);
+    
+    if (originPost) {
+      const { error } = await supabase.from("posts").insert({
+        board_id: shareBoardId,
+        title: shareTitle,
+        content: originPost.content, // 스냅샷 복사
+        source_type: "BOARD",
+        origin_post_id: originPost.id, // 원본 글 연결 고리
+        author_id: currentUser.id,
+        author_email: currentUser.email,
+      });
+
+      if (!error) {
+        alert("선택한 게시판에 성공적으로 공유되었습니다!");
+        setSharePostId(null);
+        setShareTitle("");
+        setShareBoardId("");
+      } else {
+        alert("공유 실패: " + error.message);
+      }
+    }
+    setShareLoading(false);
+  };
+
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-4 p-6">
       <header className="flex flex-wrap items-center justify-between gap-2 border border-dashed border-gray-500 bg-white/70 p-4">
@@ -61,6 +102,55 @@ export default function FeedPage() {
           피드 작성
         </Link>
       </header>
+
+      {/* 공유 모달 */}
+      {sharePostId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm border border-dashed border-gray-500 bg-white p-6">
+            <h2 className="mb-4 text-lg font-bold">게시판에 공유하기</h2>
+            <div className="mb-4 flex flex-col gap-3">
+              <label className="text-sm">
+                게시판 선택
+                <select 
+                  className="mt-1 w-full border border-dashed border-gray-400 bg-white p-2 text-sm"
+                  value={shareBoardId}
+                  onChange={(e) => setShareBoardId(e.target.value)}
+                >
+                  <option value="">게시판을 선택하세요</option>
+                  {boards.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm">
+                공유할 제목
+                <input 
+                  type="text"
+                  placeholder="게시판에 표시될 제목을 입력하세요"
+                  className="mt-1 w-full border border-dashed border-gray-400 bg-white p-2 text-sm"
+                  value={shareTitle}
+                  onChange={(e) => setShareTitle(e.target.value)}
+                />
+              </label>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button 
+                onClick={() => setSharePostId(null)}
+                className="border border-dashed border-gray-400 px-3 py-1 text-sm hover:bg-gray-100"
+              >
+                취소
+              </button>
+              <button 
+                onClick={submitShare}
+                disabled={!shareBoardId || !shareTitle.trim() || shareLoading}
+                className="border border-dashed border-gray-500 bg-blue-50 px-3 py-1 text-sm text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+              >
+                {shareLoading ? "공유 중..." : "공유하기"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <section className="flex flex-col gap-4">
         {loading ? (
@@ -80,14 +170,9 @@ export default function FeedPage() {
               </div>
               
               <div className="flex gap-2">
-                {post.source_type === 'BOARD' && (
-                  <span className="inline-block rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
-                    게시판 공유글
-                  </span>
-                )}
-                {post.is_hot && (
+                {post.source_type === 'BOARD' && post.is_hot && (
                   <span className="inline-block rounded bg-red-100 px-2 py-0.5 text-xs text-red-700">
-                    🔥 개념글
+                    🔥 {(post as any).board_name || "게시판"} 개념글
                   </span>
                 )}
               </div>
@@ -107,7 +192,10 @@ export default function FeedPage() {
                   좋아요
                 </button>
                 {post.source_type === 'FEED' && (
-                  <button className="border border-dashed border-gray-400 px-3 py-1 text-xs text-gray-600 hover:bg-gray-200">
+                  <button 
+                    onClick={() => setSharePostId(post.id)}
+                    className="border border-dashed border-gray-400 px-3 py-1 text-xs text-gray-600 hover:bg-gray-200"
+                  >
                     게시판에 공유 (Cross-post)
                   </button>
                 )}

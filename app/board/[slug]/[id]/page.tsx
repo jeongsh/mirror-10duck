@@ -15,8 +15,10 @@ export default function BoardPostDetailPage() {
   const [post, setPost] = useState<CommunityPost | null>(null);
   const [board, setBoard] = useState<Board | null>(null);
   const [userId, setUserId] = useState("");
+  const [userEmail, setUserEmail] = useState("");
   const [isFollowingAuthor, setIsFollowingAuthor] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [shareLoading, setShareLoading] = useState(false);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -31,6 +33,7 @@ export default function BoardPostDetailPage() {
       ]);
 
       setUserId(authData.user?.id ?? "");
+      setUserEmail(authData.user?.email ?? "");
 
       if (boardResponse.data) setBoard(boardResponse.data);
 
@@ -93,15 +96,45 @@ export default function BoardPostDetailPage() {
   const onDelete = async () => {
     if (!canEdit || !post) return;
     const isConfirmed = window.confirm("정말 삭제할까요?");
-    if (!isConfirmed) return;
+    if (isConfirmed) {
+      const { error } = await supabase.from("posts").delete().eq("id", post.id);
+      if (error) {
+        alert(error.message);
+        return;
+      }
+      router.push(`/board/${slug}`);
+    }
+  };
 
-    const { error } = await supabase.from("posts").delete().eq("id", post.id);
-    if (error) {
-      setMessage(error.message);
+  const shareToFeed = async () => {
+    if (!userId) {
+      alert("로그인이 필요합니다.");
       return;
     }
+    if (!post) return;
+    
+    setShareLoading(true);
+    
+    // 피드에 맞게 제목과 본문을 조합하여 새 글 생성
+    const feedContent = `[${board?.name}에서 공유됨] ${post.title}\n\n${post.content}`;
 
-    router.push(`/board/${slug}`);
+    const { error } = await supabase.from("posts").insert({
+      board_id: null,
+      title: null,
+      content: feedContent,
+      source_type: "FEED",
+      origin_post_id: post.id,
+      author_id: userId,
+      author_email: userEmail,
+    });
+
+    setShareLoading(false);
+
+    if (!error) {
+      alert("내 피드에 성공적으로 공유되었습니다!");
+    } else {
+      alert("공유 실패: " + error.message);
+    }
   };
 
   const toggleHotPost = async () => {
@@ -192,6 +225,15 @@ export default function BoardPostDetailPage() {
             </button>
           </>
         ) : null}
+
+        <button
+          type="button"
+          onClick={shareToFeed}
+          disabled={shareLoading}
+          className="border border-dashed border-gray-400 bg-blue-50 px-3 py-2 text-sm text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+        >
+          {shareLoading ? "공유 중..." : "내 피드에 공유"}
+        </button>
 
         {/* 테스트용 개념글 토글 (개발 환경에서만 노출) */}
         {process.env.NODE_ENV === "development" && post && (
