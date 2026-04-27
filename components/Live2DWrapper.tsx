@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Application, Ticker } from "pixi.js";
-import { Live2DModel } from "@naari3/pixi-live2d-display";
+import { Live2DModel, MotionPriority } from "@naari3/pixi-live2d-display";
 import { useCharacterStore } from "@/store/useCharacterStore";
 import type { CharacterActionKey } from "@/types/character";
 
@@ -20,6 +20,11 @@ declare global {
 
 const CANVAS_W = 320;
 const CANVAS_H = 420;
+
+interface MotionFileMeta {
+  durationMs: number;
+  loop: boolean;
+}
 
 /**
  * Live2D 캐릭터 렌더링 래퍼.
@@ -45,6 +50,16 @@ export default function Live2DWrapper() {
   const originalFocusRef = useRef<((x: number, y: number) => void) | null>(null);
   const neutralParametersRef = useRef<number[] | null>(null);
   const emotionApplySeqRef = useRef(0);
+  const pendingIdleReturnRef = useRef(false);
+  const lastMotionPlayingRef = useRef(false);
+  const lastPendingIdleRef = useRef(false);
+  const actionIdleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const actionIdleTimeoutSeqRef = useRef(0);
+  const motionMetaCacheRef = useRef<Map<string, MotionFileMeta>>(new Map());
+  const modelMotionsRef = useRef<{ modelPath: string | null; motions: Record<string, { File?: string }[]> }>({
+    modelPath: null,
+    motions: {},
+  });
   const [appReady, setAppReady] = useState(false);
 
   const modelPath = useCharacterStore((s) => s.modelPath);
@@ -54,6 +69,61 @@ export default function Live2DWrapper() {
   const setModelConfig = useCharacterStore((s) => s.setModelConfig);
 
   const dragData = useRef({ isDragging: false, lastX: 0, lastY: 0 });
+
+  const getMotionMeta = async (
+    currentModelPath: string,
+    group: string,
+    index: number
+  ): Promise<MotionFileMeta | null> => {
+    const cacheKey = `${currentModelPath}::${group}::${index}`;
+    const cached = motionMetaCacheRef.current.get(cacheKey);
+    if (cached) return cached;
+
+    try {
+      if (modelMotionsRef.current.modelPath !== currentModelPath) {
+        const settingsRes = await fetch(currentModelPath);
+        if (!settingsRes.ok) return null;
+        const settingsJson = (await settingsRes.json()) as {
+          FileReferences?: {
+            Motions?: Record<string, { File?: string }[]>;
+          };
+        };
+        modelMotionsRef.current = {
+          modelPath: currentModelPath,
+          motions: settingsJson.FileReferences?.Motions ?? {},
+        };
+      }
+
+      const groupDefs = modelMotionsRef.current.motions[group];
+      const motionFile = groupDefs?.[index]?.File;
+      if (!motionFile) return null;
+
+      const baseUrl = new URL(currentModelPath, window.location.origin);
+      const motionUrl = new URL(motionFile, baseUrl).toString();
+      const motionRes = await fetch(motionUrl);
+      if (!motionRes.ok) return null;
+
+      const motionJson = (await motionRes.json()) as {
+        Meta?: {
+          Duration?: number;
+          Loop?: boolean;
+        };
+      };
+      const durationSec = motionJson.Meta?.Duration;
+      const loop = motionJson.Meta?.Loop === true;
+      if (typeof durationSec !== "number" || !Number.isFinite(durationSec)) return null;
+
+      const meta: MotionFileMeta = {
+        durationMs: Math.max(0, Math.round(durationSec * 1000)),
+        loop,
+      };
+      motionMetaCacheRef.current.set(cacheKey, meta);
+      return meta;
+    } catch (e) {
+      console.warn("[Live2DWrapper] getMotionMeta warning:", e);
+      return null;
+    }
+  };
 
   const captureNeutralParameters = (model: Live2DModel) => {
     try {
@@ -576,6 +646,91 @@ export default function Live2DWrapper() {
   }, [appReady, modelPath, isTracking, isReady]);
 
   // --------------------------------------------------------------------
+  // Effect 8 · 액션 모션 종료 → idle 자동 복귀 폴러
+  //
+  // pixi-live2d-display 가 자체적으로 idle 모션을 자동 큐잉해야 하지만,
+  // 모델/우선순위 조합에 따라 트리거되지 않고 마지막 프레임에서 멈추는 경우가 있다.
+  // motionFinish 이벤트 또한 일부 빌드에서 외부 리스너로 누락되는 사례가 관찰되어,
+  // 매 프레임 motionManager.playing 플래그를 직접 폴링해서 모션 종료를 감지한다.
+  // --------------------------------------------------------------------
+  useEffect(() => {
+    if (!appReady || !modelRef.current) return;
+    const model = modelRef.current;
+    const app = appRef.current;
+    if (!app) return;
+
+    lastMotionPlayingRef.current = false;
+    lastPendingIdleRef.current = pendingIdleReturnRef.current;
+
+    const tick = () => {
+      if (modelRef.current !== model) return;
+
+      const mm = (
+        model.internalModel as unknown as {
+          motionManager?: {
+            playing?: boolean;
+            isFinished?: () => boolean;
+          };
+        }
+      ).motionManager;
+      if (!mm) return;
+
+      const isPlaying = mm.playing === true && !(mm.isFinished?.() ?? false);
+      const wasPlaying = lastMotionPlayingRef.current;
+      lastMotionPlayingRef.current = isPlaying;
+      const pendingIdle = pendingIdleReturnRef.current;
+
+      if (wasPlaying !== isPlaying) {
+        console.log("[Live2DWrapper] motion playing changed:", {
+          wasPlaying,
+          isPlaying,
+          pendingIdle,
+        });
+      }
+      if (lastPendingIdleRef.current !== pendingIdle) {
+        console.log("[Live2DWrapper] pending idle changed:", {
+          wasPending: lastPendingIdleRef.current,
+          pendingIdle,
+        });
+        lastPendingIdleRef.current = pendingIdle;
+      }
+
+      if (wasPlaying && !isPlaying && pendingIdle) {
+        console.log("[Live2DWrapper] action motion finished, restoring idle motion");
+        pendingIdleReturnRef.current = false;
+        lastPendingIdleRef.current = false;
+        const profile = useCharacterStore.getState().profile;
+        const idleMotion = profile?.motionMap.idle;
+        if (idleMotion) {
+          try {
+            void model
+              .motion(idleMotion.group, idleMotion.index, MotionPriority.FORCE)
+              .then((ok) => {
+                console.log("[Live2DWrapper] idle motion requested:", { idleMotion, ok });
+              });
+          } catch (e) {
+            console.warn("[Live2DWrapper] idle restore warning:", e);
+          }
+        }
+      }
+    };
+
+    app.ticker.add(tick);
+    return () => {
+      const ticker = app?.ticker as { remove?: (fn: () => void) => void } | null | undefined;
+      ticker?.remove?.(tick);
+      pendingIdleReturnRef.current = false;
+      lastMotionPlayingRef.current = false;
+      lastPendingIdleRef.current = false;
+      if (actionIdleTimeoutRef.current) {
+        clearTimeout(actionIdleTimeoutRef.current);
+        actionIdleTimeoutRef.current = null;
+      }
+      actionIdleTimeoutSeqRef.current += 1;
+    };
+  }, [appReady, modelPath, isReady]);
+
+  // --------------------------------------------------------------------
   // 공통 헬퍼
   // --------------------------------------------------------------------
   function playAction(action: CharacterActionKey) {
@@ -587,7 +742,81 @@ export default function Live2DWrapper() {
     const motion = profile.motionMap[action];
     if (motion) {
       try {
-        model.motion(motion.group, motion.index);
+        void model
+          .motion(motion.group, motion.index, MotionPriority.FORCE)
+          .then((ok) => {
+            console.log("[Live2DWrapper] action motion requested:", { action, motion, ok });
+          });
+
+        // 액션 모션이 끝나면 idle 로 복귀해야 한다는 플래그.
+        // 실제 복귀는 Effect 8 의 ticker 콜백이 모션 종료를 감지해 처리한다.
+        // (라이브러리의 motionFinish 이벤트가 모델/우선순위 조합에 따라 누락되는
+        //  케이스가 있어 ticker 폴링 방식이 더 안정적임.)
+        if (action !== "idle") {
+          pendingIdleReturnRef.current = true;
+          console.log("[Live2DWrapper] pending idle set true");
+
+          const scheduleSeq = ++actionIdleTimeoutSeqRef.current;
+          const scheduleFallback = (delayMs: number, reason: string) => {
+            if (scheduleSeq !== actionIdleTimeoutSeqRef.current) return;
+            if (actionIdleTimeoutRef.current) {
+              clearTimeout(actionIdleTimeoutRef.current);
+            }
+            actionIdleTimeoutRef.current = setTimeout(() => {
+              if (modelRef.current !== model) return;
+              const latestProfile = useCharacterStore.getState().profile;
+              const idleMotion = latestProfile?.motionMap.idle;
+              pendingIdleReturnRef.current = false;
+              lastPendingIdleRef.current = false;
+              if (!idleMotion) return;
+              try {
+                console.log("[Live2DWrapper] fallback timeout restoring idle motion", {
+                  delayMs,
+                  reason,
+                });
+                void model
+                  .motion(idleMotion.group, idleMotion.index, MotionPriority.FORCE)
+                  .then((ok) => {
+                    console.log("[Live2DWrapper] idle motion requested by fallback:", {
+                      idleMotion,
+                      ok,
+                    });
+                  });
+              } catch (e) {
+                console.warn("[Live2DWrapper] fallback idle restore warning:", e);
+              }
+            }, delayMs);
+          };
+
+          // 메타 로드 실패해도 기본값(1200ms)으로 즉시 스케줄.
+          scheduleFallback(1200, "default");
+
+          if (modelPath) {
+            void getMotionMeta(modelPath, motion.group, motion.index).then((meta) => {
+              if (!meta || scheduleSeq !== actionIdleTimeoutSeqRef.current) return;
+              const calculatedDelay = meta.loop
+                ? Math.min(Math.max(Math.round(meta.durationMs * 0.45), 900), 1800)
+                : Math.max(600, meta.durationMs + 120);
+              console.log("[Live2DWrapper] motion meta loaded:", {
+                action,
+                group: motion.group,
+                index: motion.index,
+                durationMs: meta.durationMs,
+                loop: meta.loop,
+                calculatedDelay,
+              });
+              scheduleFallback(calculatedDelay, "motion-meta");
+            });
+          }
+        } else {
+          pendingIdleReturnRef.current = false;
+          console.log("[Live2DWrapper] pending idle cleared (idle action)");
+          if (actionIdleTimeoutRef.current) {
+            clearTimeout(actionIdleTimeoutRef.current);
+            actionIdleTimeoutRef.current = null;
+          }
+          actionIdleTimeoutSeqRef.current += 1;
+        }
       } catch (e) {
         console.warn("[Live2DWrapper] motion play warning:", e);
       }
