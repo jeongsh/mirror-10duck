@@ -41,7 +41,7 @@ export default function AuthPage() {
     } else {
       setMessage(
         mode === "login"
-          ? "로그인 성공. 커뮤니티로 이동해서 글을 작성해보세요."
+          ? "로그인 성공. 채널 목록으로 이동해서 글을 작성해보세요."
           : "회원가입 성공. 이메일 인증이 켜져 있으면 메일함을 확인하세요.",
       );
       const { data } = await supabase.auth.getUser();
@@ -139,16 +139,10 @@ export default function AuthPage() {
             로그아웃
           </button>
           <Link
-            href="/community"
+            href="/board"
             className="border border-dashed border-gray-500 bg-white px-3 py-2"
           >
-            게시판 보기
-          </Link>
-          <Link
-            href="/community/write"
-            className="border border-dashed border-gray-500 bg-white px-3 py-2"
-          >
-            글쓰기
+            채널 목록 보기
           </Link>
         </div>
       </section>

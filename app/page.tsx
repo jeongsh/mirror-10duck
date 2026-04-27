@@ -17,16 +17,10 @@ export default function HomePage() {
             회원가입/로그인
           </Link>
           <Link
-            href="/community"
+            href="/board"
             className="border border-dashed border-gray-500 bg-white px-3 py-2 text-sm"
           >
-            게시판
-          </Link>
-          <Link
-            href="/community/write"
-            className="border border-dashed border-gray-500 bg-white px-3 py-2 text-sm"
-          >
-            글쓰기
+            채널 목록
           </Link>
         </div>
       </header>
