@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Script from "next/script";
+import FollowedBoardsSnb from "@/components/FollowedBoardsSnb";
+import GlobalNavigation from "@/components/GlobalNavigation";
 import Live2DClientOnly from "@/components/Live2DClientOnly";
 import "./globals.css";
 
@@ -25,7 +27,11 @@ export default function RootLayout({
           src="/live2dcubismcore.min.js"
           strategy="beforeInteractive"
         />
-        {children}
+        <GlobalNavigation />
+        <div className="mx-auto flex w-full max-w-7xl gap-4 px-4 py-4">
+          <FollowedBoardsSnb />
+          <div className="min-w-0 flex-1">{children}</div>
+        </div>
         <Live2DClientOnly />
       </body>
     </html>

@@ -12,6 +12,12 @@ import type { CharacterProfile } from "@/types/character";
 import CharacterUploader from "./character/CharacterUploader";
 import CharacterLibraryPanel from "./character/CharacterLibraryPanel";
 
+import {
+  BASE_PROFILES,
+  mergeProfiles,
+  resolvePreferredProfile,
+} from "@/lib/live2d/profileSync";
+
 type Tab = "basic" | "library" | "upload";
 
 const TABS: { id: Tab; label: string }[] = [
@@ -20,31 +26,12 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "upload", label: "업로드" },
 ];
 
-const BASE_PROFILES: CharacterProfile[] = [PICHU_PROFILE, MAO_PRO_PROFILE];
-
-const resolvePreferredProfile = (
-  allProfiles: CharacterProfile[],
-  preferredId?: string
-) =>
-  allProfiles.find((p) => p.id === preferredId) ??
-  allProfiles.find((p) => p.id === PICHU_PROFILE.id) ??
-  null;
-
-const mergeProfiles = (
-  defaults: CharacterProfile[],
-  savedProfiles: CharacterProfile[]
-): CharacterProfile[] => {
-  const byId = new Map<string, CharacterProfile>();
-  for (const p of defaults) byId.set(p.id, p);
-  for (const p of savedProfiles) byId.set(p.id, p);
-  return Array.from(byId.values()).sort((a, b) => b.createdAt - a.createdAt);
-};
-
 /**
  * 캐릭터 컨트롤 패널.
  *
  * - 마운트 시 내장 캐릭터들을 라이브러리에 등록하고 기본 캐릭터를 활성화한다.
  * - 탭 전환으로 기본 제어 / 라이브러리 / 업로드 패널을 표시한다.
+ * - 실제 초기화 로직은 Live2DClientOnly(전역) 에서 수행하므로 여기선 UI 제어에 집중한다.
  */
 export default function CharacterControls() {
   const [tab, setTab] = useState<Tab>("basic");
@@ -58,40 +45,32 @@ export default function CharacterControls() {
   const profile = useCharacterStore((s) => s.profile);
   const setProfile = useCharacterStore((s) => s.setProfile);
 
-  // 로그인 상태에 따라 라이브러리 동기화 + 활성 캐릭터 복원
+  // 로그인 상태 변화에 따른 동기화 (이미 Live2DClientOnly 에서 수행 중이지만, 
+  // 라이브러리 탭 진입 시 최신 상태 보장을 위해 남겨둠)
   useEffect(() => {
-    // 첫 fetch 전이면 아무것도 하지 않는다 (깜빡임 방지)
-    if (authUser === undefined) return;
-
-    if (!authUser) {
-      setProfiles([]);
-      setActive(null);
-      setProfile(null);
-      return;
-    }
+    if (authUser === undefined || !authUser) return;
 
     void (async () => {
       const savedProfiles = await listCharacterProfiles();
       const allProfiles = mergeProfiles(BASE_PROFILES, savedProfiles);
-      setProfiles(allProfiles);
+      
+      if (profiles.length !== allProfiles.length) {
+        setProfiles(allProfiles);
+      }
 
       const preferredId =
         typeof authUser.user_metadata?.activeCharacterId === "string"
           ? (authUser.user_metadata.activeCharacterId as string)
           : undefined;
       const preferredProfile = resolvePreferredProfile(allProfiles, preferredId);
-      if (!preferredProfile) return;
-
-      if (activeId !== preferredProfile.id) {
+      
+      if (preferredProfile && activeId !== preferredProfile.id) {
         setActive(preferredProfile.id);
       }
-      if (profile?.id !== preferredProfile.id) {
+      if (preferredProfile && profile?.id !== preferredProfile.id) {
         setProfile(preferredProfile);
       }
     })();
-    // activeId/profile.id 가 동기화 도중 바뀌어 무한 재실행되는 것을 막기 위해
-    // 의도적으로 authUser 만 의존성으로 둔다.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUser]);
 
   // 비로그인: 캐릭터 관련 UI 전체 비표시
