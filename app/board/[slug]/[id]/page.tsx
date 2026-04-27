@@ -104,6 +104,24 @@ export default function BoardPostDetailPage() {
     router.push(`/board/${slug}`);
   };
 
+  const toggleHotPost = async () => {
+    if (!post) return;
+    const newHotStatus = !post.is_hot;
+    const { error } = await supabase
+      .from("posts")
+      .update({ 
+        is_hot: newHotStatus,
+        hot_promoted_at: newHotStatus ? new Date().toISOString() : null
+      })
+      .eq("id", post.id);
+
+    if (error) {
+      alert(error.message);
+    } else {
+      setPost({ ...post, is_hot: newHotStatus });
+    }
+  };
+
   if (loading) {
     return (
       <main className="mx-auto w-full max-w-3xl p-6">
@@ -174,6 +192,21 @@ export default function BoardPostDetailPage() {
             </button>
           </>
         ) : null}
+
+        {/* 테스트용 개념글 토글 (개발 환경에서만 노출) */}
+        {process.env.NODE_ENV === "development" && post && (
+          <button
+            type="button"
+            onClick={toggleHotPost}
+            className={`border border-dashed px-3 py-2 text-sm transition-colors ${
+              post.is_hot 
+                ? "border-orange-500 bg-orange-50 text-orange-700" 
+                : "border-gray-400 bg-gray-50 text-gray-500"
+            }`}
+          >
+            {post.is_hot ? "🔥 개념글 해제" : "✨ 개념글로 등극"}
+          </button>
+        )}
       </div>
 
       {message ? (
