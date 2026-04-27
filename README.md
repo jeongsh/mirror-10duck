@@ -37,7 +37,8 @@
 - `퇴근` 요청 시 다음을 수행하도록 설정됨:
   - `docs/plan.md` 업데이트
   - `docs/ARCHITECTURE_OVERVIEW.md` 업데이트
-  - 두 파일만 커밋 + 푸시
+  - `docs/DB_TABLES.md` 업데이트
+  - 세 파일만 커밋 + 푸시
 
 ### Antigravity 사용 시
 - 워크플로: `.agent/workflows/퇴근.md`

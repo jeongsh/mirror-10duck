@@ -15,13 +15,17 @@ alwaysApply: true
 - 파일 하단에 "최근 변경 메모" 섹션을 추가한다.
 - 오늘 구조/역할 문서 관점에서 바뀐 점을 1~3줄로 기록한다.
 
-3. Git 처리
-- `docs/plan.md`, `docs/ARCHITECTURE_OVERVIEW.md`만 스테이징한다.
+3. `docs/DB_TABLES.md` 업데이트
+- 오늘 변경된 DB 스키마/정책/관계가 있으면 반영한다.
+- 신규 테이블/컬럼/RLS 변경이 없더라도 "변경 없음" 여부를 간단히 확인한다.
+
+4. Git 처리
+- `docs/plan.md`, `docs/ARCHITECTURE_OVERVIEW.md`, `docs/DB_TABLES.md`만 스테이징한다.
 - 한국어 커밋 메시지로 커밋한다.
-- 예시: `docs: 퇴근 전 plan/구조 문서 업데이트`
+- 예시: `docs: 퇴근 전 plan/구조/DB 문서 업데이트`
 - 커밋 후 `git push`까지 수행한다.
 
-4. 보고 형식
+5. 보고 형식
 - 최종 응답에 수정 파일 목록, 커밋 메시지, 푸시 결과(브랜치/원격)를 짧게 보고한다.
 
 주의:
