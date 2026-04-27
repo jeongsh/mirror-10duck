@@ -22,6 +22,12 @@ export default function HomePage() {
           >
             채널 목록
           </Link>
+          <Link
+            href="/feed"
+            className="border border-dashed border-gray-500 bg-white px-3 py-2 text-sm"
+          >
+            피드 타임라인
+          </Link>
         </div>
       </header>
 
