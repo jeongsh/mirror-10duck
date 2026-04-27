@@ -51,8 +51,6 @@ export default function Live2DWrapper() {
   const neutralParametersRef = useRef<number[] | null>(null);
   const emotionApplySeqRef = useRef(0);
   const pendingIdleReturnRef = useRef(false);
-  const lastMotionPlayingRef = useRef(false);
-  const lastPendingIdleRef = useRef(false);
   const actionIdleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const actionIdleTimeoutSeqRef = useRef(0);
   const motionMetaCacheRef = useRef<Map<string, MotionFileMeta>>(new Map());
@@ -576,30 +574,38 @@ export default function Live2DWrapper() {
   // Effect 6 · 파라미터 라이브 모핑
   // Live2D 는 매 프레임 파라미터를 재설정하지 않으면 0 으로 리셋되므로
   // 매 tick 에서 값을 덮어써야 한다.
+  //
+  // 주의: store 의 morphValues 를 구독하지 않는다.
+  //   - 매 프레임 getState 로 최신 값을 직접 읽기 때문에 구독은 불필요하고,
+  //     구독을 걸면 값이 바뀔 때마다 컴포넌트 전체가 리렌더되어 오히려 손해다.
   // --------------------------------------------------------------------
-  const morphValues = useCharacterStore((s) => s.morphValues);
   useEffect(() => {
     if (!appReady || !modelRef.current) return;
     const model = modelRef.current;
     const app = appRef.current;
     if (!app) return;
 
+    // 모델 로드 시점에 한 번만 coreModel 을 해석한다 (매 프레임 internalModel 재캐스팅 회피).
+    const core = (
+      model.internalModel as unknown as {
+        coreModel?: {
+          setParameterValueById?: (id: string, v: number) => void;
+        };
+      }
+    ).coreModel;
+    const setParam = core?.setParameterValueById?.bind(core);
+    if (!setParam) return;
+
     const tick = () => {
       const values = useCharacterStore.getState().morphValues;
-      const core = (
-        model.internalModel as unknown as {
-          coreModel?: {
-            setParameterValueById?: (id: string, v: number) => void;
-          };
+      // try/catch 를 루프 밖으로 빼서 호출 오버헤드를 줄인다.
+      // 잘못된 파라미터 ID 로 throw 가 나도 다음 프레임에 다시 시도되므로 무방.
+      try {
+        for (const id in values) {
+          setParam(id, values[id]);
         }
-      ).coreModel;
-      if (!core?.setParameterValueById) return;
-      for (const [id, v] of Object.entries(values)) {
-        try {
-          core.setParameterValueById(id, v);
-        } catch {
-          /* ignore */
-        }
+      } catch {
+        /* ignore */
       }
     };
 
@@ -609,9 +615,6 @@ export default function Live2DWrapper() {
       const ticker = app?.ticker as { remove?: (fn: () => void) => void } | null | undefined;
       ticker?.remove?.(tick);
     };
-    // morphValues 가 바뀔 때 재구독할 필요는 없음 (store 에서 직접 읽음).
-    // isReady 는 새 모델 로드 성공 트리거.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appReady, modelPath, isReady]);
 
   // --------------------------------------------------------------------
@@ -646,82 +649,19 @@ export default function Live2DWrapper() {
   }, [appReady, modelPath, isTracking, isReady]);
 
   // --------------------------------------------------------------------
-  // Effect 8 · 액션 모션 종료 → idle 자동 복귀 폴러
+  // Effect 8 · 모델 swap / 언마운트 시 idle 복귀 fallback 타이머 정리
   //
-  // pixi-live2d-display 가 자체적으로 idle 모션을 자동 큐잉해야 하지만,
-  // 모델/우선순위 조합에 따라 트리거되지 않고 마지막 프레임에서 멈추는 경우가 있다.
-  // motionFinish 이벤트 또한 일부 빌드에서 외부 리스너로 누락되는 사례가 관찰되어,
-  // 매 프레임 motionManager.playing 플래그를 직접 폴링해서 모션 종료를 감지한다.
+  // 과거에는 매 프레임 motionManager.playing 을 폴링해서 모션 종료를 감지했지만,
+  // 현재 사용 중인 액션 모션이 모두 Loop=true 라 playing 플래그가 false 로
+  // 떨어지지 않았다. 결국 폴러는 한 번도 트리거되지 않으면서 60fps 콜백 비용만
+  // 지불하는 dead code 였기에 제거했다.
+  //
+  // 비루프 모션도 fallback 타이머가 `durationMs + 120ms` 로 동일하게 처리한다.
+  // (모션 메타는 playAction 에서 motion3.json 을 읽어 캐시한다.)
   // --------------------------------------------------------------------
   useEffect(() => {
-    if (!appReady || !modelRef.current) return;
-    const model = modelRef.current;
-    const app = appRef.current;
-    if (!app) return;
-
-    lastMotionPlayingRef.current = false;
-    lastPendingIdleRef.current = pendingIdleReturnRef.current;
-
-    const tick = () => {
-      if (modelRef.current !== model) return;
-
-      const mm = (
-        model.internalModel as unknown as {
-          motionManager?: {
-            playing?: boolean;
-            isFinished?: () => boolean;
-          };
-        }
-      ).motionManager;
-      if (!mm) return;
-
-      const isPlaying = mm.playing === true && !(mm.isFinished?.() ?? false);
-      const wasPlaying = lastMotionPlayingRef.current;
-      lastMotionPlayingRef.current = isPlaying;
-      const pendingIdle = pendingIdleReturnRef.current;
-
-      if (wasPlaying !== isPlaying) {
-        console.log("[Live2DWrapper] motion playing changed:", {
-          wasPlaying,
-          isPlaying,
-          pendingIdle,
-        });
-      }
-      if (lastPendingIdleRef.current !== pendingIdle) {
-        console.log("[Live2DWrapper] pending idle changed:", {
-          wasPending: lastPendingIdleRef.current,
-          pendingIdle,
-        });
-        lastPendingIdleRef.current = pendingIdle;
-      }
-
-      if (wasPlaying && !isPlaying && pendingIdle) {
-        console.log("[Live2DWrapper] action motion finished, restoring idle motion");
-        pendingIdleReturnRef.current = false;
-        lastPendingIdleRef.current = false;
-        const profile = useCharacterStore.getState().profile;
-        const idleMotion = profile?.motionMap.idle;
-        if (idleMotion) {
-          try {
-            void model
-              .motion(idleMotion.group, idleMotion.index, MotionPriority.FORCE)
-              .then((ok) => {
-                console.log("[Live2DWrapper] idle motion requested:", { idleMotion, ok });
-              });
-          } catch (e) {
-            console.warn("[Live2DWrapper] idle restore warning:", e);
-          }
-        }
-      }
-    };
-
-    app.ticker.add(tick);
     return () => {
-      const ticker = app?.ticker as { remove?: (fn: () => void) => void } | null | undefined;
-      ticker?.remove?.(tick);
       pendingIdleReturnRef.current = false;
-      lastMotionPlayingRef.current = false;
-      lastPendingIdleRef.current = false;
       if (actionIdleTimeoutRef.current) {
         clearTimeout(actionIdleTimeoutRef.current);
         actionIdleTimeoutRef.current = null;
@@ -742,22 +682,16 @@ export default function Live2DWrapper() {
     const motion = profile.motionMap[action];
     if (motion) {
       try {
-        void model
-          .motion(motion.group, motion.index, MotionPriority.FORCE)
-          .then((ok) => {
-            console.log("[Live2DWrapper] action motion requested:", { action, motion, ok });
-          });
+        void model.motion(motion.group, motion.index, MotionPriority.FORCE);
 
-        // 액션 모션이 끝나면 idle 로 복귀해야 한다는 플래그.
-        // 실제 복귀는 Effect 8 의 ticker 콜백이 모션 종료를 감지해 처리한다.
-        // (라이브러리의 motionFinish 이벤트가 모델/우선순위 조합에 따라 누락되는
-        //  케이스가 있어 ticker 폴링 방식이 더 안정적임.)
         if (action !== "idle") {
+          // 액션 모션이 끝나면 idle 로 복귀해야 한다는 플래그.
+          // 라이브러리의 motionFinish 이벤트는 Loop=true 모션에서 절대 발화하지
+          // 않으므로, 모션 길이를 미리 읽어 setTimeout 으로 강제 복귀시킨다.
           pendingIdleReturnRef.current = true;
-          console.log("[Live2DWrapper] pending idle set true");
 
           const scheduleSeq = ++actionIdleTimeoutSeqRef.current;
-          const scheduleFallback = (delayMs: number, reason: string) => {
+          const scheduleFallback = (delayMs: number) => {
             if (scheduleSeq !== actionIdleTimeoutSeqRef.current) return;
             if (actionIdleTimeoutRef.current) {
               clearTimeout(actionIdleTimeoutRef.current);
@@ -767,21 +701,9 @@ export default function Live2DWrapper() {
               const latestProfile = useCharacterStore.getState().profile;
               const idleMotion = latestProfile?.motionMap.idle;
               pendingIdleReturnRef.current = false;
-              lastPendingIdleRef.current = false;
               if (!idleMotion) return;
               try {
-                console.log("[Live2DWrapper] fallback timeout restoring idle motion", {
-                  delayMs,
-                  reason,
-                });
-                void model
-                  .motion(idleMotion.group, idleMotion.index, MotionPriority.FORCE)
-                  .then((ok) => {
-                    console.log("[Live2DWrapper] idle motion requested by fallback:", {
-                      idleMotion,
-                      ok,
-                    });
-                  });
+                void model.motion(idleMotion.group, idleMotion.index, MotionPriority.FORCE);
               } catch (e) {
                 console.warn("[Live2DWrapper] fallback idle restore warning:", e);
               }
@@ -789,28 +711,22 @@ export default function Live2DWrapper() {
           };
 
           // 메타 로드 실패해도 기본값(1200ms)으로 즉시 스케줄.
-          scheduleFallback(1200, "default");
+          scheduleFallback(1200);
 
           if (modelPath) {
             void getMotionMeta(modelPath, motion.group, motion.index).then((meta) => {
               if (!meta || scheduleSeq !== actionIdleTimeoutSeqRef.current) return;
+              // 비루프: 자연스러운 종료 직후 (+120ms 마진) idle 로 전환.
+              // 루프: 길이의 ~45% 지점에서 끊되 0.9~1.8초 범위로 클램프해
+              //       너무 짧게 끊기거나 너무 오래 머무는 걸 방지.
               const calculatedDelay = meta.loop
                 ? Math.min(Math.max(Math.round(meta.durationMs * 0.45), 900), 1800)
                 : Math.max(600, meta.durationMs + 120);
-              console.log("[Live2DWrapper] motion meta loaded:", {
-                action,
-                group: motion.group,
-                index: motion.index,
-                durationMs: meta.durationMs,
-                loop: meta.loop,
-                calculatedDelay,
-              });
-              scheduleFallback(calculatedDelay, "motion-meta");
+              scheduleFallback(calculatedDelay);
             });
           }
         } else {
           pendingIdleReturnRef.current = false;
-          console.log("[Live2DWrapper] pending idle cleared (idle action)");
           if (actionIdleTimeoutRef.current) {
             clearTimeout(actionIdleTimeoutRef.current);
             actionIdleTimeoutRef.current = null;
@@ -870,8 +786,6 @@ export default function Live2DWrapper() {
       y: modelRef.current.y,
     });
   };
-
-  void morphValues; // dependency marker
 
   return (
     <aside
