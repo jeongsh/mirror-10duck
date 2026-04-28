@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Script from "next/script";
-import FollowedBoardsSnb from "@/components/FollowedBoardsSnb";
 import GlobalNavigation from "@/components/GlobalNavigation";
 import Live2DClientOnly from "@/components/Live2DClientOnly";
+import RightSidebar from "@/components/RightSidebar";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -28,9 +28,18 @@ export default function RootLayout({
           strategy="beforeInteractive"
         />
         <GlobalNavigation />
-        <div className="mx-auto flex w-full max-w-7xl gap-4 px-4 py-4">
-          <FollowedBoardsSnb />
-          <div className="min-w-0 flex-1">{children}</div>
+        <div className="relative mx-auto w-full max-w-7xl px-4 pt-6 pb-4">
+          {/* 좌측 윙배너 (해상도 1536px 이상에서만 보임) - 스티키 적용 */}
+          <div className="sticky top-20 z-10 hidden h-0 w-0 2xl:block">
+            <aside className="absolute right-[calc(100%+20px)] top-0 h-[600px] w-[200px] flex-col items-center justify-center border border-dashed border-gray-400 bg-gray-100/50 text-center text-xs text-gray-400 flex">
+              [좌측<br />세로 배너]
+            </aside>
+          </div>
+
+          <div className="flex flex-col lg:flex-row items-start gap-6">
+            <div className="min-w-0 flex-1 w-full">{children}</div>
+            <RightSidebar />
+          </div>
         </div>
         <Live2DClientOnly />
       </body>

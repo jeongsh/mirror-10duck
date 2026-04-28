@@ -21,7 +21,7 @@ import {
 const Live2DWrapper = dynamic(() => import("./Live2DWrapper"), {
   ssr: false,
   loading: () => (
-    <div className="fixed bottom-6 right-6 z-50 border-2 border-dashed border-gray-500 bg-gray-200/60 p-4 text-[11px] tracking-widest text-gray-500 uppercase">
+    <div className="fixed bottom-0 right-0 z-50 border-2 border-dashed border-gray-500 bg-gray-200/60 p-4 text-[11px] tracking-widest text-gray-500 uppercase">
       [Live2D 영역 · 로딩 중...]
     </div>
   ),

@@ -1,37 +1,7 @@
-import Link from "next/link";
-import CharacterControls from "@/components/CharacterControls";
+import HomeContent from "@/components/HomeContent";
 
 export default function HomePage() {
-  return (
-    <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-4 p-6 text-gray-700">
-      <header className="border border-dashed border-gray-500 bg-white/70 p-6">
-        <h1 className="text-2xl font-bold">씹덕(SSIBDUK) MVP</h1>
-        <p className="mt-2 text-sm text-gray-600">
-          Phase 2.2 기준으로 Supabase 인증/커뮤니티 기능이 연결되었습니다.
-        </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Link
-            href="/auth"
-            className="border border-dashed border-gray-500 bg-white px-3 py-2 text-sm"
-          >
-            회원가입/로그인
-          </Link>
-          <Link
-            href="/board"
-            className="border border-dashed border-gray-500 bg-white px-3 py-2 text-sm"
-          >
-            채널 목록
-          </Link>
-          <Link
-            href="/feed"
-            className="border border-dashed border-gray-500 bg-white px-3 py-2 text-sm"
-          >
-            피드 타임라인
-          </Link>
-        </div>
-      </header>
-
-      <CharacterControls />
-    </main>
-  );
+  // `app/layout.tsx`에 이미 `max-w-7xl` 및 `FollowedBoardsSnb`(좌측) 가 존재하므로,
+  // 여기서는 남은 영역(min-w-0 flex-1)을 채우는 HomeContent(메인+우측사이드바 2단 구조)를 마운트합니다.
+  return <HomeContent />;
 }

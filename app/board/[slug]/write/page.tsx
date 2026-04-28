@@ -71,7 +71,7 @@ export default function WritePostPage() {
   };
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-4 p-6">
+    <main className="flex w-full flex-col gap-4">
       <header className="border border-dashed border-gray-500 bg-white/70 p-4">
         <h1 className="text-lg font-bold">{board ? `${board.name} - 글쓰기` : "게시글 작성"}</h1>
         <p className="mt-1 text-sm text-gray-600">

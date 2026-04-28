@@ -157,14 +157,14 @@ export default function BoardPostDetailPage() {
 
   if (loading) {
     return (
-      <main className="mx-auto w-full max-w-3xl p-6">
+      <main className="flex w-full flex-col gap-4">
         <div className="border border-dashed border-gray-500 bg-white/70 p-4 text-sm text-gray-500">로딩 중...</div>
       </main>
     );
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-4 p-6">
+    <main className="flex w-full flex-col gap-4">
       <header className="border border-dashed border-gray-500 bg-white/70 p-4">
         <div className="mb-2 text-sm text-gray-500">
           <Link href="/board" className="hover:underline">게시판</Link> &gt;{" "}

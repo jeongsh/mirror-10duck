@@ -789,7 +789,7 @@ export default function Live2DWrapper() {
 
   return (
     <aside
-      className="fixed bottom-6 right-6 z-50 select-none"
+      className="fixed bottom-0 right-0 z-50 select-none"
       aria-label="[Live2D 캐릭터 영역]"
     >
       <div className="mb-1 flex items-center justify-between text-[11px] tracking-wider text-gray-600 uppercase">

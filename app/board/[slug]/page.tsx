@@ -75,7 +75,7 @@ export default function BoardPage() {
   if (!board) return <main className="p-6 text-center text-red-500">게시판을 찾을 수 없습니다.</main>;
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-4 p-6">
+    <main className="flex w-full flex-col gap-4">
       <header className="flex flex-wrap items-center justify-between gap-2 border border-dashed border-gray-500 bg-white/70 p-4">
         <div>
           <h1 className="text-lg font-bold">{board.name}</h1>

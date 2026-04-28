@@ -57,7 +57,7 @@ export default function FollowedBoardsSnb() {
   }, []);
 
   return (
-    <aside className="hidden w-64 shrink-0 lg:block">
+    <div className="w-full">
       <div className="sticky top-20 border border-dashed border-gray-500 bg-white/70 p-4">
         <h2 className="border-b border-dashed border-gray-400 pb-2 text-sm font-bold">내 팔로우 채널</h2>
 
@@ -98,6 +98,6 @@ export default function FollowedBoardsSnb() {
           </ul>
         )}
       </div>
-    </aside>
+    </div>
   );
 }

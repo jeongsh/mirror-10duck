@@ -92,7 +92,7 @@ export default function FeedPage() {
   };
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-4 p-6">
+    <main className="flex w-full flex-col gap-6">
       <header className="flex flex-wrap items-center justify-between gap-2 border border-dashed border-gray-500 bg-white/70 p-4">
         <div>
           <h1 className="text-xl font-bold">내 타임라인 (Feed)</h1>

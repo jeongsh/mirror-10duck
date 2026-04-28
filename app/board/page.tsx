@@ -22,7 +22,7 @@ export default function BoardDirectoryPage() {
   }, []);
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 p-6">
+    <main className="flex w-full flex-col gap-6">
       <header className="border border-dashed border-gray-500 bg-white/70 p-4">
         <h1 className="text-xl font-bold">게시판 채널 목록</h1>
         <p className="text-sm text-gray-600">원하는 채널에 입장하세요.</p>
