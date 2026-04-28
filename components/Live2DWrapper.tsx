@@ -150,6 +150,13 @@ export default function Live2DWrapper() {
     }
   };
 
+  const restoreTransparentClearColor = () => {
+    const renderer = appRef.current?.renderer as unknown as {
+      gl?: WebGLRenderingContext | WebGL2RenderingContext;
+    };
+    renderer.gl?.clearColor(0, 0, 0, 0);
+  };
+
   const restoreNeutralParameters = (model: Live2DModel) => {
     const snapshot = neutralParametersRef.current;
     if (!snapshot) return;
@@ -393,6 +400,13 @@ export default function Live2DWrapper() {
 
         modelRef.current = localModel;
         originalFocusRef.current = localModel.focus.bind(localModel);
+        const originalOnRender = localModel.onRender?.bind(localModel);
+        if (originalOnRender) {
+          localModel.onRender = (ticker) => {
+            originalOnRender(ticker);
+            restoreTransparentClearColor();
+          };
+        }
         captureNeutralParameters(localModel);
 
         setReady(true);
@@ -805,7 +819,7 @@ export default function Live2DWrapper() {
           ref={canvasRef}
           width={CANVAS_W}
           height={CANVAS_H}
-          className="block bg-gray-100 touch-none"
+          className="block bg-transparent touch-none"
           style={{ width: CANVAS_W, height: CANVAS_H }}
         />
 
