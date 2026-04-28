@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   installModelFromZip,
   isInstalled,
@@ -16,10 +16,24 @@ import {
   guessMotionMap,
   guessOutfits,
 } from "@/lib/live2d/autoMap";
+import { LIVE2D_VIEWPORT } from "@/lib/live2d/viewport";
 import { uploadCharacterAssets } from "@/lib/supabase/characterStorage";
 import { useCharacterLibraryStore } from "@/store/useCharacterLibraryStore";
 import { useCharacterStore } from "@/store/useCharacterStore";
-import type { CharacterProfile } from "@/types/character";
+import type { CharacterProfile, CharacterViewConfig } from "@/types/character";
+
+interface CharacterUploaderProps {
+  onCommitted?: (profile: CharacterProfile) => void;
+  previewMode?: "inline" | "external";
+  savedView?: CharacterViewConfig;
+  previewView?: CharacterViewConfig;
+  onPreviewModelChange?: (modelUrl: string | null) => void;
+  onPreviewViewChange?: (view: CharacterViewConfig) => void;
+}
+
+export const INITIAL_UPLOAD_VIEW: CharacterViewConfig = { scale: 0.25, x: 0, y: 20 };
+const PREVIEW_W = LIVE2D_VIEWPORT.width;
+const PREVIEW_H = LIVE2D_VIEWPORT.height;
 
 /**
  * ZIP 모델 패키지를 받아서:
@@ -28,7 +42,14 @@ import type { CharacterProfile } from "@/types/character";
  *  3) 자동 추정된 매핑을 포함한 CharacterProfile 을 라이브러리에 등록
  *  4) 등록 직후 해당 캐릭터를 활성 모델로 로드
  */
-export default function CharacterUploader() {
+export default function CharacterUploader({
+  onCommitted,
+  previewMode = "inline",
+  savedView = INITIAL_UPLOAD_VIEW,
+  previewView,
+  onPreviewModelChange,
+  onPreviewViewChange,
+}: CharacterUploaderProps) {
   const [pending, setPending] = useState(false);
   const [committing, setCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
@@ -44,6 +65,56 @@ export default function CharacterUploader() {
   const register = useCharacterLibraryStore((s) => s.register);
   const setActive = useCharacterLibraryStore((s) => s.setActive);
   const setProfile = useCharacterStore((s) => s.setProfile);
+
+  useEffect(() => {
+    return () => {
+      if (!result || !isInstalled(result)) return;
+      for (const url of result.blobUrls) {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+  }, [result]);
+
+  useEffect(() => {
+    if (previewMode !== "external") return;
+    onPreviewModelChange?.(result && isInstalled(result) ? result.modelUrl : null);
+    return () => onPreviewModelChange?.(null);
+  }, [onPreviewModelChange, previewMode, result]);
+
+  const buildProfile = useCallback(
+    (
+      installed: InstalledModelPackage,
+      characterId: string,
+      modelPath: string,
+      blobUrls: string[],
+      view: CharacterViewConfig
+    ): CharacterProfile => {
+      const morphSliders = guessMorphSliders(installed);
+      return {
+        id: characterId,
+        name: name || "이름 없는 캐릭터",
+        description: description || undefined,
+        modelPath,
+        expressionMap: guessExpressionMap(installed),
+        motionMap: guessMotionMap(installed),
+        hitAreaMap: guessHitAreaMap(installed),
+        outfits: guessOutfits(installed),
+        morphSliders,
+        parameterPresets: defaultPresets(morphSliders),
+        sounds: { emotions: {}, actions: {} },
+        dialogues: { emotions: {}, actions: {} },
+        defaultView: view,
+        blobUrls,
+        isBuiltIn: false,
+        createdAt: Date.now(),
+      };
+    },
+    [description, name]
+  );
 
   const handleFile = useCallback(async (file: File) => {
     setPending(true);
@@ -108,29 +179,10 @@ export default function CharacterUploader() {
     setCommitError(null);
 
     const characterId = `uploaded-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
     try {
       const { modelUrl } = await uploadCharacterAssets(zipFile, characterId);
 
-      const morphSliders = guessMorphSliders(result);
-      const profile: CharacterProfile = {
-        id: characterId,
-        name: name || "이름 없는 캐릭터",
-        description: description || undefined,
-        modelPath: modelUrl,
-        expressionMap: guessExpressionMap(result),
-        motionMap: guessMotionMap(result),
-        hitAreaMap: guessHitAreaMap(result),
-        outfits: guessOutfits(result),
-        morphSliders,
-        parameterPresets: defaultPresets(morphSliders),
-        sounds: { emotions: {}, actions: {} },
-        dialogues: { emotions: {}, actions: {} },
-        defaultView: { scale: 0.25, x: 0, y: 20 },
-        blobUrls: [],
-        isBuiltIn: false,
-        createdAt: Date.now(),
-      };
+      const profile = buildProfile(result, characterId, modelUrl, [], savedView);
 
       // 미리 만들어진 blob URL 들은 Storage 업로드가 끝난 시점에 더 이상 필요 없으므로 정리.
       for (const url of result.blobUrls) {
@@ -150,6 +202,7 @@ export default function CharacterUploader() {
       setName("");
       setDescription("");
       if (inputRef.current) inputRef.current.value = "";
+      onCommitted?.(profile);
     } catch (e) {
       console.error("[CharacterUploader] commit 실패:", e);
       setCommitError(e instanceof Error ? e.message : String(e));
@@ -249,8 +302,222 @@ export default function CharacterUploader() {
           >
             {committing ? "[Storage 업로드 중...]" : "[라이브러리에 등록하고 로드]"}
           </button>
+          <div className="border border-dashed border-blue-300 bg-blue-50/70 p-2 text-[11px] text-blue-900">
+            <div className="mb-2 font-bold tracking-widest uppercase">[미리보기 위치]</div>
+            <p className="text-blue-800">
+              오른쪽 미리보기 화면에서 드래그로 위치를 옮기고 휠로 크기를 조절하세요.
+            </p>
+          </div>
         </div>
       )}
+    </div>
+  );
+}
+
+export function CharacterUploadPreview({
+  modelUrl,
+  view,
+  onViewChange,
+}: {
+  modelUrl: string;
+  view: CharacterViewConfig;
+  onViewChange: (view: CharacterViewConfig) => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const appRef = useRef<any>(null);
+  const modelRef = useRef<any>(null);
+  const dragData = useRef({ isDragging: false, lastX: 0, lastY: 0 });
+  const onViewChangeRef = useRef(onViewChange);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    onViewChangeRef.current = onViewChange;
+  }, [onViewChange]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let app: any = null;
+    const previousApp = window.app;
+
+    const boot = async () => {
+      if (!canvasRef.current) return;
+      try {
+        const [{ Application, Ticker }, { Live2DModel }] = await Promise.all([
+          import("pixi.js"),
+          import("@naari3/pixi-live2d-display"),
+        ]);
+        if (cancelled) return;
+
+        app = new Application();
+        await app.init({
+          canvas: canvasRef.current,
+          preference: "webgl",
+          antialias: true,
+          backgroundAlpha: 0,
+          resolution: 1,
+          autoDensity: false,
+          width: PREVIEW_W,
+          height: PREVIEW_H,
+        });
+        if (cancelled) return;
+
+        Live2DModel.registerTicker(Ticker);
+        window.app = app;
+        appRef.current = app;
+
+        const model = await Live2DModel.from(modelUrl, {
+          autoHitTest: false,
+          autoFocus: false,
+        });
+        if (cancelled) {
+          model.destroy({ children: true, texture: true, baseTexture: true });
+          return;
+        }
+
+        try {
+          const core = (
+            model.internalModel as unknown as {
+              coreModel?: {
+                _model?: {
+                  drawables?: { renderOrders?: Int32Array };
+                  renderOrders?: Int32Array;
+                };
+              };
+            }
+          ).coreModel?._model;
+          if (core?.drawables && !core.drawables.renderOrders && core.renderOrders) {
+            core.drawables.renderOrders = core.renderOrders;
+          }
+        } catch (e) {
+          console.warn("[CharacterUploadPreview] core6 compat patch warning:", e);
+        }
+
+        try {
+          (
+            model as unknown as { setRenderer?: (renderer: unknown) => void }
+          ).setRenderer?.(app.renderer);
+        } catch (e) {
+          console.warn("[CharacterUploadPreview] setRenderer warning:", e);
+        }
+
+        model.scale.set(view.scale);
+        model.x = view.x;
+        model.y = view.y;
+        app.stage.addChild(model);
+        modelRef.current = model;
+        onViewChangeRef.current(view);
+      } catch (e) {
+        console.error("[CharacterUploadPreview] preview load 실패:", e);
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    };
+
+    void boot();
+
+    return () => {
+      cancelled = true;
+      if (modelRef.current) {
+        try {
+          modelRef.current.destroy({ children: true, texture: true, baseTexture: true });
+        } catch (e) {
+          console.warn("[CharacterUploadPreview] model destroy warning:", e);
+        }
+        modelRef.current = null;
+      }
+      const targetApp = appRef.current ?? app;
+      if (targetApp) {
+        try {
+          targetApp.destroy(true, {
+            children: true,
+            texture: true,
+            baseTexture: true,
+            textureSource: true,
+          });
+        } catch (e) {
+          console.warn("[CharacterUploadPreview] app destroy warning:", e);
+        }
+      }
+      appRef.current = null;
+      if (window.app === targetApp) {
+        window.app = previousApp;
+      }
+    };
+  }, [modelUrl]);
+
+  useEffect(() => {
+    const model = modelRef.current;
+    if (!model) return;
+    model.scale.set(view.scale);
+    model.x = view.x;
+    model.y = view.y;
+  }, [view.scale, view.x, view.y]);
+
+  const updateView = () => {
+    const model = modelRef.current;
+    if (!model) return;
+    onViewChange({ scale: model.scale.x, x: model.x, y: model.y });
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!modelRef.current) return;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    dragData.current = { isDragging: true, lastX: e.clientX, lastY: e.clientY };
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const model = modelRef.current;
+    if (!dragData.current.isDragging || !model) return;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const scaleX = rect && rect.width > 0 ? PREVIEW_W / rect.width : 1;
+    const scaleY = rect && rect.height > 0 ? PREVIEW_H / rect.height : 1;
+    model.x += (e.clientX - dragData.current.lastX) * scaleX;
+    model.y += (e.clientY - dragData.current.lastY) * scaleY;
+    dragData.current.lastX = e.clientX;
+    dragData.current.lastY = e.clientY;
+    updateView();
+  };
+
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    const model = modelRef.current;
+    if (!model) return;
+    e.preventDefault();
+    const scaleFactor = e.deltaY > 0 ? 0.95 : 1.05;
+    model.scale.x *= scaleFactor;
+    model.scale.y *= scaleFactor;
+    updateView();
+  };
+
+  return (
+    <div
+      className="mb-2 flex justify-center border border-dashed border-blue-300 bg-white/70"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={() => {
+        dragData.current.isDragging = false;
+      }}
+      onPointerCancel={() => {
+        dragData.current.isDragging = false;
+      }}
+      onWheel={handleWheel}
+    >
+      <div className="relative cursor-grab active:cursor-grabbing">
+        <canvas
+          ref={canvasRef}
+          width={PREVIEW_W}
+          height={PREVIEW_H}
+          className="block touch-none bg-transparent"
+          style={{
+            width: "min(100%, 320px)",
+            height: "auto",
+            aspectRatio: `${PREVIEW_W} / ${PREVIEW_H}`,
+          }}
+        />
+        {error && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/80 p-3 text-center text-[11px] text-red-600">
+            {error}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

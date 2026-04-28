@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { useCharacterLibraryStore } from "@/store/useCharacterLibraryStore";
 import { useCharacterStore } from "@/store/useCharacterStore";
-import CharacterUploader from "@/components/character/CharacterUploader";
+import CharacterUploader, {
+  CharacterUploadPreview,
+  INITIAL_UPLOAD_VIEW,
+} from "@/components/character/CharacterUploader";
 import { Board } from "@/types/community";
 import { listCharacterProfiles } from "@/lib/supabase/characters";
 import { BASE_PROFILES, mergeProfiles } from "@/lib/live2d/profileSync";
@@ -44,6 +47,10 @@ export default function ProfilePage() {
   // 탈퇴 모달 상태
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [withdrawInput, setWithdrawInput] = useState("");
+  const [showCharacterUploadModal, setShowCharacterUploadModal] = useState(false);
+  const [previewModelUrl, setPreviewModelUrl] = useState<string | null>(null);
+  const [previewView, setPreviewView] = useState(INITIAL_UPLOAD_VIEW);
+  const [savedView, setSavedView] = useState(INITIAL_UPLOAD_VIEW);
   
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -58,6 +65,14 @@ export default function ProfilePage() {
   const setActiveCharacterId = useCharacterLibraryStore((s) => s.setActive);
   const unregister = useCharacterLibraryStore((s) => s.unregister);
   const setProfile = useCharacterStore((s) => s.setProfile);
+
+  const handlePreviewModelChange = useCallback((modelUrl: string | null) => {
+    setPreviewModelUrl(modelUrl);
+    if (modelUrl) {
+      setPreviewView(INITIAL_UPLOAD_VIEW);
+      setSavedView(INITIAL_UPLOAD_VIEW);
+    }
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -454,8 +469,20 @@ export default function ProfilePage() {
             </div>
 
             {/* 업로더 영역 */}
-            <div className="border border-dashed border-gray-300 bg-gray-50/30 p-4">
-              <CharacterUploader />
+            <div className="flex items-center justify-between gap-4 border border-dashed border-gray-300 bg-gray-50/30 p-4">
+              <div>
+                <div className="text-xs font-bold text-gray-700">캐릭터 업로드</div>
+                <p className="mt-1 text-[11px] text-gray-400">
+                  ZIP 패키지를 모달에서 등록하고 Live2D 미리보기로 위치를 맞춥니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCharacterUploadModal(true)}
+                className="shrink-0 border border-dashed border-gray-800 bg-white px-4 py-2 text-xs font-bold tracking-widest text-gray-800 transition-colors hover:bg-gray-800 hover:text-white"
+              >
+                [캐릭터 업로드]
+              </button>
             </div>
 
             {profiles.length === 0 ? (
@@ -583,6 +610,82 @@ export default function ProfilePage() {
               >
                 {loading ? "처리중..." : "[영구 탈퇴]"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCharacterUploadModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[90vh] w-full max-w-5xl flex-col border border-dashed border-gray-500 bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-dashed border-gray-300 px-5 py-4">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-widest text-gray-700">
+                  캐릭터 업로드
+                </h3>
+                <p className="mt-1 text-[11px] text-gray-400">
+                  분석이 끝나면 모달 내부 오른쪽에 Live2D 미리보기가 표시됩니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCharacterUploadModal(false);
+                  setPreviewModelUrl(null);
+                  setPreviewView(INITIAL_UPLOAD_VIEW);
+                  setSavedView(INITIAL_UPLOAD_VIEW);
+                }}
+                className="border border-dashed border-gray-400 px-3 py-1 text-xs font-bold text-gray-500 hover:bg-gray-100"
+              >
+                [닫기]
+              </button>
+            </div>
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto p-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+              <CharacterUploader
+                previewMode="external"
+                savedView={savedView}
+                previewView={previewView}
+                onPreviewModelChange={handlePreviewModelChange}
+                onPreviewViewChange={setPreviewView}
+                onCommitted={() => {
+                  setShowCharacterUploadModal(false);
+                  setPreviewModelUrl(null);
+                  setPreviewView(INITIAL_UPLOAD_VIEW);
+                  setSavedView(INITIAL_UPLOAD_VIEW);
+                }}
+              />
+              <aside className="border border-dashed border-blue-300 bg-blue-50/60 p-4 text-xs text-blue-900">
+                <div className="mb-2 font-bold uppercase tracking-widest">[미리보기 화면]</div>
+                {previewModelUrl ? (
+                  <div className="space-y-2">
+                    <CharacterUploadPreview
+                      modelUrl={previewModelUrl}
+                      view={previewView}
+                      onViewChange={setPreviewView}
+                    />
+                    <div className="grid grid-cols-3 gap-2 font-mono text-[11px] text-blue-900">
+                      <span>scale {previewView.scale.toFixed(2)}</span>
+                      <span>x {Math.round(previewView.x)}</span>
+                      <span>y {Math.round(previewView.y)}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSavedView(previewView)}
+                      className="w-full border border-dashed border-blue-500 bg-white px-2 py-1 text-[11px] font-bold tracking-widest text-blue-800 transition-colors hover:bg-blue-100"
+                    >
+                      [현재 scale/x/y 저장]
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex h-[340px] items-center justify-center border border-dashed border-blue-300 bg-white/60 p-4 text-center text-[11px] text-blue-700">
+                    ZIP 선택 후 이 영역에 Live2D 미리보기가 표시됩니다.
+                  </div>
+                )}
+                <p className="mt-3 leading-relaxed">
+                  캐릭터를 드래그하고 마우스 휠로 scale을 맞춘 뒤 오른쪽의 저장 버튼을 누르면 등록 시 기본
+                  위치로 저장됩니다.
+                </p>
+              </aside>
             </div>
           </div>
         </div>

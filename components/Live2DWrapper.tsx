@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Application, Ticker } from "pixi.js";
 import { Live2DModel, MotionPriority } from "@naari3/pixi-live2d-display";
+import { LIVE2D_VIEWPORT } from "@/lib/live2d/viewport";
 import { useCharacterStore } from "@/store/useCharacterStore";
 import type { CharacterActionKey } from "@/types/character";
 
@@ -18,8 +19,8 @@ declare global {
   }
 }
 
-const CANVAS_W = 320;
-const CANVAS_H = 420;
+const CANVAS_W = LIVE2D_VIEWPORT.width;
+const CANVAS_H = LIVE2D_VIEWPORT.height;
 
 interface MotionFileMeta {
   durationMs: number;
@@ -775,8 +776,11 @@ export default function Live2DWrapper() {
   };
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!dragData.current.isDragging || !modelRef.current) return;
-    const dx = e.clientX - dragData.current.lastX;
-    const dy = e.clientY - dragData.current.lastY;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const scaleX = rect && rect.width > 0 ? CANVAS_W / rect.width : 1;
+    const scaleY = rect && rect.height > 0 ? CANVAS_H / rect.height : 1;
+    const dx = (e.clientX - dragData.current.lastX) * scaleX;
+    const dy = (e.clientY - dragData.current.lastY) * scaleY;
     modelRef.current.x += dx;
     modelRef.current.y += dy;
     dragData.current.lastX = e.clientX;
@@ -820,7 +824,11 @@ export default function Live2DWrapper() {
           width={CANVAS_W}
           height={CANVAS_H}
           className="block bg-transparent touch-none"
-          style={{ width: CANVAS_W, height: CANVAS_H }}
+          style={{
+            width: `min(${CANVAS_W}px, calc(100vw - 16px))`,
+            height: "auto",
+            aspectRatio: `${CANVAS_W} / ${CANVAS_H}`,
+          }}
         />
 
         <SpeechBubble />
