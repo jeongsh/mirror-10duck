@@ -14,6 +14,7 @@ const NAV_ITEMS = [
 export default function GlobalNavigation() {
   const pathname = usePathname();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [nickname, setNickname] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -22,13 +23,17 @@ export default function GlobalNavigation() {
       const { data } = await supabase.auth.getUser();
       if (isMounted) {
         setIsLoggedIn(Boolean(data.user));
+        setNickname(data.user?.user_metadata?.nickname || null);
       }
     };
 
     syncAuthState();
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsLoggedIn(Boolean(session?.user));
+      if (isMounted) {
+        setIsLoggedIn(Boolean(session?.user));
+        setNickname(session?.user?.user_metadata?.nickname || null);
+      }
     });
 
     return () => {
@@ -65,10 +70,10 @@ export default function GlobalNavigation() {
           })}
         </div>
         <Link
-          href="/auth"
+          href={isLoggedIn ? "/profile" : "/auth"}
           className="ml-auto border border-dashed border-gray-500 bg-white px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-100"
         >
-          {isLoggedIn ? "프로필 수정" : "로그인"}
+          {isLoggedIn ? (nickname || "프로필") : "로그인"}
         </Link>
       </div>
     </nav>
