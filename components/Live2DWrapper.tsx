@@ -792,14 +792,9 @@ export default function Live2DWrapper() {
       className="fixed bottom-0 right-0 z-50 select-none"
       aria-label="[Live2D 캐릭터 영역]"
     >
-      <div className="mb-1 flex items-center justify-between text-[11px] tracking-wider text-gray-600 uppercase">
-        <span>[Live2D 캐릭터 영역]</span>
-        <span className="text-gray-400">
-          {CANVAS_W} x {CANVAS_H}
-        </span>
-      </div>
+
       <div
-        className="relative border-2 border-dashed border-gray-500 bg-gray-200/60 p-2 cursor-grab active:cursor-grabbing"
+        className="relative cursor-grab active:cursor-grabbing"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -813,7 +808,7 @@ export default function Live2DWrapper() {
           className="block bg-gray-100 touch-none"
           style={{ width: CANVAS_W, height: CANVAS_H }}
         />
-        <Live2DStatusBadge />
+
         <SpeechBubble />
       </div>
     </aside>
