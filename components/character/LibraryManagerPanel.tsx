@@ -80,9 +80,9 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
   const [draftName, setDraftName] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
   const [draftView, setDraftView] = useState<CharacterViewConfig>({
-    scale: 0,
+    scale: 0.05,
     x: 0,
-    y: 0,
+    y: 20,
   });
   const [draftDialogues, setDraftDialogues] = useState<DialogueMap>({
     emotions: {},

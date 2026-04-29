@@ -366,6 +366,7 @@ export function CharacterUploadPreview({
   const neutralParametersRef = useRef<number[] | null>(null);
   const dragData = useRef({ isDragging: false, lastX: 0, lastY: 0 });
   const onViewChangeRef = useRef(onViewChange);
+  const viewRef = useRef(view);
   const viewCommitModeRef = useRef(viewCommitMode);
   const wheelCommitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -374,6 +375,10 @@ export function CharacterUploadPreview({
   useEffect(() => {
     onViewChangeRef.current = onViewChange;
   }, [onViewChange]);
+
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
 
   useEffect(() => {
     viewCommitModeRef.current = viewCommitMode;
@@ -514,14 +519,15 @@ export function CharacterUploadPreview({
           console.warn("[CharacterUploadPreview] setRenderer warning:", e);
         }
 
-        model.scale.set(view.scale);
-        model.x = view.x;
-        model.y = view.y;
+        const latestView = viewRef.current;
+        model.scale.set(latestView.scale);
+        model.x = latestView.x;
+        model.y = latestView.y;
         app.stage.addChild(model);
         modelRef.current = model;
         captureNeutralParameters(model);
         setPreviewReadySeq((seq) => seq + 1);
-        onViewChangeRef.current(view);
+        onViewChangeRef.current(latestView);
       } catch (e) {
         console.error("[CharacterUploadPreview] preview load 실패:", e);
         setError(e instanceof Error ? e.message : String(e));
