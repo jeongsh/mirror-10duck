@@ -18,10 +18,15 @@ import { loadModelZipEntries } from "@/lib/live2d/modelZip";
  */
 
 export const MODEL_PACKAGE_LIMITS = {
-  MAX_TOTAL_MB: 80,
-  MAX_MOC3_MB: 15,
+  MAX_TOTAL_MB: 200,
+  RECOMMENDED_TOTAL_MB: 50,
+  WARN_TOTAL_MB: 80,
+  HEAVY_TOTAL_MB: 120,
+  RECOMMENDED_MOC3_MB: 30,
+  HEAVY_MOC3_MB: 60,
   MAX_TEXTURE_MB: 16,
-  MAX_TEXTURE_COUNT: 8,
+  RECOMMENDED_TEXTURE_COUNT: 8,
+  HEAVY_TEXTURE_COUNT: 16,
   MAX_EXPRESSION_COUNT: 64,
   MAX_MOTION_COUNT: 256,
 } as const;
@@ -239,6 +244,18 @@ export async function installModelFromZip(
     ]);
   }
 
+  if (file.size > MODEL_PACKAGE_LIMITS.HEAVY_TOTAL_MB * 1024 * 1024) {
+    issues.push({
+      level: "warning",
+      message: `ZIP 크기가 ${MODEL_PACKAGE_LIMITS.HEAVY_TOTAL_MB}MB를 초과합니다. 판매 원본으로는 가능하지만 웹 로딩용 모델은 별도 경량본을 권장합니다.`,
+    });
+  } else if (file.size > MODEL_PACKAGE_LIMITS.WARN_TOTAL_MB * 1024 * 1024) {
+    issues.push({
+      level: "warning",
+      message: `ZIP 크기가 ${MODEL_PACKAGE_LIMITS.WARN_TOTAL_MB}MB를 초과합니다. 모바일/저사양 환경에서 업로드와 로딩이 느릴 수 있습니다.`,
+    });
+  }
+
   let zipEntries: { path: string; entry: JSZip.JSZipObject }[];
   try {
     const loaded = await loadModelZipEntries(file);
@@ -414,10 +431,15 @@ export async function installModelFromZip(
 
   // 텍스처 개수 체크
   const textures = texturesRef;
-  if (textures.length > MODEL_PACKAGE_LIMITS.MAX_TEXTURE_COUNT) {
+  if (textures.length > MODEL_PACKAGE_LIMITS.HEAVY_TEXTURE_COUNT) {
     issues.push({
-      level: "error",
-      message: `텍스처가 ${MODEL_PACKAGE_LIMITS.MAX_TEXTURE_COUNT} 개 제한을 초과했습니다(${textures.length}).`,
+      level: "warning",
+      message: `텍스처가 ${MODEL_PACKAGE_LIMITS.HEAVY_TEXTURE_COUNT}개를 초과했습니다(${textures.length}개). 웹 로딩용 경량본을 별도로 만드는 것을 권장합니다.`,
+    });
+  } else if (textures.length > MODEL_PACKAGE_LIMITS.RECOMMENDED_TEXTURE_COUNT) {
+    issues.push({
+      level: "warning",
+      message: `텍스처가 권장 개수(${MODEL_PACKAGE_LIMITS.RECOMMENDED_TEXTURE_COUNT}개)를 초과했습니다(${textures.length}개). 로딩/렌더링이 느려질 수 있습니다.`,
     });
   }
 
@@ -432,10 +454,18 @@ export async function installModelFromZip(
     const buf = await entry.async("arraybuffer");
 
     // 크기 상한
-    if (kind === "moc3" && buf.byteLength > MODEL_PACKAGE_LIMITS.MAX_MOC3_MB * 1024 * 1024) {
+    if (kind === "moc3" && buf.byteLength > MODEL_PACKAGE_LIMITS.HEAVY_MOC3_MB * 1024 * 1024) {
       issues.push({
-        level: "error",
-        message: `moc3 가 ${MODEL_PACKAGE_LIMITS.MAX_MOC3_MB}MB 를 초과합니다.`,
+        level: "warning",
+        message: `moc3가 ${MODEL_PACKAGE_LIMITS.HEAVY_MOC3_MB}MB를 초과합니다. 브라우저 메모리 사용량과 로딩 시간이 크게 늘 수 있어 웹 로딩용 경량본을 권장합니다.`,
+      });
+    } else if (
+      kind === "moc3" &&
+      buf.byteLength > MODEL_PACKAGE_LIMITS.RECOMMENDED_MOC3_MB * 1024 * 1024
+    ) {
+      issues.push({
+        level: "warning",
+        message: `moc3가 권장 크기(${MODEL_PACKAGE_LIMITS.RECOMMENDED_MOC3_MB}MB)를 초과합니다. 브라우저 메모리 사용량과 로딩 시간이 커질 수 있습니다.`,
       });
     }
     if (kind === "texture" && buf.byteLength > MODEL_PACKAGE_LIMITS.MAX_TEXTURE_MB * 1024 * 1024) {
@@ -484,6 +514,18 @@ export async function installModelFromZip(
 
     blobs.set(refPath, new Blob([buf], { type: mime }));
     void isBinary;
+  }
+
+  if (totalReferencedBytes > MODEL_PACKAGE_LIMITS.HEAVY_TOTAL_MB * 1024 * 1024) {
+    issues.push({
+      level: "warning",
+      message: `실제 로딩 리소스가 ${MODEL_PACKAGE_LIMITS.HEAVY_TOTAL_MB}MB를 초과합니다. 인기 모델이 되면 트래픽 비용과 첫 로딩 실패율이 커질 수 있습니다.`,
+    });
+  } else if (totalReferencedBytes > MODEL_PACKAGE_LIMITS.WARN_TOTAL_MB * 1024 * 1024) {
+    issues.push({
+      level: "warning",
+      message: `실제 로딩 리소스가 ${MODEL_PACKAGE_LIMITS.WARN_TOTAL_MB}MB를 초과합니다. 일반 사용에는 ${MODEL_PACKAGE_LIMITS.RECOMMENDED_TOTAL_MB}MB 이하를 권장합니다.`,
+    });
   }
 
   const hasError = issues.some((i) => i.level === "error");
