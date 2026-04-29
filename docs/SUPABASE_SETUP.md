@@ -261,11 +261,121 @@ character-assets/
   `Live2DModel.from(<storage public url of model3.json>)` 호출 시 같은 base 의
   다른 리소스가 자동으로 함께 fetch 됩니다.
 
-## 4) 구현된 페이지
+## 4) Phase 2.3 캐릭터-커뮤니티 연결 (Reactions + Comments)
+
+스티커는 라이브러리에 등록된 캐릭터(`public.characters`)를 그대로 소스로 사용하므로 별도 테이블이 필요 없습니다.  
+다만 "리액션(좋아요 2.0)" 과 "댓글/스티커 답글" 은 신규 테이블이 필요합니다.
+
+> 그대로 복사해도 되고, 동일 내용을 단일 파일로 정리해 둔  
+> [`docs/migrations/2026-04-29-phase23-reactions-comments.sql`](./migrations/2026-04-29-phase23-reactions-comments.sql)
+> 를 Supabase SQL Editor 에 한 번만 붙여 넣어 실행해도 됩니다.
+>
+> 만약 실행 직후에도 클라이언트에서 `Could not find the table 'public.post_reactions' in the schema cache` 에러가 보이면,  
+> SQL Editor 에서 `notify pgrst, 'reload schema';` 한 줄만 추가 실행하거나 잠시 후 새로고침 해주세요.  
+> (아래 블록 마지막에도 같은 줄이 포함되어 있습니다.)
+>
+> 이미 과거에 `unique (post_id, user_id, reaction_type)` 형태로 만들어 둔 경우에는,  
+> [`docs/migrations/2026-04-29-phase23-reactions-single-per-user.sql`](./migrations/2026-04-29-phase23-reactions-single-per-user.sql)
+> 를 한 번만 실행해 **한 글당 한 사용자 1리액션** 정책으로 전환할 수 있습니다.  
+> (중복 row 자동 정리 + UNIQUE 키 변경 + 스키마 캐시 리로드 포함)
+
+```sql
+create extension if not exists "pgcrypto";
+
+-- 1) post_reactions: 글에 누른 6종 감정 리액션 + 반응자의 캐릭터 썸네일 스냅샷
+create table if not exists public.post_reactions (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references public.posts(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  reaction_type text not null check (
+    reaction_type in ('happy','empathy','surprise','sad','funny','cheer')
+  ),
+  character_id text,
+  character_thumbnail_url text,
+  created_at timestamptz not null default now(),
+  -- 한 글당 한 사용자 1리액션 정책 (같은 종류 재클릭=해제 / 다른 종류 클릭=교체)
+  unique (post_id, user_id)
+);
+
+create index if not exists idx_post_reactions_post_id
+  on public.post_reactions(post_id);
+
+alter table public.post_reactions enable row level security;
+
+drop policy if exists "Anyone can read post_reactions" on public.post_reactions;
+drop policy if exists "Authenticated can insert post_reactions" on public.post_reactions;
+drop policy if exists "Owner can delete post_reactions" on public.post_reactions;
+
+create policy "Anyone can read post_reactions"
+on public.post_reactions for select
+using (true);
+
+create policy "Authenticated can insert post_reactions"
+on public.post_reactions for insert
+to authenticated
+with check (auth.uid() = user_id);
+
+create policy "Owner can delete post_reactions"
+on public.post_reactions for delete
+to authenticated
+using (auth.uid() = user_id);
+
+-- 2) comments: 텍스트 OR 스티커-only 댓글
+create table if not exists public.comments (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references public.posts(id) on delete cascade,
+  author_id uuid not null references auth.users(id) on delete cascade,
+  author_email text not null,
+  content text,
+  sticker_token text,
+  created_at timestamptz not null default now(),
+  check (content is not null or sticker_token is not null)
+);
+
+create index if not exists idx_comments_post_id
+  on public.comments(post_id, created_at);
+
+alter table public.comments enable row level security;
+
+drop policy if exists "Anyone can read comments" on public.comments;
+drop policy if exists "Authenticated can insert comments" on public.comments;
+drop policy if exists "Author can update comments" on public.comments;
+drop policy if exists "Author can delete comments" on public.comments;
+
+create policy "Anyone can read comments"
+on public.comments for select
+using (true);
+
+create policy "Authenticated can insert comments"
+on public.comments for insert
+to authenticated
+with check (auth.uid() = author_id);
+
+create policy "Author can update comments"
+on public.comments for update
+to authenticated
+using (auth.uid() = author_id)
+with check (auth.uid() = author_id);
+
+create policy "Author can delete comments"
+on public.comments for delete
+to authenticated
+using (auth.uid() = author_id);
+
+-- PostgREST schema cache 리로드 (없으면 schema cache 미반영 에러가 잠시 뜰 수 있음)
+notify pgrst, 'reload schema';
+```
+
+`character_thumbnail_url` 은 반응 시점의 스냅샷이라 캐릭터 삭제/교체 후에도 안전하게 표시됩니다.
+
+## 5) 구현된 페이지
 
 - `/auth` - 회원가입/로그인/로그아웃
-- `/community` - 게시글 목록 + 카테고리 필터
-- `/community/write` - 글쓰기
-- `/community/[id]` - 게시글 상세 + 삭제
-- `/community/[id]/edit` - 게시글 수정
+- `/board` - 게시판 채널 디렉토리
+- `/board/[slug]` - 채널별 게시글 목록 + 채널 팔로우
+- `/board/[slug]/write` - 게시판 글쓰기 (스티커 삽입 + 미리보기)
+- `/board/[slug]/[id]` - 게시글 상세 + 리액션 + 댓글/스티커 답글
+- `/feed` - 팔로우 기반 피드 + 인라인 리액션
+- `/feed/write` - 피드 글쓰기 (스티커 삽입 + 미리보기)
+- `/profile` - 프로필/캐릭터 라이브러리/구독 채널/계정 설정
 - `/library/[id]` - 캐릭터 통합 관리 (이름/소개/대사/기본 위치 등)

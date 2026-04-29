@@ -1,6 +1,6 @@
 # DB 테이블 정리 (Supabase / PostgreSQL)
 
-이 문서는 현재 `Phase 2.2` 구현 기준으로 실제 사용 중인 DB 구조를 정리합니다.
+이 문서는 현재 `Phase 2.3` 구현 기준으로 실제 사용 중인 DB 구조를 정리합니다.
 
 ## 1) `auth.users` (Supabase 관리 테이블)
 
@@ -104,17 +104,71 @@ Supabase Auth가 자동으로 관리하는 사용자 테이블입니다.
 
 ---
 
-## 7) 추후 확장 후보 테이블
+## 7) `public.post_reactions` (감정 리액션)
 
-향후 `Phase 2.3+`에서 분리 권장:
+Phase 2.3 캐릭터-커뮤니티 연결의 "좋아요 2.0" 데이터입니다.
+
+### 컬럼
+- `id` `uuid` PK, 기본값 `gen_random_uuid()`
+- `post_id` `uuid` NOT NULL, `posts(id)` FK ON DELETE CASCADE
+- `user_id` `uuid` NOT NULL, `auth.users(id)` FK ON DELETE CASCADE
+- `reaction_type` `text` NOT NULL  
+  CHECK IN (`'happy'`, `'empathy'`, `'surprise'`, `'sad'`, `'funny'`, `'cheer'`)
+- `character_id` `text` NULL (반응 시점의 활성 `CharacterProfile.id` 스냅샷)
+- `character_thumbnail_url` `text` NULL (썸네일 URL 스냅샷)
+- `created_at` `timestamptz` NOT NULL, 기본값 `now()`
+
+### 인덱스/키
+- Primary Key: `id`
+- Unique Key: `(post_id, user_id)`  
+  → **한 글당 한 사용자 1리액션** 정책. 같은 종류 재클릭=해제, 다른 종류 클릭=교체.
+  (정책 전환 마이그레이션: `docs/migrations/2026-04-29-phase23-reactions-single-per-user.sql`)
+- Index: `idx_post_reactions_post_id`
+
+### RLS 정책
+- `select`: 누구나 조회 가능
+- `insert`: 인증 사용자만 가능, `auth.uid() = user_id`
+- `delete`: 본인 리액션만 삭제 가능 (`auth.uid() = user_id`)
+- `update`: 비활성화 (변경 대신 삭제 후 재삽입으로 처리)
+
+---
+
+## 8) `public.comments` (댓글 + 스티커 답글)
+
+Phase 2.3 캐릭터-커뮤니티 연결의 댓글 시스템입니다.  
+`content` 또는 `sticker_token` 중 하나만 채워지는 "양립형" 구조입니다.
+
+### 컬럼
+- `id` `uuid` PK, 기본값 `gen_random_uuid()`
+- `post_id` `uuid` NOT NULL, `posts(id)` FK ON DELETE CASCADE
+- `author_id` `uuid` NOT NULL, `auth.users(id)` FK ON DELETE CASCADE
+- `author_email` `text` NOT NULL
+- `content` `text` NULL (텍스트 댓글; 본문에 `:sticker/...:` 토큰 임베드 가능)
+- `sticker_token` `text` NULL (스티커 답글 모드, 스티커 토큰 1개)
+- `created_at` `timestamptz` NOT NULL, 기본값 `now()`
+- CHECK: `(content is not null) or (sticker_token is not null)` (둘 다 NULL 금지)
+
+### 인덱스/키
+- Primary Key: `id`
+- Index: `idx_comments_post_id` (`post_id`, `created_at`)
+
+### RLS 정책
+- `select`: 누구나 조회 가능
+- `insert`: 인증 사용자만 가능, `auth.uid() = author_id`
+- `update`: 작성자 본인만 가능 (현재 UI에서는 비노출)
+- `delete`: 작성자 본인만 가능
+
+---
+
+## 9) 추후 확장 후보 테이블
+
+향후 `Phase 3+`에서 분리/추가 권장:
 - `profiles` 또는 `user_profiles`: 닉네임, 아바타, 소개 등 사용자 공개 프로필
-- `comments`: 댓글 CRUD
-- `post_reactions`: 리액션(좋아요 2.0) 집계
-- `stickers`, `sticker_assets`: 스티커 메타/파일 매핑
+- `stickers`, `sticker_assets`: 스티커 메타/파일 매핑 (현재는 라이브러리 캐릭터를 그대로 스티커 소스로 활용)
 - `character_assets`: 업로드 모델 파일(Zip/Texture/모션) 스토리지 메타
 
 ---
 
-## 8) 참고 문서
+## 10) 참고 문서
 - `docs/SUPABASE_SETUP.md`: 초기 SQL + RLS 설정
 - `docs/plan.md`: 전체 단계별 개발 계획

@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { Board } from "@/types/community";
+import StickerPicker from "@/components/stickers/StickerPicker";
+import RichContent from "@/components/stickers/RichContent";
+import { insertAtTextarea } from "@/lib/stickers/insertAtCursor";
 
 export default function WritePostPage() {
   const router = useRouter();
@@ -18,6 +21,18 @@ export default function WritePostPage() {
   const [userEmail, setUserEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const contentRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleInsertSticker = (token: string) => {
+    const { next, cursor } = insertAtTextarea(contentRef.current, content, token);
+    setContent(next);
+    requestAnimationFrame(() => {
+      const el = contentRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(cursor, cursor);
+    });
+  };
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -101,14 +116,31 @@ export default function WritePostPage() {
         <label className="text-sm">
           내용
           <textarea
+            ref={contentRef}
             required
             rows={12}
             value={content}
             onChange={(event) => setContent(event.target.value)}
             className="mt-1 w-full border border-dashed border-gray-500 bg-white px-3 py-2"
-            placeholder="내용을 작성해 주세요."
+            placeholder="내용을 작성해 주세요. 캐릭터 스티커는 우측 버튼으로 삽입할 수 있습니다."
           />
         </label>
+
+        <div className="flex flex-wrap items-center gap-2 border-t border-dashed border-gray-300 pt-2">
+          <StickerPicker onInsert={handleInsertSticker} />
+          <span className="text-[11px] text-gray-500">
+            본문 커서 위치에 `:sticker/{"{id}"}/{"{emotion}"}:` 토큰으로 삽입됩니다.
+          </span>
+        </div>
+
+        {content ? (
+          <div className="border border-dashed border-gray-300 bg-gray-50/60 p-3">
+            <div className="mb-2 text-[11px] font-bold uppercase tracking-widest text-gray-500">
+              미리보기
+            </div>
+            <RichContent content={content} />
+          </div>
+        ) : null}
 
         <div className="flex gap-2">
           <button

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { CommunityPost, Board } from "@/types/community";
+import RichContent from "@/components/stickers/RichContent";
+import ReactionBar from "@/components/community/ReactionBar";
 
 export default function FeedPage() {
   const [posts, setPosts] = useState<CommunityPost[]>([]);
@@ -183,23 +185,22 @@ export default function FeedPage() {
                 </div>
               )}
               
-              <div className="mt-2 whitespace-pre-wrap text-sm text-gray-800">
-                {post.content}
+              <div className="mt-2">
+                <RichContent content={post.content} />
               </div>
-              
-              <div className="mt-4 flex gap-2">
-                <button className="border border-dashed border-gray-400 px-3 py-1 text-xs text-gray-600 hover:bg-gray-200">
-                  좋아요
-                </button>
-                {post.source_type === 'FEED' && (
-                  <button 
+
+              <ReactionBar postId={post.id} viewerId={currentUser?.id ?? null} />
+
+              {post.source_type === 'FEED' && (
+                <div className="mt-2 flex gap-2">
+                  <button
                     onClick={() => setSharePostId(post.id)}
                     className="border border-dashed border-gray-400 px-3 py-1 text-xs text-gray-600 hover:bg-gray-200"
                   >
                     게시판에 공유 (Cross-post)
                   </button>
-                )}
-              </div>
+                </div>
+              )}
             </article>
           ))
         )}

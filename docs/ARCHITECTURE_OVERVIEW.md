@@ -129,13 +129,54 @@
 - 업로드 모델 분석 결과를 서비스 추상 키에 자동 매핑합니다.
 - 표정/모션/히트영역/의상/모핑 슬라이더/프리셋을 휴리스틱 기반으로 추정합니다.
 
-## 8) 화면 동작 흐름(요약)
+## 8) 캐릭터-커뮤니티 연결 (Phase 2.3)
+
+캐릭터 라이브러리를 커뮤니티 본문/댓글/리액션에 연결하는 레이어입니다.
+
+### `lib/stickers/token.ts`
+- 스티커 토큰의 직렬화/파싱 유틸리티입니다.
+- 토큰 형식: `:sticker/{characterId}/{emotion}:`
+- `splitContentSegments()` 가 본문 문자열을 텍스트/스티커 세그먼트 배열로 변환합니다.
+
+### `lib/stickers/insertAtCursor.ts`
+- 텍스트 에리어의 현재 커서 위치에 텍스트(=스티커 토큰)를 끼워 넣고, 갱신된 문자열과 새 커서 위치를 반환합니다.
+
+### `components/stickers/CharacterSticker.tsx`
+- 토큰 한 개를 캐릭터 라이브러리와 매칭해 썸네일 + 감정 라벨로 렌더링합니다.
+- 모바일/웹 공통 정렬: `inline-flex` + 고정 px + `align-middle` 로 본문 라인 정렬을 유지합니다.
+
+### `components/stickers/RichContent.tsx`
+- 본문 문자열을 받아 텍스트와 캐릭터 스티커가 섞인 리액트 노드로 렌더링합니다.
+- 게시글 상세, 피드 카드, 텍스트 댓글에서 공용으로 사용됩니다.
+
+### `components/stickers/StickerPicker.tsx`
+- "스티커 삽입" 버튼 + 캐릭터 선택 + 8종 감정 그리드 팝오버.
+- 선택 시 `onInsert(token)` 콜백으로 토큰 문자열을 흘려보냅니다.
+- 글쓰기 폼과 댓글 입력창이 모두 같은 컴포넌트를 재사용합니다.
+
+### `lib/community/reactions.ts`
+- 6종 감정 리액션 메타데이터(`REACTION_META`) 와 Supabase 조회/토글 헬퍼.
+- `summarizeReactions()` 로 리액션 행 배열을 (카운트 + 내가 누른 것 + 최근 캐릭터 썸네일)로 압축합니다.
+
+### `components/community/ReactionBar.tsx`
+- 글 한 개의 리액션 6종 버튼 + 최근 반응자 캐릭터 썸네일 스택을 보여줍니다.
+- 클릭 시 활성 캐릭터의 썸네일을 함께 스냅샷으로 저장 → "텍스트 없는 스티커 답글" 1차 버전 역할.
+
+### `components/community/CommentSection.tsx`
+- 게시글 한 개의 댓글 목록/입력 영역.
+- 텍스트 댓글에는 본문에 스티커 토큰 임베드 가능 (`StickerPicker` 재사용).
+- 입력란을 비우고 "스티커 답글로 바로 등록" 으로 스티커-only 댓글을 한 번에 등록할 수 있습니다.
+
+## 9) 화면 동작 흐름(요약)
 
 1. 앱 시작 -> `layout`에서 Live2D 코어 로드 + `Live2DClientOnly` 마운트
 2. `CharacterControls`에서 내장 프로필 등록/활성화
 3. `useCharacterStore.profile.modelPath` 기준으로 `Live2DWrapper`가 모델 로드
 4. 유저 입력(감정/의상/모핑/클릭) -> 스토어 업데이트
 5. `Live2DWrapper`가 스토어 변화를 읽어 표정/모션/파츠/사운드/대사 반영
+6. 글쓰기/댓글 입력 시 `StickerPicker` 가 `useCharacterLibraryStore` 를 그대로 스티커 소스로 사용
+7. 게시글/피드/댓글 렌더 시 `RichContent` 가 토큰을 `CharacterSticker` 로 치환
+8. `ReactionBar` 가 활성 캐릭터 썸네일을 같이 기록해 최근 반응자 트레이를 그린다
 
 ---
 

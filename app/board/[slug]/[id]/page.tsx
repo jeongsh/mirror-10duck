@@ -5,6 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { CommunityPost, Board } from "@/types/community";
+import RichContent from "@/components/stickers/RichContent";
+import ReactionBar from "@/components/community/ReactionBar";
+import CommentSection from "@/components/community/CommentSection";
 
 export default function BoardPostDetailPage() {
   const router = useRouter();
@@ -191,14 +194,20 @@ export default function BoardPostDetailPage() {
         </div>
       </header>
 
-      <article className="min-h-[320px] whitespace-pre-wrap border border-dashed border-gray-500 bg-white/70 p-4 text-sm">
+      <article className="min-h-[320px] border border-dashed border-gray-500 bg-white/70 p-4 text-sm">
         {post?.source_type === 'FEED' ? (
           <div className="mb-4 rounded bg-gray-100 p-3 text-xs text-gray-600">
             ℹ️ 이 글은 피드에서 공유된 글의 스냅샷입니다.
           </div>
         ) : null}
-        {post?.content ?? "게시글을 찾을 수 없습니다."}
+        {post ? (
+          <RichContent content={post.content} />
+        ) : (
+          <p className="text-gray-500">게시글을 찾을 수 없습니다.</p>
+        )}
       </article>
+
+      {post ? <ReactionBar postId={post.id} viewerId={userId || null} /> : null}
 
       <div className="flex flex-wrap gap-2">
         <Link href={`/board/${slug}`} className="border border-dashed border-gray-500 bg-white px-3 py-2 text-sm">
@@ -250,6 +259,14 @@ export default function BoardPostDetailPage() {
           </button>
         )}
       </div>
+
+      {post ? (
+        <CommentSection
+          postId={post.id}
+          viewerId={userId || null}
+          viewerEmail={userEmail || null}
+        />
+      ) : null}
 
       {message ? (
         <p className="border border-dashed border-red-500 bg-red-50 p-3 text-sm text-red-700">{message}</p>
