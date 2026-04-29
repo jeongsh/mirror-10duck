@@ -17,7 +17,11 @@ import {
   guessOutfits,
 } from "@/lib/live2d/autoMap";
 import { LIVE2D_VIEWPORT } from "@/lib/live2d/viewport";
-import { uploadCharacterAssets } from "@/lib/supabase/characterStorage";
+import { extractRendererThumbnail } from "@/lib/live2d/thumbnailCapture";
+import {
+  uploadCharacterAssets,
+  uploadCharacterThumbnail,
+} from "@/lib/supabase/characterStorage";
 import { useCharacterLibraryStore } from "@/store/useCharacterLibraryStore";
 import { useCharacterStore } from "@/store/useCharacterStore";
 import type { CharacterProfile, CharacterViewConfig } from "@/types/character";
@@ -29,9 +33,10 @@ interface CharacterUploaderProps {
   previewView?: CharacterViewConfig;
   onPreviewModelChange?: (modelUrl: string | null) => void;
   onPreviewViewChange?: (view: CharacterViewConfig) => void;
+  createThumbnailBlob?: () => Promise<Blob | null>;
 }
 
-export const INITIAL_UPLOAD_VIEW: CharacterViewConfig = { scale: 0.25, x: 0, y: 20 };
+export const INITIAL_UPLOAD_VIEW: CharacterViewConfig = { scale: 0.05, x: 0, y: 20 };
 const PREVIEW_W = LIVE2D_VIEWPORT.width;
 const PREVIEW_H = LIVE2D_VIEWPORT.height;
 
@@ -49,6 +54,7 @@ export default function CharacterUploader({
   previewView,
   onPreviewModelChange,
   onPreviewViewChange,
+  createThumbnailBlob,
 }: CharacterUploaderProps) {
   const [pending, setPending] = useState(false);
   const [committing, setCommitting] = useState(false);
@@ -91,7 +97,8 @@ export default function CharacterUploader({
       characterId: string,
       modelPath: string,
       blobUrls: string[],
-      view: CharacterViewConfig
+      view: CharacterViewConfig,
+      thumbnailUrl?: string
     ): CharacterProfile => {
       const morphSliders = guessMorphSliders(installed);
       return {
@@ -99,6 +106,7 @@ export default function CharacterUploader({
         name: name || "이름 없는 캐릭터",
         description: description || undefined,
         modelPath,
+        thumbnailUrl,
         expressionMap: guessExpressionMap(installed),
         motionMap: guessMotionMap(installed),
         hitAreaMap: guessHitAreaMap(installed),
@@ -182,7 +190,19 @@ export default function CharacterUploader({
     try {
       const { modelUrl } = await uploadCharacterAssets(zipFile, characterId);
 
-      const profile = buildProfile(result, characterId, modelUrl, [], savedView);
+      let thumbnailUrl: string | undefined;
+      if (createThumbnailBlob) {
+        try {
+          const thumbnail = await createThumbnailBlob();
+          if (thumbnail) {
+            thumbnailUrl = await uploadCharacterThumbnail(characterId, thumbnail);
+          }
+        } catch (e) {
+          console.warn("[CharacterUploader] thumbnail capture/upload warning:", e);
+        }
+      }
+
+      const profile = buildProfile(result, characterId, modelUrl, [], savedView, thumbnailUrl);
 
       // 미리 만들어진 blob URL 들은 Storage 업로드가 끝난 시점에 더 이상 필요 없으므로 정리.
       for (const url of result.blobUrls) {
@@ -318,10 +338,12 @@ export function CharacterUploadPreview({
   modelUrl,
   view,
   onViewChange,
+  onCaptureReady,
 }: {
   modelUrl: string;
   view: CharacterViewConfig;
   onViewChange: (view: CharacterViewConfig) => void;
+  onCaptureReady?: (capture: (() => Promise<Blob | null>) | null) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const appRef = useRef<any>(null);
@@ -333,6 +355,19 @@ export function CharacterUploadPreview({
   useEffect(() => {
     onViewChangeRef.current = onViewChange;
   }, [onViewChange]);
+
+  const captureThumbnail = useCallback(async (): Promise<Blob | null> => {
+    const app = appRef.current;
+    const canvas = canvasRef.current;
+    if (!app || !canvas) return null;
+
+    return extractRendererThumbnail(app, canvas);
+  }, []);
+
+  useEffect(() => {
+    onCaptureReady?.(captureThumbnail);
+    return () => onCaptureReady?.(null);
+  }, [captureThumbnail, onCaptureReady]);
 
   useEffect(() => {
     let cancelled = false;

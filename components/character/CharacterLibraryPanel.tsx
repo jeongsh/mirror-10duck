@@ -84,6 +84,20 @@ export default function CharacterLibraryPanel() {
                   </span>
                 )}
               </div>
+              <div
+                className="mx-auto flex w-full max-w-[112px] items-center justify-center overflow-hidden border border-dashed border-gray-300 bg-white/50 text-[10px] text-gray-400"
+                style={{ aspectRatio: "320 / 420" }}
+              >
+                {p.thumbnailUrl ? (
+                  <img
+                    src={p.thumbnailUrl}
+                    alt={`${p.name} thumbnail`}
+                    className="h-full w-full object-contain"
+                  />
+                ) : (
+                  "NO THUMB"
+                )}
+              </div>
               {p.description && (
                 <div className="line-clamp-2 text-[11px] text-gray-600">
                   {p.description}

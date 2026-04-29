@@ -29,6 +29,7 @@ export default function ProfilePage() {
   const user = useAuthUser();
   const profiles = useCharacterLibraryStore((s) => s.profiles);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const thumbnailCaptureRef = useRef<(() => Promise<Blob | null>) | null>(null);
   
   const [activeTab, setActiveTab] = useState<TabId>("profile");
   
@@ -493,6 +494,20 @@ export default function ProfilePage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {profiles.map((profile) => (
                   <div key={profile.id} className={`border p-4 flex flex-col gap-3 group transition-colors ${profile.id === activeCharacterId ? 'border-gray-800 bg-gray-50' : 'border-dashed border-gray-500 bg-white hover:border-gray-800'}`}>
+                    <div
+                      className="mx-auto flex w-full max-w-[160px] items-center justify-center overflow-hidden border border-dashed border-gray-300 bg-gray-50 text-[10px] font-bold text-gray-300"
+                      style={{ aspectRatio: "320 / 420" }}
+                    >
+                      {profile.thumbnailUrl ? (
+                        <img
+                          src={profile.thumbnailUrl}
+                          alt={`${profile.name} thumbnail`}
+                          className="h-full w-full object-contain"
+                        />
+                      ) : (
+                        "NO THUMBNAIL"
+                      )}
+                    </div>
                     <div className="flex justify-between items-center">
                       <h3 className="text-xs font-bold truncate pr-2 flex items-center gap-2">
                         {profile.name}
@@ -632,6 +647,7 @@ export default function ProfilePage() {
                 onClick={() => {
                   setShowCharacterUploadModal(false);
                   setPreviewModelUrl(null);
+                  thumbnailCaptureRef.current = null;
                   setPreviewView(INITIAL_UPLOAD_VIEW);
                   setSavedView(INITIAL_UPLOAD_VIEW);
                 }}
@@ -647,9 +663,11 @@ export default function ProfilePage() {
                 previewView={previewView}
                 onPreviewModelChange={handlePreviewModelChange}
                 onPreviewViewChange={setPreviewView}
+                createThumbnailBlob={() => thumbnailCaptureRef.current?.() ?? Promise.resolve(null)}
                 onCommitted={() => {
                   setShowCharacterUploadModal(false);
                   setPreviewModelUrl(null);
+                  thumbnailCaptureRef.current = null;
                   setPreviewView(INITIAL_UPLOAD_VIEW);
                   setSavedView(INITIAL_UPLOAD_VIEW);
                 }}
@@ -662,6 +680,9 @@ export default function ProfilePage() {
                       modelUrl={previewModelUrl}
                       view={previewView}
                       onViewChange={setPreviewView}
+                      onCaptureReady={(capture) => {
+                        thumbnailCaptureRef.current = capture;
+                      }}
                     />
                     <div className="grid grid-cols-3 gap-2 font-mono text-[11px] text-blue-900">
                       <span>scale {previewView.scale.toFixed(2)}</span>

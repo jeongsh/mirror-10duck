@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { captureLive2DThumbnail } from "@/lib/live2d/thumbnailCapture";
+import { uploadCharacterThumbnail } from "@/lib/supabase/characterStorage";
 import { useCharacterLibraryStore } from "@/store/useCharacterLibraryStore";
 import { useCharacterStore } from "@/store/useCharacterStore";
 import {
@@ -39,6 +41,8 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
   const setModelConfig = useCharacterStore((s) => s.setModelConfig);
 
   const [targetId, setTargetId] = useState<string>("");
+  const [thumbnailBusy, setThumbnailBusy] = useState(false);
+  const [thumbnailError, setThumbnailError] = useState<string | null>(null);
 
   useEffect(() => {
     if (initialTargetId) {
@@ -85,6 +89,22 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
     setLoadedProfile(next);
     setModelConfig(next.defaultView);
     router.push(`/library/${encodeURIComponent(id)}`);
+  };
+
+  const regenerateThumbnail = async () => {
+    if (!target) return;
+    setThumbnailBusy(true);
+    setThumbnailError(null);
+    try {
+      const blob = await captureLive2DThumbnail(target.modelPath, target.defaultView);
+      if (!blob) throw new Error("썸네일 이미지를 생성하지 못했습니다.");
+      const thumbnailUrl = await uploadCharacterThumbnail(target.id, blob);
+      patchTarget({ thumbnailUrl });
+    } catch (e) {
+      setThumbnailError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setThumbnailBusy(false);
+    }
   };
 
   return (
@@ -157,6 +177,45 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
         >
           [현재 캔버스 위치/스케일 저장]
         </button>
+      </Section>
+
+      <Section title="썸네일">
+        <div className="grid grid-cols-1 gap-3 border-t border-dashed border-gray-300 pt-3 md:grid-cols-[96px_minmax(0,1fr)]">
+          <div
+            className="flex w-24 items-center justify-center overflow-hidden border border-dashed border-gray-400 bg-white/70 text-[10px] text-gray-400"
+            style={{ aspectRatio: "320 / 420" }}
+          >
+            {target.thumbnailUrl ? (
+              <img
+                src={target.thumbnailUrl}
+                alt={`${target.name} thumbnail`}
+                className="h-full w-full object-contain"
+              />
+            ) : (
+              "NO THUMB"
+            )}
+          </div>
+          <div className="space-y-2 text-xs text-gray-600">
+            <button
+              type="button"
+              disabled={thumbnailBusy}
+              onClick={() => {
+                void regenerateThumbnail();
+              }}
+              className="border border-dashed border-emerald-600 bg-emerald-50 px-2 py-1 text-[11px] font-bold tracking-widest text-emerald-800 disabled:opacity-50"
+            >
+              {thumbnailBusy ? "[THUMBNAIL GENERATING...]" : "[현재 모델로 썸네일 생성]"}
+            </button>
+            <p className="text-[11px] text-gray-500">
+              기본 위치(scale/x/y)를 기준으로 임시 Live2D 렌더를 만들고 Pixi extract로 PNG를 저장합니다.
+            </p>
+            {thumbnailError && (
+              <p className="border border-dashed border-red-300 bg-red-50 px-2 py-1 text-[11px] text-red-600">
+                {thumbnailError}
+              </p>
+            )}
+          </div>
+        </div>
       </Section>
 
       <Section title="상황별 대사">

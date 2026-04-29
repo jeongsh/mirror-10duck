@@ -188,6 +188,36 @@ export interface UploadedCharacterAssets {
   uploadedPaths: string[];
 }
 
+export async function uploadCharacterThumbnail(
+  characterId: string,
+  thumbnail: Blob,
+): Promise<string> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error("로그인이 필요합니다.");
+  }
+
+  const path = `${user.id}/${characterId}/thumbnail.png`;
+  const { error } = await supabase.storage
+    .from(BUCKET)
+    .upload(path, thumbnail, {
+      contentType: thumbnail.type || "image/png",
+      upsert: true,
+    });
+
+  if (error) {
+    throw new Error(`Storage 썸네일 업로드 실패 (${path}): ${error.message}`);
+  }
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from(BUCKET).getPublicUrl(path);
+
+  return publicUrl;
+}
+
 /**
  * ZIP 안의 유효 파일들을 Storage 의 `${user_id}/${character_id}/` 아래에 업로드한다.
  *
