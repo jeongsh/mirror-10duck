@@ -22,6 +22,21 @@ function extOf(path: string): string {
   return i >= 0 ? path.slice(i).toLowerCase() : "";
 }
 
+function canonicalizePath(input: string): string {
+  const unified = input.replace(/\\/g, "/").normalize("NFC");
+  const parts = unified.split("/");
+  const stack: string[] = [];
+  for (const p of parts) {
+    if (!p || p === ".") continue;
+    if (p === "..") {
+      stack.pop();
+      continue;
+    }
+    stack.push(p);
+  }
+  return stack.join("/");
+}
+
 function commonRoot(files: string[]): string | null {
   if (files.length === 0) return null;
   const parts = files[0].split("/");
@@ -31,6 +46,16 @@ function commonRoot(files: string[]): string | null {
     if (!f.startsWith(candidate + "/")) return "";
   }
   return candidate;
+}
+
+function joinPath(base: string, rel: string): string {
+  if (!base) return canonicalizePath(rel);
+  return canonicalizePath(`${base}/${rel}`);
+}
+
+function dirOf(path: string): string {
+  const i = path.lastIndexOf("/");
+  return i >= 0 ? path.slice(0, i) : "";
 }
 
 function mimeOf(ext: string): string {
@@ -188,6 +213,97 @@ export interface UploadedCharacterAssets {
   uploadedPaths: string[];
 }
 
+interface StorageModel3Json {
+  Version?: number;
+  FileReferences: {
+    Moc: string;
+    Textures: string[];
+    Physics?: string;
+    Pose?: string;
+    DisplayInfo?: string;
+    UserData?: string;
+    Expressions?: { Name: string; File: string }[];
+    Motions?: Record<string, { File: string; Sound?: string }[]>;
+  };
+  HitAreas?: unknown;
+  Groups?: unknown;
+  Layout?: unknown;
+  [key: string]: unknown;
+}
+
+function isStorageModel3Json(value: unknown): value is StorageModel3Json {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    !!(value as { FileReferences?: unknown }).FileReferences &&
+    typeof (value as { FileReferences: { Moc?: unknown } }).FileReferences.Moc === "string"
+  );
+}
+
+function collectReferencedModelPaths(model3: StorageModel3Json, modelJsonDir: string): string[] {
+  const refs: string[] = [];
+  const add = (rel: string | undefined) => {
+    if (!rel) return;
+    const resolved = joinPath(modelJsonDir, rel);
+    if (!refs.includes(resolved)) refs.push(resolved);
+  };
+
+  add(model3.FileReferences.Moc);
+  for (const texture of model3.FileReferences.Textures) add(texture);
+  add(model3.FileReferences.Physics);
+  add(model3.FileReferences.Pose);
+  add(model3.FileReferences.DisplayInfo);
+  add(model3.FileReferences.UserData);
+  for (const expression of model3.FileReferences.Expressions ?? []) add(expression.File);
+  for (const motions of Object.values(model3.FileReferences.Motions ?? {})) {
+    for (const motion of motions) {
+      add(motion.File);
+      add(motion.Sound);
+    }
+  }
+
+  return refs;
+}
+
+function rewriteModel3JsonForStorage(
+  model3: StorageModel3Json,
+  modelJsonDir: string,
+  storagePathByRef: Map<string, string>,
+): StorageModel3Json {
+  const rewrite = (rel: string) => storagePathByRef.get(joinPath(modelJsonDir, rel)) ?? rel;
+  const refs: StorageModel3Json["FileReferences"] = {
+    Moc: rewrite(model3.FileReferences.Moc),
+    Textures: model3.FileReferences.Textures.map(rewrite),
+  };
+
+  if (model3.FileReferences.Physics) refs.Physics = rewrite(model3.FileReferences.Physics);
+  if (model3.FileReferences.Pose) refs.Pose = rewrite(model3.FileReferences.Pose);
+  if (model3.FileReferences.DisplayInfo) {
+    refs.DisplayInfo = rewrite(model3.FileReferences.DisplayInfo);
+  }
+  if (model3.FileReferences.UserData) refs.UserData = rewrite(model3.FileReferences.UserData);
+  if (model3.FileReferences.Expressions?.length) {
+    refs.Expressions = model3.FileReferences.Expressions.map((expression) => ({
+      ...expression,
+      File: rewrite(expression.File),
+    }));
+  }
+  if (model3.FileReferences.Motions) {
+    refs.Motions = Object.fromEntries(
+      Object.entries(model3.FileReferences.Motions).map(([group, motions]) => [
+        group,
+        motions.map((motion) => ({
+          ...motion,
+          File: rewrite(motion.File),
+          ...(motion.Sound ? { Sound: rewrite(motion.Sound) } : {}),
+        })),
+      ]),
+    );
+  }
+
+  return { ...model3, FileReferences: refs };
+}
+
 async function getCurrentUserWithLockRetry() {
   try {
     return await supabase.auth.getUser();
@@ -255,8 +371,10 @@ export async function uploadCharacterAssets(
   for (const { path: relPath, entry } of zipEntries) {
     if (entry.dir) continue;
     if (shouldIgnore(relPath)) continue;
-    allPaths.push(relPath);
-    entryByPath.set(relPath, entry);
+    const canonicalPath = canonicalizePath(relPath);
+    if (!canonicalPath) continue;
+    allPaths.push(canonicalPath);
+    entryByPath.set(canonicalPath, entry);
   }
 
   if (allPaths.length === 0) {
@@ -280,19 +398,64 @@ export async function uploadCharacterAssets(
   }
 
   const modelJsonPath = modelJsonCandidates[0];
-  const modelJsonRelative = stripRoot(modelJsonPath);
+  const modelJsonDir = dirOf(stripRoot(modelJsonPath));
+  const modelJsonEntry = entryByPath.get(modelJsonPath);
+  if (!modelJsonEntry) {
+    throw new Error(`model3.json 파일을 ZIP에서 찾을 수 없습니다: ${modelJsonPath}`);
+  }
+
+  const parsedModelJson = JSON.parse(await modelJsonEntry.async("string"));
+  const sanitizedModelJson = sanitizeModel3Json(parsedModelJson);
+  if (!isStorageModel3Json(sanitizedModelJson)) {
+    throw new Error("model3.json 형식이 올바르지 않습니다.");
+  }
 
   const storagePrefix = `${user.id}/${characterId}`;
   const uploadedPaths: string[] = [];
+  const referencedModelPaths = collectReferencedModelPaths(sanitizedModelJson, modelJsonDir);
+  const storagePathByRef = new Map<string, string>();
+  referencedModelPaths.forEach((refPath, index) => {
+    const ext = extOf(refPath);
+    if (!ALLOWED_EXTENSIONS.has(ext)) {
+      throw new Error(`허용되지 않는 확장자입니다: ${refPath}`);
+    }
+    storagePathByRef.set(refPath, `assets/${String(index).padStart(3, "0")}${ext}`);
+  });
 
-  for (const path of allPaths) {
+  const rewrittenModelJson = rewriteModel3JsonForStorage(
+    sanitizedModelJson,
+    modelJsonDir,
+    storagePathByRef,
+  );
+  const modelJsonStoragePath = `${storagePrefix}/model.model3.json`;
+  const modelJsonBlob = new Blob([JSON.stringify(rewrittenModelJson)], {
+    type: "application/json",
+  });
+  const { error: modelJsonUploadError } = await supabase.storage
+    .from(BUCKET)
+    .upload(modelJsonStoragePath, modelJsonBlob, {
+      contentType: "application/json",
+      upsert: true,
+    });
+
+  if (modelJsonUploadError) {
+    throw new Error(
+      `Storage 업로드 실패 (${modelJsonStoragePath}): ${modelJsonUploadError.message}`,
+    );
+  }
+  uploadedPaths.push(modelJsonStoragePath);
+
+  for (const [refPath, storageRelativePath] of storagePathByRef) {
+    const path = root ? canonicalizePath(`${root}/${refPath}`) : canonicalizePath(refPath);
     const ext = extOf(path);
     if (!ALLOWED_EXTENSIONS.has(ext)) continue;
 
     const entry = entryByPath.get(path);
-    if (!entry) continue;
+    if (!entry) {
+      throw new Error(`참조된 파일을 ZIP에서 찾을 수 없습니다: ${refPath}`);
+    }
 
-    const targetPath = `${storagePrefix}/${stripRoot(path)}`;
+    const targetPath = `${storagePrefix}/${storageRelativePath}`;
 
     let blob: Blob;
     if (path === modelJsonPath) {
@@ -324,7 +487,7 @@ export async function uploadCharacterAssets(
 
   const { data: publicUrlData } = supabase.storage
     .from(BUCKET)
-    .getPublicUrl(`${storagePrefix}/${modelJsonRelative}`);
+    .getPublicUrl(modelJsonStoragePath);
 
   return {
     modelUrl: publicUrlData.publicUrl,
