@@ -1,6 +1,6 @@
-import JSZip from "jszip";
 import { supabase } from "@/lib/supabase/client";
 import { ALLOWED_EXTENSIONS } from "@/lib/live2d/modelPackage";
+import { loadModelZipEntries } from "@/lib/live2d/modelZip";
 
 const BUCKET = "character-assets";
 
@@ -248,14 +248,16 @@ export async function uploadCharacterAssets(
     throw new Error("로그인이 필요합니다.");
   }
 
-  const zip = await JSZip.loadAsync(file);
+  const { entries: zipEntries } = await loadModelZipEntries(file);
 
   const allPaths: string[] = [];
-  zip.forEach((relPath, entry) => {
-    if (entry.dir) return;
-    if (shouldIgnore(relPath)) return;
+  const entryByPath = new Map<string, (typeof zipEntries)[number]["entry"]>();
+  for (const { path: relPath, entry } of zipEntries) {
+    if (entry.dir) continue;
+    if (shouldIgnore(relPath)) continue;
     allPaths.push(relPath);
-  });
+    entryByPath.set(relPath, entry);
+  }
 
   if (allPaths.length === 0) {
     throw new Error("ZIP 이 비어있습니다.");
@@ -287,7 +289,7 @@ export async function uploadCharacterAssets(
     const ext = extOf(path);
     if (!ALLOWED_EXTENSIONS.has(ext)) continue;
 
-    const entry = zip.file(path);
+    const entry = entryByPath.get(path);
     if (!entry) continue;
 
     const targetPath = `${storagePrefix}/${stripRoot(path)}`;

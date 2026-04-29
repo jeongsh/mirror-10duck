@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import { loadModelZipEntries } from "@/lib/live2d/modelZip";
 
 /**
  * Live2D 모델 패키지(ZIP) 파서 & 검증기.
@@ -117,6 +118,23 @@ function extOf(path: string): string {
   return i >= 0 ? path.slice(i).toLowerCase() : "";
 }
 
+function canonicalizePath(input: string): string {
+  // ZIP 엔트리/모델 참조를 동일한 포맷으로 맞춰
+  // OS/압축도구/유니코드 정규화 차이로 인한 불일치를 줄인다.
+  const unified = input.replace(/\\/g, "/").normalize("NFC");
+  const parts = unified.split("/");
+  const stack: string[] = [];
+  for (const p of parts) {
+    if (!p || p === ".") continue;
+    if (p === "..") {
+      stack.pop();
+      continue;
+    }
+    stack.push(p);
+  }
+  return stack.join("/");
+}
+
 function commonRoot(files: string[]): string | null {
   if (files.length === 0) return null;
   const parts = files[0].split("/");
@@ -129,16 +147,9 @@ function commonRoot(files: string[]): string | null {
 }
 
 function joinPath(base: string, rel: string): string {
-  if (!base) return rel;
+  if (!base) return canonicalizePath(rel);
   // rel 이 `../` 를 포함할 수도 있으므로 간단 normalize
-  const parts = (base + "/" + rel).split("/");
-  const stack: string[] = [];
-  for (const p of parts) {
-    if (!p || p === ".") continue;
-    if (p === "..") stack.pop();
-    else stack.push(p);
-  }
-  return stack.join("/");
+  return canonicalizePath(base + "/" + rel);
 }
 
 function dirOf(path: string): string {
@@ -228,9 +239,10 @@ export async function installModelFromZip(
     ]);
   }
 
-  let zip: JSZip;
+  let zipEntries: { path: string; entry: JSZip.JSZipObject }[];
   try {
-    zip = await JSZip.loadAsync(file);
+    const loaded = await loadModelZipEntries(file);
+    zipEntries = loaded.entries;
   } catch (e) {
     return emptyAnalysis([
       {
@@ -243,12 +255,18 @@ export async function installModelFromZip(
   }
 
   // -- 1단계: 유효 파일 수집
+  const zipEntryByCanonicalPath = new Map<string, JSZip.JSZipObject>();
   const allPaths: string[] = [];
-  zip.forEach((relPath, entry) => {
-    if (entry.dir) return;
-    if (shouldIgnore(relPath)) return;
-    allPaths.push(relPath);
-  });
+  for (const { path: relPath, entry } of zipEntries) {
+    if (entry.dir) continue;
+    if (shouldIgnore(relPath)) continue;
+    const canonicalPath = canonicalizePath(relPath);
+    if (!canonicalPath) continue;
+    allPaths.push(canonicalPath);
+    if (!zipEntryByCanonicalPath.has(canonicalPath)) {
+      zipEntryByCanonicalPath.set(canonicalPath, entry);
+    }
+  }
 
   if (allPaths.length === 0) {
     return emptyAnalysis([{ level: "error", message: "ZIP 이 비어있습니다." }]);
@@ -275,7 +293,16 @@ export async function installModelFromZip(
 
   const modelJsonPath = modelJsonCandidates[0];
   const modelJsonDir = dirOf(stripRoot(modelJsonPath));
-  const modelJsonText = await zip.file(modelJsonPath)!.async("string");
+  const modelJsonEntry = zipEntryByCanonicalPath.get(modelJsonPath);
+  if (!modelJsonEntry) {
+    return emptyAnalysis([
+      {
+        level: "error",
+        message: `model3.json 파일을 ZIP에서 찾을 수 없습니다: ${modelJsonPath}`,
+      },
+    ]);
+  }
+  const modelJsonText = await modelJsonEntry.async("string");
 
   let model3: Model3JsonLike;
   try {
@@ -356,8 +383,8 @@ export async function installModelFromZip(
   // -- 4단계: 참조 파일 존재 확인 & 확장자/크기 검증
   const referencedFiles = new Map<string, JSZip.JSZipObject>();
   for (const refPath of requiredRefs) {
-    const zipPath = root ? `${root}/${refPath}` : refPath;
-    const entry = zip.file(zipPath);
+    const zipPath = root ? canonicalizePath(`${root}/${refPath}`) : canonicalizePath(refPath);
+    const entry = zipEntryByCanonicalPath.get(zipPath);
     if (!entry) {
       issues.push({
         level: "error",
