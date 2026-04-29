@@ -188,13 +188,24 @@ export interface UploadedCharacterAssets {
   uploadedPaths: string[];
 }
 
+async function getCurrentUserWithLockRetry() {
+  try {
+    return await supabase.auth.getUser();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes("Lock broken")) throw error;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    return supabase.auth.getUser();
+  }
+}
+
 export async function uploadCharacterThumbnail(
   characterId: string,
   thumbnail: Blob,
 ): Promise<string> {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getCurrentUserWithLockRetry();
   if (!user) {
     throw new Error("로그인이 필요합니다.");
   }
@@ -232,7 +243,7 @@ export async function uploadCharacterAssets(
 ): Promise<UploadedCharacterAssets> {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getCurrentUserWithLockRetry();
   if (!user) {
     throw new Error("로그인이 필요합니다.");
   }
@@ -327,7 +338,7 @@ export async function uploadCharacterAssets(
 export async function deleteCharacterAssets(characterId: string): Promise<void> {
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getCurrentUserWithLockRetry();
   if (!user) return;
 
   const prefix = `${user.id}/${characterId}`;

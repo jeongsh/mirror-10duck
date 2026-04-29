@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { Board, CommunityPost } from "@/types/community";
-import CharacterControls from "@/components/CharacterControls";
 
 export default function HomeContent() {
   const [boards, setBoards] = useState<Board[]>([]);
@@ -99,10 +98,6 @@ export default function HomeContent() {
         </div>
       </div>
 
-      {/* 기존 컨트롤 패널 유지 */}
-      <div className="mt-4">
-        <CharacterControls />
-      </div>
     </section>
   );
 }

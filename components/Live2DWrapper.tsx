@@ -67,8 +67,6 @@ export default function Live2DWrapper() {
   const setError = useCharacterStore((s) => s.setError);
   const setModelConfig = useCharacterStore((s) => s.setModelConfig);
 
-  const dragData = useRef({ isDragging: false, lastX: 0, lastY: 0 });
-
   const getMotionMeta = async (
     currentModelPath: string,
     group: string,
@@ -768,43 +766,6 @@ export default function Live2DWrapper() {
     if (sound) void playSound(sound);
   }
 
-  // 드래그 앤 줌
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!modelRef.current) return;
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    dragData.current = { isDragging: true, lastX: e.clientX, lastY: e.clientY };
-  };
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragData.current.isDragging || !modelRef.current) return;
-    const rect = canvasRef.current?.getBoundingClientRect();
-    const scaleX = rect && rect.width > 0 ? CANVAS_W / rect.width : 1;
-    const scaleY = rect && rect.height > 0 ? CANVAS_H / rect.height : 1;
-    const dx = (e.clientX - dragData.current.lastX) * scaleX;
-    const dy = (e.clientY - dragData.current.lastY) * scaleY;
-    modelRef.current.x += dx;
-    modelRef.current.y += dy;
-    dragData.current.lastX = e.clientX;
-    dragData.current.lastY = e.clientY;
-    setModelConfig({
-      scale: modelRef.current.scale.x,
-      x: modelRef.current.x,
-      y: modelRef.current.y,
-    });
-  };
-  const handlePointerUp = () => { dragData.current.isDragging = false; };
-  const handlePointerCancel = () => { dragData.current.isDragging = false; };
-  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    if (!modelRef.current) return;
-    const scaleFactor = e.deltaY > 0 ? 0.95 : 1.05;
-    modelRef.current.scale.x *= scaleFactor;
-    modelRef.current.scale.y *= scaleFactor;
-    setModelConfig({
-      scale: modelRef.current.scale.x,
-      x: modelRef.current.x,
-      y: modelRef.current.y,
-    });
-  };
-
   return (
     <aside
       className="fixed bottom-0 right-0 z-50 select-none"
@@ -812,12 +773,7 @@ export default function Live2DWrapper() {
     >
 
       <div
-        className="relative cursor-grab active:cursor-grabbing"
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerCancel}
-        onWheel={handleWheel}
+        className="relative"
       >
         <canvas
           ref={canvasRef}

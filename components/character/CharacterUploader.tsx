@@ -18,13 +18,18 @@ import {
 } from "@/lib/live2d/autoMap";
 import { LIVE2D_VIEWPORT } from "@/lib/live2d/viewport";
 import { extractRendererThumbnail } from "@/lib/live2d/thumbnailCapture";
+import { savePreferredCharacter } from "@/lib/supabase/characterPreferences";
 import {
   uploadCharacterAssets,
   uploadCharacterThumbnail,
 } from "@/lib/supabase/characterStorage";
 import { useCharacterLibraryStore } from "@/store/useCharacterLibraryStore";
 import { useCharacterStore } from "@/store/useCharacterStore";
-import type { CharacterProfile, CharacterViewConfig } from "@/types/character";
+import type {
+  CharacterEmotion,
+  CharacterProfile,
+  CharacterViewConfig,
+} from "@/types/character";
 
 interface CharacterUploaderProps {
   onCommitted?: (profile: CharacterProfile) => void;
@@ -216,6 +221,7 @@ export default function CharacterUploader({
       register(profile);
       setActive(profile.id);
       setProfile(profile);
+      await savePreferredCharacter(profile.id);
 
       setResult(null);
       setZipFile(null);
@@ -339,22 +345,39 @@ export function CharacterUploadPreview({
   view,
   onViewChange,
   onCaptureReady,
+  profile,
+  emotion,
+  message,
+  viewCommitMode = "live",
 }: {
   modelUrl: string;
   view: CharacterViewConfig;
   onViewChange: (view: CharacterViewConfig) => void;
   onCaptureReady?: (capture: (() => Promise<Blob | null>) | null) => void;
+  profile?: CharacterProfile;
+  emotion?: CharacterEmotion;
+  message?: string | null;
+  viewCommitMode?: "live" | "end";
 }) {
+  const previewRootRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const appRef = useRef<any>(null);
   const modelRef = useRef<any>(null);
+  const neutralParametersRef = useRef<number[] | null>(null);
   const dragData = useRef({ isDragging: false, lastX: 0, lastY: 0 });
   const onViewChangeRef = useRef(onViewChange);
+  const viewCommitModeRef = useRef(viewCommitMode);
+  const wheelCommitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [previewReadySeq, setPreviewReadySeq] = useState(0);
 
   useEffect(() => {
     onViewChangeRef.current = onViewChange;
   }, [onViewChange]);
+
+  useEffect(() => {
+    viewCommitModeRef.current = viewCommitMode;
+  }, [viewCommitMode]);
 
   const captureThumbnail = useCallback(async (): Promise<Blob | null> => {
     const app = appRef.current;
@@ -369,10 +392,66 @@ export function CharacterUploadPreview({
     return () => onCaptureReady?.(null);
   }, [captureThumbnail, onCaptureReady]);
 
+  const captureNeutralParameters = useCallback((model: any) => {
+    try {
+      const core = (
+        model.internalModel as unknown as {
+          coreModel?: {
+            getParameterCount?: () => number;
+            getParameterValueByIndex?: (index: number) => number;
+          };
+        }
+      ).coreModel;
+      if (!core?.getParameterCount || !core.getParameterValueByIndex) {
+        neutralParametersRef.current = null;
+        return;
+      }
+
+      const count = core.getParameterCount();
+      const snapshot: number[] = [];
+      for (let i = 0; i < count; i++) {
+        snapshot.push(core.getParameterValueByIndex(i));
+      }
+      neutralParametersRef.current = snapshot;
+    } catch (e) {
+      neutralParametersRef.current = null;
+      console.warn("[CharacterUploadPreview] neutral parameter capture warning:", e);
+    }
+  }, []);
+
+  const restoreNeutralParameters = useCallback((model: any) => {
+    const snapshot = neutralParametersRef.current;
+    if (!snapshot) return;
+
+    try {
+      const core = (
+        model.internalModel as unknown as {
+          coreModel?: {
+            getParameterCount?: () => number;
+            setParameterValueByIndex?: (
+              index: number,
+              value: number,
+              weight?: number
+            ) => void;
+          };
+        }
+      ).coreModel;
+      if (!core?.getParameterCount || !core.setParameterValueByIndex) return;
+
+      const count = Math.min(core.getParameterCount(), snapshot.length);
+      for (let i = 0; i < count; i++) {
+        core.setParameterValueByIndex(i, snapshot[i], 1);
+      }
+    } catch (e) {
+      console.warn("[CharacterUploadPreview] neutral parameter restore warning:", e);
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     let app: any = null;
     const previousApp = window.app;
+    setError(null);
 
     const boot = async () => {
       if (!canvasRef.current) return;
@@ -440,6 +519,8 @@ export function CharacterUploadPreview({
         model.y = view.y;
         app.stage.addChild(model);
         modelRef.current = model;
+        captureNeutralParameters(model);
+        setPreviewReadySeq((seq) => seq + 1);
         onViewChangeRef.current(view);
       } catch (e) {
         console.error("[CharacterUploadPreview] preview load 실패:", e);
@@ -476,8 +557,44 @@ export function CharacterUploadPreview({
       if (window.app === targetApp) {
         window.app = previousApp;
       }
+      if (wheelCommitTimeoutRef.current) {
+        clearTimeout(wheelCommitTimeoutRef.current);
+        wheelCommitTimeoutRef.current = null;
+      }
     };
-  }, [modelUrl]);
+  }, [captureNeutralParameters, modelUrl]);
+
+  useEffect(() => {
+    const model = modelRef.current;
+    if (!model || !profile || !emotion) return;
+
+    const expManager = (
+      model.internalModel as unknown as {
+        motionManager?: {
+          expressionManager?: {
+            stopAllExpressions?: () => void;
+          };
+        };
+      }
+    ).motionManager?.expressionManager;
+
+    try {
+      expManager?.stopAllExpressions?.();
+    } catch (e) {
+      console.warn("[CharacterUploadPreview] expression clear warning:", e);
+    }
+
+    restoreNeutralParameters(model);
+
+    const targetExp = profile.expressionMap[emotion];
+    if (!targetExp) return;
+
+    try {
+      void model.expression(targetExp);
+    } catch (e) {
+      console.warn("[CharacterUploadPreview] expression apply warning:", e);
+    }
+  }, [emotion, previewReadySeq, profile, restoreNeutralParameters]);
 
   useEffect(() => {
     const model = modelRef.current;
@@ -487,10 +604,11 @@ export function CharacterUploadPreview({
     model.y = view.y;
   }, [view.scale, view.x, view.y]);
 
-  const updateView = () => {
+  const updateView = (forceCommit = false) => {
     const model = modelRef.current;
     if (!model) return;
-    onViewChange({ scale: model.scale.x, x: model.x, y: model.y });
+    if (viewCommitModeRef.current === "end" && !forceCommit) return;
+    onViewChangeRef.current({ scale: model.scale.x, x: model.x, y: model.y });
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -512,28 +630,47 @@ export function CharacterUploadPreview({
     updateView();
   };
 
-  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+  const finishInteraction = () => {
+    dragData.current.isDragging = false;
+    updateView(true);
+  };
+
+  const handleWheel = useCallback((e: WheelEvent) => {
     const model = modelRef.current;
     if (!model) return;
     e.preventDefault();
     const scaleFactor = e.deltaY > 0 ? 0.95 : 1.05;
     model.scale.x *= scaleFactor;
     model.scale.y *= scaleFactor;
-    updateView();
-  };
+    if (viewCommitModeRef.current === "live") {
+      updateView(true);
+      return;
+    }
+
+    if (wheelCommitTimeoutRef.current) {
+      clearTimeout(wheelCommitTimeoutRef.current);
+    }
+    wheelCommitTimeoutRef.current = setTimeout(() => {
+      wheelCommitTimeoutRef.current = null;
+      updateView(true);
+    }, 120);
+  }, []);
+
+  useEffect(() => {
+    const root = previewRootRef.current;
+    if (!root) return;
+    root.addEventListener("wheel", handleWheel, { passive: false });
+    return () => root.removeEventListener("wheel", handleWheel);
+  }, [handleWheel]);
 
   return (
     <div
+      ref={previewRootRef}
       className="mb-2 flex justify-center border border-dashed border-blue-300 bg-white/70"
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
-      onPointerUp={() => {
-        dragData.current.isDragging = false;
-      }}
-      onPointerCancel={() => {
-        dragData.current.isDragging = false;
-      }}
-      onWheel={handleWheel}
+      onPointerUp={finishInteraction}
+      onPointerCancel={finishInteraction}
     >
       <div className="relative cursor-grab active:cursor-grabbing">
         <canvas
@@ -550,6 +687,11 @@ export function CharacterUploadPreview({
         {error && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/80 p-3 text-center text-[11px] text-red-600">
             {error}
+          </div>
+        )}
+        {message && (
+          <div className="absolute bottom-2 left-2 right-2 border border-dashed border-gray-500 bg-white/85 px-2 py-1 text-center text-[11px] text-gray-700">
+            {message}
           </div>
         )}
       </div>

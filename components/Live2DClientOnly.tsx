@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 import dynamic from "next/dynamic";
+import { usePathname } from "next/navigation";
+import { getTrackingPreference } from "@/lib/supabase/characterPreferences";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { useCharacterLibraryStore } from "@/store/useCharacterLibraryStore";
 import { useCharacterStore } from "@/store/useCharacterStore";
@@ -28,6 +30,7 @@ const Live2DWrapper = dynamic(() => import("./Live2DWrapper"), {
 });
 
 export default function Live2DClientOnly() {
+  const pathname = usePathname();
   const authUser = useAuthUser();
   
   const setProfiles = useCharacterLibraryStore((s) => s.setProfiles);
@@ -35,6 +38,7 @@ export default function Live2DClientOnly() {
   const activeId = useCharacterLibraryStore((s) => s.activeId);
   const profile = useCharacterStore((s) => s.profile);
   const setProfile = useCharacterStore((s) => s.setProfile);
+  const setTracking = useCharacterStore((s) => s.setTracking);
 
   // 전역 초기화: 로그인 상태에 따라 라이브러리 동기화 + 활성 캐릭터 복원
   // CharacterControls 가 홈에만 있기 때문에, 홈이 아닌 곳에서 새로고침 시에도
@@ -46,6 +50,7 @@ export default function Live2DClientOnly() {
       setProfiles([]);
       setActive(null);
       setProfile(null);
+      setTracking(true);
       return;
     }
 
@@ -71,12 +76,15 @@ export default function Live2DClientOnly() {
       if (profile?.id !== preferredProfile.id) {
         setProfile(preferredProfile);
       }
+      setTracking(getTrackingPreference(authUser.user_metadata, preferredProfile.id, true));
     })();
     // authUser 가 확정된 시점에 1회만 실행 (내부 상태 변화로 인한 루프 방지)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUser]);
 
-  if (!authUser) return null;
+  const isCharacterManagePage = pathname.startsWith("/library/");
+
+  if (!authUser || isCharacterManagePage) return null;
   
   return <Live2DWrapper />;
 }

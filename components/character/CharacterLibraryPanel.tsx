@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { supabase } from "@/lib/supabase/client";
+import { savePreferredCharacter } from "@/lib/supabase/characterPreferences";
 import { useCharacterLibraryStore } from "@/store/useCharacterLibraryStore";
 import { useCharacterStore } from "@/store/useCharacterStore";
 
@@ -14,17 +14,6 @@ export default function CharacterLibraryPanel() {
   const setActive = useCharacterLibraryStore((s) => s.setActive);
   const unregister = useCharacterLibraryStore((s) => s.unregister);
   const setProfile = useCharacterStore((s) => s.setProfile);
-
-  const savePreferredCharacter = async (characterId: string | null) => {
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) return;
-    await supabase.auth.updateUser({
-      data: {
-        ...data.user.user_metadata,
-        activeCharacterId: characterId,
-      },
-    });
-  };
 
   const loadCharacter = async (id: string) => {
     const p = profiles.find((p) => p.id === id);
