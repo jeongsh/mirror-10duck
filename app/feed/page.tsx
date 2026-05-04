@@ -5,7 +5,9 @@ import {
   Eye,
   MessageCircle,
   MoreHorizontal,
+  Search,
   Share,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
@@ -18,7 +20,12 @@ import { supabase } from "@/lib/supabase/client";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { splitContentSegments } from "@/lib/stickers/token";
 import { formatCommunityDate } from "@/lib/utils/formatDate";
-import { Board, CommunityPost, postAggregateDefaults } from "@/types/community";
+import {
+  Board,
+  CommunityPost,
+  UserProfile,
+  postAggregateDefaults,
+} from "@/types/community";
 
 type TimelineTab = "for-you" | "following";
 type FollowUserRow = { following_id: string };
@@ -46,6 +53,10 @@ function splitFeedBody(content: string) {
   return { body, imageUrls };
 }
 
+function profileName(profile: UserProfile) {
+  return profile.display_name || profile.nickname || "사용자";
+}
+
 export default function FeedPage() {
   const authUser = useAuthUser();
   const [activeTab, setActiveTab] = useState<TimelineTab>("for-you");
@@ -59,6 +70,32 @@ export default function FeedPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [latestNoticeCount, setLatestNoticeCount] = useState(0);
   const [openPostMenuId, setOpenPostMenuId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+
+  const enrichProfiles = useCallback(async (rows: CommunityPost[]) => {
+    const missingAuthorIds = Array.from(
+      new Set(rows.filter((post) => !post.profiles).map((post) => post.author_id)),
+    );
+
+    if (missingAuthorIds.length === 0) return rows;
+
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .in("user_id", missingAuthorIds);
+
+    const profileMap = new Map(
+      ((data as UserProfile[] | null) ?? []).map((profile) => [profile.user_id, profile]),
+    );
+
+    return rows.map((post) => ({
+      ...post,
+      profiles: post.profiles ?? profileMap.get(post.author_id) ?? null,
+    }));
+  }, []);
 
   const fetchFeed = useCallback(async () => {
     if (authUser === undefined) return;
@@ -78,7 +115,7 @@ export default function FeedPage() {
         .order("created_at", { ascending: false })
         .limit(30);
 
-      setPosts((data as CommunityPost[] | null) ?? []);
+      setPosts(await enrichProfiles((data as CommunityPost[] | null) ?? []));
       setLoading(false);
       return;
     }
@@ -126,11 +163,10 @@ export default function FeedPage() {
         });
       });
 
-      setPosts(
-        Array.from(merged.values())
-          .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
-          .slice(0, 30),
-      );
+      const nextPosts = Array.from(merged.values())
+        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+        .slice(0, 30);
+      setPosts(await enrichProfiles(nextPosts));
       setLoading(false);
       return;
     }
@@ -142,13 +178,50 @@ export default function FeedPage() {
     });
 
     if (error) console.error("Feed Fetch Error:", error);
-    setPosts((data as CommunityPost[] | null) ?? []);
+    setPosts(await enrichProfiles((data as CommunityPost[] | null) ?? []));
     setLoading(false);
-  }, [activeTab, authUser]);
+  }, [activeTab, authUser, enrichProfiles]);
 
   useEffect(() => {
     void fetchFeed();
   }, [fetchFeed]);
+
+  useEffect(() => {
+    const query = searchQuery.trim();
+
+    if (!query || query === "@") {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setSearchLoading(true);
+      const isHandleSearch = query.startsWith("@");
+      const cleanQuery = isHandleSearch ? query.slice(1) : query;
+      const escaped = cleanQuery.replaceAll("%", "\\%").replaceAll("_", "\\_");
+      
+      const orFilter = isHandleSearch
+        ? `handle.ilike.%${escaped}%`
+        : `nickname.ilike.%${escaped}%,display_name.ilike.%${escaped}%,handle.ilike.%${escaped}%`;
+
+      const { data } = await supabase
+        .from("profiles")
+        .select("*")
+        .or(orFilter)
+        .limit(10);
+
+      if (cancelled) return;
+      setSearchResults((data as UserProfile[] | null) ?? []);
+      setSearchLoading(false);
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [searchQuery]);
 
   const handlePosted = async () => {
     setLatestNoticeCount((count) => count + 1);
@@ -191,15 +264,16 @@ export default function FeedPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col border-x border-dashed border-gray-500 bg-white/40">
-      <header className="sticky top-0 z-20 border-b border-dashed border-gray-500 bg-white/90">
+      <header className="border-b border-dashed border-gray-500 bg-white/90">
         <div className="grid grid-cols-2">
           <button
             type="button"
             onClick={() => setActiveTab("for-you")}
-            className={`relative px-4 py-4 text-sm font-bold ${activeTab === "for-you" ? "text-gray-950" : "text-gray-500"
-              }`}
+            className={`relative px-4 py-4 text-sm font-bold ${
+              activeTab === "for-you" ? "text-gray-950" : "text-gray-500"
+            }`}
           >
-            For you
+            추천
             {activeTab === "for-you" ? (
               <span className="absolute bottom-0 left-1/2 h-1 w-14 -translate-x-1/2 bg-gray-800" />
             ) : null}
@@ -207,16 +281,89 @@ export default function FeedPage() {
           <button
             type="button"
             onClick={() => setActiveTab("following")}
-            className={`relative px-4 py-4 text-sm font-bold ${activeTab === "following" ? "text-gray-950" : "text-gray-500"
-              }`}
+            className={`relative px-4 py-4 text-sm font-bold ${
+              activeTab === "following" ? "text-gray-950" : "text-gray-500"
+            }`}
           >
-            Following
+            팔로잉
             {activeTab === "following" ? (
               <span className="absolute bottom-0 left-1/2 h-1 w-14 -translate-x-1/2 bg-gray-800" />
             ) : null}
           </button>
         </div>
       </header>
+
+      <section className="relative border-b border-dashed border-gray-500 bg-white/70 p-3">
+        <div className="flex items-center gap-2 border border-dashed border-gray-500 bg-white px-3 py-2">
+          <Search size={17} className="text-gray-500" />
+          <input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            placeholder="사용자 검색 (@로 아이디 검색)"
+            className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-gray-500"
+          />
+          {searchQuery ? (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery("");
+                setSearchResults([]);
+              }}
+              className="flex h-6 w-6 items-center justify-center border border-dashed border-gray-400 bg-white hover:bg-gray-100"
+              title="검색어 지우기"
+            >
+              <X size={14} />
+            </button>
+          ) : null}
+        </div>
+
+        {searchFocused && searchQuery.trim() ? (
+          <div className="absolute left-3 right-3 top-14 z-30 max-h-96 overflow-y-auto border border-dashed border-gray-500 bg-white p-2 shadow-sm">
+            {searchLoading ? (
+              <div className="px-3 py-4 text-sm text-gray-500">검색 중...</div>
+            ) : searchResults.length === 0 ? (
+              <div className="px-3 py-4 text-sm text-gray-500">검색 결과가 없습니다.</div>
+            ) : (
+              <ul className="flex flex-col">
+                {searchResults.map((profile) => (
+                  <li key={profile.user_id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const handleStr = profile.handle || profile.nickname;
+                        setSearchQuery(handleStr ? `@${handleStr}` : profileName(profile));
+                        setSearchFocused(false);
+                      }}
+                      className="flex w-full items-center gap-3 border-b border-dashed border-gray-200 px-2 py-3 text-left hover:bg-gray-100"
+                    >
+                      <div className="h-10 w-10 overflow-hidden border border-dashed border-gray-400 bg-gray-50">
+                        {profile.avatar_url ? (
+                          <img
+                            src={profile.avatar_url}
+                            alt={profileName(profile)}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[9px] font-bold uppercase text-gray-400">
+                            User
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-bold text-gray-900">
+                          {profileName(profile)}
+                        </div>
+                        <div className="truncate text-xs text-gray-500">@{profile.handle || profile.nickname}</div>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : null}
+      </section>
 
       <FeedComposer
         userId={authUser?.id ?? ""}
@@ -231,7 +378,7 @@ export default function FeedPage() {
           onClick={showLatestPosts}
           className="border-b border-dashed border-gray-500 bg-white/70 px-4 py-3 text-center text-sm font-medium text-gray-700 hover:bg-gray-100"
         >
-          Show {latestNoticeCount} post{latestNoticeCount > 1 ? "s" : ""}
+          새 게시물 {latestNoticeCount}개 보기
         </button>
       ) : null}
 
@@ -290,7 +437,7 @@ export default function FeedPage() {
       <section className="flex flex-col">
         {loading ? (
           <div className="border-b border-dashed border-gray-500 bg-white/70 p-6 text-center text-sm text-gray-500">
-            Loading...
+            불러오는 중...
           </div>
         ) : posts.length === 0 ? (
           <div className="border-b border-dashed border-gray-500 bg-white/70 p-8 text-center text-sm text-gray-500">
@@ -302,7 +449,7 @@ export default function FeedPage() {
           posts.map((post) => {
             const stats = postAggregateDefaults(post);
             const { body, imageUrls } = splitFeedBody(post.content);
-            const authorHandle = post.author_email.split("@")[0];
+            const authorHandle = post.profiles?.handle || post.profiles?.nickname || post.author_email.split("@")[0];
 
             return (
               <article
@@ -315,16 +462,23 @@ export default function FeedPage() {
                       profile={post.profiles}
                       fallback={{ nickname: authorHandle }}
                       size="md"
-                      showAvatar
+                      showAvatar={true}
+                      showName={false}
                     />
                   </div>
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0 text-sm text-gray-500">
-                        <span className="font-semibold text-gray-900">{authorHandle}</span>{" "}
-                        <span>@{authorHandle}</span>
-                        <span> · {formatCommunityDate(post.created_at)}</span>
+                      <div className="flex items-center gap-1.5 min-w-0 text-sm text-gray-500 flex-wrap">
+                        <IdentityBadge
+                          profile={post.profiles}
+                          fallback={{ nickname: authorHandle }}
+                          size="md"
+                          showAvatar={false}
+                          showName={true}
+                        />
+                        <span className="truncate">@{authorHandle}</span>
+                        <span>· {formatCommunityDate(post.created_at)}</span>
                       </div>
                       <div className="relative">
                         <button
@@ -359,11 +513,11 @@ export default function FeedPage() {
                     {post.source_type === "BOARD" ? (
                       <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
                         <span className="border border-dashed border-gray-300 px-1.5 py-0.5">
-                          Board
+                          게시판
                         </span>
                         {post.is_hot ? (
                           <span className="border border-dashed border-gray-300 bg-white px-1.5 py-0.5 text-gray-700">
-                            HOT
+                            인기
                           </span>
                         ) : null}
                       </div>

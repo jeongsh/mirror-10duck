@@ -23,6 +23,15 @@ type MediaDraft = {
   previewUrl: string;
 };
 
+type ReplyPolicy = "everyone" | "following" | "mentioned" | "verified";
+
+const REPLY_POLICY_LABELS: Record<ReplyPolicy, string> = {
+  everyone: "모두 답글 가능",
+  following: "내가 팔로우한 계정",
+  mentioned: "멘션한 계정만",
+  verified: "인증된 계정",
+};
+
 interface FeedComposerProps {
   userId: string;
   userEmail: string;
@@ -45,6 +54,8 @@ export default function FeedComposer({
   const [focused, setFocused] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [replyPolicy, setReplyPolicy] = useState<ReplyPolicy>("everyone");
+  const [replyMenuOpen, setReplyMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRef = useRef<MediaDraft[]>([]);
@@ -173,6 +184,7 @@ export default function FeedComposer({
 
       setContent("");
       setFocused(false);
+      setReplyMenuOpen(false);
       setMedia((prev) => {
         prev.forEach((item) => URL.revokeObjectURL(item.previewUrl));
         return [];
@@ -196,7 +208,7 @@ export default function FeedComposer({
     >
       <div className="flex gap-3 p-4">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden border border-dashed border-gray-400 bg-gray-50 text-[10px] font-bold uppercase text-gray-400">
-          {userEmail ? userEmail.slice(0, 2) : "Me"}
+          {userEmail ? userEmail.slice(0, 2) : "ME"}
         </div>
 
         <div className="min-w-0 flex-1">
@@ -207,17 +219,49 @@ export default function FeedComposer({
             onFocus={() => setFocused(true)}
             disabled={disabled || loading}
             className="block min-h-20 w-full resize-none bg-transparent text-lg leading-7 text-gray-900 outline-none placeholder:text-gray-500 disabled:opacity-60"
-            placeholder={disabled ? "로그인 후 작성할 수 있습니다." : "What's happening?"}
+            placeholder={disabled ? "로그인 후 작성할 수 있습니다." : "무슨 일이 일어나고 있나요?"}
           />
 
           {showReplyControl && (focused || content || media.length > 0) ? (
-            <button
-              type="button"
-              className="mb-3 flex items-center gap-1 border border-dashed border-gray-300 bg-white px-2 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-100"
-            >
-              <BadgeCheck size={15} />
-              Everyone can reply
-            </button>
+            <div className="relative mb-3 inline-block">
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setReplyMenuOpen((open) => !open);
+                }}
+                className="flex items-center gap-1 border border-dashed border-gray-300 bg-white px-2 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-100"
+              >
+                <BadgeCheck size={15} />
+                {REPLY_POLICY_LABELS[replyPolicy]}
+              </button>
+
+              {replyMenuOpen ? (
+                <div className="absolute left-0 top-8 z-30 w-64 border border-dashed border-gray-500 bg-white p-3 shadow-sm">
+                  <div className="mb-2 text-xs font-bold">누가 답글을 달 수 있나요?</div>
+                  <div className="flex flex-col gap-1">
+                    {(Object.keys(REPLY_POLICY_LABELS) as ReplyPolicy[]).map((policy) => (
+                      <button
+                        key={policy}
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setReplyPolicy(policy);
+                          setReplyMenuOpen(false);
+                        }}
+                        className={`border border-dashed px-3 py-2 text-left text-xs hover:bg-gray-100 ${
+                          replyPolicy === policy
+                            ? "border-gray-700 bg-gray-100 font-bold"
+                            : "border-gray-300 bg-white"
+                        }`}
+                      >
+                        {REPLY_POLICY_LABELS[policy]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           ) : null}
 
           <FeedMediaGrid
@@ -284,7 +328,7 @@ export default function FeedComposer({
             disabled={!canPost}
             className="border border-dashed border-gray-500 bg-gray-200 px-5 py-2 text-sm font-bold text-gray-900 hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {loading ? <Loader2 size={16} className="animate-spin" /> : "Post"}
+            {loading ? <Loader2 size={16} className="animate-spin" /> : "게시"}
           </button>
         </div>
       </div>

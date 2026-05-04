@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
+import { checkHandleAvailability } from "@/lib/supabase/profiles";
 
 type AuthMode = "login" | "signup";
 
@@ -12,6 +13,7 @@ export default function AuthPage() {
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [handle, setHandle] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -27,10 +29,38 @@ export default function AuthPage() {
     setLoading(true);
     setMessage("");
 
+    if (mode === "signup") {
+      if (!handle.trim()) {
+        setMessage("아이디를 입력해주세요.");
+        setLoading(false);
+        return;
+      }
+      if (!/^[a-zA-Z0-9_]{3,20}$/.test(handle)) {
+        setMessage("아이디는 영문, 숫자, 언더바(_)만 사용하여 3~20자로 입력해주세요.");
+        setLoading(false);
+        return;
+      }
+      const isAvailable = await checkHandleAvailability(handle);
+      if (!isAvailable) {
+        setMessage("이미 사용 중인 아이디입니다.");
+        setLoading(false);
+        return;
+      }
+    }
+
     const action =
       mode === "login"
         ? supabase.auth.signInWithPassword({ email, password })
-        : supabase.auth.signUp({ email, password });
+        : supabase.auth.signUp({ 
+            email, 
+            password,
+            options: {
+              data: {
+                handle,
+                nickname: handle // 초기 닉네임을 아이디로 설정
+              }
+            }
+          });
     const { error } = await action;
 
     if (error) {
@@ -83,6 +113,23 @@ export default function AuthPage() {
         onSubmit={onSubmit}
         className="flex flex-col gap-3 border border-dashed border-gray-500 bg-white/70 p-4"
       >
+        {mode === "signup" && (
+          <label className="text-sm">
+            아이디
+            <div className="flex mt-1 border border-dashed border-gray-500 bg-white overflow-hidden">
+              <span className="flex items-center px-3 text-gray-500 font-bold bg-gray-50 border-r border-dashed border-gray-400">@</span>
+              <input
+                type="text"
+                required={mode === "signup"}
+                value={handle}
+                onChange={(event) => setHandle(event.target.value)}
+                className="w-full bg-transparent px-3 py-2 outline-none"
+                placeholder="영문, 숫자, 언더바 3~20자"
+              />
+            </div>
+          </label>
+        )}
+
         <label className="text-sm">
           이메일
           <input

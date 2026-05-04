@@ -11,15 +11,17 @@ interface IdentityBadgeProps {
   };
   size?: "sm" | "md" | "lg";
   showAvatar?: boolean;
+  showName?: boolean;
 }
 
 export default function IdentityBadge({ 
   profile, 
   fallback, 
   size = "md",
-  showAvatar = true 
+  showAvatar = true,
+  showName = true
 }: IdentityBadgeProps) {
-  const nickname = profile?.nickname || fallback?.nickname || "Anonymous";
+  const displayName = profile?.display_name || profile?.nickname || fallback?.nickname || "Anonymous";
   const avatarUrl = profile?.avatar_url || fallback?.avatar_url;
   const isFixed = (profile?.nickname_type || fallback?.nickname_type) === "FIXED";
 
@@ -40,7 +42,7 @@ export default function IdentityBadge({
       {showAvatar && (
         <div className={`${avatarSizes[size]} shrink-0 overflow-hidden border border-dashed border-gray-400 bg-gray-50`}>
           {avatarUrl ? (
-            <img src={avatarUrl} alt={nickname} className="h-full w-full object-cover" />
+            <img src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-[8px] text-gray-300 font-bold uppercase italic">
               User
@@ -48,20 +50,22 @@ export default function IdentityBadge({
           )}
         </div>
       )}
-      <div className="flex items-center gap-1.5">
-        <span className={`font-bold tracking-tight ${isFixed ? "text-gray-900" : "text-gray-500 italic"}`}>
-          {nickname}
-        </span>
-        {isFixed ? (
-          <span className="bg-gray-800 text-white px-1 text-[8px] font-black border border-gray-800 uppercase tracking-tighter leading-tight">
-            FIXED
+      {showName && (
+        <div className="flex items-center gap-1.5">
+          <span className={`font-bold tracking-tight ${isFixed ? "text-gray-900" : "text-gray-500 italic"}`}>
+            {displayName}
           </span>
-        ) : (
-          <span className="text-gray-400 text-[8px] font-bold border border-dashed border-gray-300 px-1 uppercase tracking-tighter leading-tight">
-            TEMP
-          </span>
-        )}
-      </div>
+          {isFixed ? (
+            <span className="bg-gray-800 text-white px-1 text-[8px] font-black border border-gray-800 uppercase tracking-tighter leading-tight">
+              FIXED
+            </span>
+          ) : (
+            <span className="text-gray-400 text-[8px] font-bold border border-dashed border-gray-300 px-1 uppercase tracking-tighter leading-tight">
+              TEMP
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

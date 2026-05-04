@@ -13,6 +13,8 @@ export type UserProfile = {
   user_id: string;
   nickname: string;
   display_name: string | null;
+  handle: string | null;
+  handle_updated_at: string | null;
   avatar_url: string | null;
   bio: string | null;
   representative_character_id: string | null;

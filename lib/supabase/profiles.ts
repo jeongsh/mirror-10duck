@@ -33,3 +33,17 @@ export async function updateProfile(
 
   return data;
 }
+
+export async function checkHandleAvailability(handle: string, excludeUserId?: string): Promise<boolean> {
+  let query = supabase.from("profiles").select("id").eq("handle", handle);
+  if (excludeUserId) {
+    query = query.neq("user_id", excludeUserId);
+  }
+  
+  const { data, error } = await query.limit(1);
+  if (error) {
+    throw error;
+  }
+  
+  return data.length === 0;
+}

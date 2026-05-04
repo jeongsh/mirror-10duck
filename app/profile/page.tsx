@@ -14,7 +14,7 @@ import CharacterUploader, {
 import { Board } from "@/types/community";
 import { listCharacterProfiles } from "@/lib/supabase/characters";
 import { BASE_PROFILES, mergeProfiles } from "@/lib/live2d/profileSync";
-import { getProfile, updateProfile } from "@/lib/supabase/profiles";
+import { getProfile, updateProfile, checkHandleAvailability } from "@/lib/supabase/profiles";
 
 type TabId = "profile" | "library" | "subscription" | "account";
 
@@ -36,6 +36,8 @@ export default function ProfilePage() {
   
   // 프로필 상태
   const [nickname, setNickname] = useState("");
+  const [handle, setHandle] = useState("");
+  const [handleUpdatedAt, setHandleUpdatedAt] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState("");
   const [tempAvatarUrl, setTempAvatarUrl] = useState("");
   const [showAvatarModal, setShowAvatarModal] = useState(false);
@@ -109,7 +111,9 @@ export default function ProfilePage() {
       // DB 프로필 동기화
       const dbProfile = await getProfile(user.id);
       if (dbProfile) {
-        setNickname(dbProfile.nickname);
+        setNickname(dbProfile.nickname || "");
+        setHandle(dbProfile.handle || "");
+        setHandleUpdatedAt(dbProfile.handle_updated_at);
         const savedAvatar = dbProfile.avatar_url || "";
         setAvatarUrl(savedAvatar);
         setTempAvatarUrl(savedAvatar);
@@ -117,6 +121,7 @@ export default function ProfilePage() {
       } else {
         // 하위 호환성: 메타데이터 사용
         setNickname(user.user_metadata?.nickname || "");
+        setHandle(user.user_metadata?.nickname || "");
         const savedAvatar = user.user_metadata?.avatar_url || "";
         setAvatarUrl(savedAvatar);
         setTempAvatarUrl(savedAvatar);
@@ -156,23 +161,70 @@ export default function ProfilePage() {
     setLoading(true);
     setMessage("");
 
+    if (!handle.trim()) {
+      setMessage("오류: 아이디를 입력해주세요.");
+      setLoading(false);
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(handle)) {
+      setMessage("오류: 아이디는 영문, 숫자, 언더바(_)만 사용하여 3~20자로 입력해주세요.");
+      setLoading(false);
+      return;
+    }
+
     try {
+      // 0. 아이디 중복 확인
+      const isAvailable = await checkHandleAvailability(handle, user!.id);
+      if (!isAvailable) {
+        setMessage("오류: 이미 사용 중인 아이디입니다.");
+        setLoading(false);
+        return;
+      }
+
+      // 0.1 30일 제한 확인
+      let newHandleUpdatedAt = handleUpdatedAt;
+      if (handleUpdatedAt) {
+        const lastUpdated = new Date(handleUpdatedAt);
+        const now = new Date();
+        const diffDays = (now.getTime() - lastUpdated.getTime()) / (1000 * 3600 * 24);
+        
+        // 아이디가 변경되었을 경우에만 체크 (초기화나 기존 아이디 그대로인 경우는 패스)
+        const dbProfile = await getProfile(user!.id);
+        if (dbProfile?.handle !== handle) {
+          if (diffDays < 30) {
+            setMessage(`오류: 아이디는 30일에 한 번만 변경할 수 있습니다. (남은 일수: ${Math.ceil(30 - diffDays)}일)`);
+            setLoading(false);
+            return;
+          }
+          newHandleUpdatedAt = now.toISOString();
+        }
+      } else {
+        const dbProfile = await getProfile(user!.id);
+        if (dbProfile?.handle !== handle) {
+           newHandleUpdatedAt = new Date().toISOString();
+        }
+      }
+
       // 1. 프로필 테이블 업데이트
       await updateProfile(user!.id, {
         nickname,
+        handle,
+        handle_updated_at: newHandleUpdatedAt,
         avatar_url: tempAvatarUrl,
         nickname_type: isFixedNickname ? "FIXED" : "TEMPORARY"
       });
 
       // 2. Auth 메타데이터 업데이트 (편의상 유지)
       const { error } = await supabase.auth.updateUser({
-        data: { nickname, avatar_url: tempAvatarUrl },
+        data: { nickname, handle, avatar_url: tempAvatarUrl },
       });
 
       if (error) throw error;
 
       setMessage("성공적으로 저장되었습니다.");
       setAvatarUrl(tempAvatarUrl);
+      setHandleUpdatedAt(newHandleUpdatedAt);
     } catch (err: any) {
       setMessage(`오류: ${err.message}`);
     } finally {
@@ -390,6 +442,27 @@ export default function ProfilePage() {
               </div>
             </div>
 
+            {/* 아이디 행 */}
+            <div className="flex flex-col md:flex-row gap-6 md:gap-20">
+              <label className="w-40 text-sm font-bold shrink-0 pt-2 uppercase tracking-tight">아이디</label>
+              <div className="flex-1 max-w-2xl space-y-3">
+                <div className="flex border border-dashed border-gray-500 bg-white overflow-hidden">
+                  <span className="flex items-center px-3 text-gray-500 font-bold bg-gray-50 border-r border-dashed border-gray-400">@</span>
+                  <input
+                    type="text"
+                    value={handle}
+                    onChange={(e) => setHandle(e.target.value)}
+                    placeholder="영문, 숫자, 언더바 3~20자"
+                    className="flex-1 bg-transparent px-4 py-2 text-sm outline-none"
+                  />
+                </div>
+                <div className="text-[11px] text-gray-400 space-y-1">
+                  <p>• 아이디는 고유하며 중복될 수 없습니다.</p>
+                  <p>• 변경 후 30일간 변경이 불가능합니다.</p>
+                </div>
+              </div>
+            </div>
+
             {/* 닉네임 행 */}
             <div className="flex flex-col md:flex-row gap-6 md:gap-20">
               <label className="w-40 text-sm font-bold shrink-0 pt-2 uppercase tracking-tight">닉네임</label>
@@ -412,7 +485,6 @@ export default function ProfilePage() {
                   </label>
                 </div>
                 <div className="text-[11px] text-gray-400 space-y-1">
-                  <p>• 닉네임 변경 후 5일간 변경이 불가능합니다.</p>
                   <p>• 타인에게 불쾌감을 주는 닉네임은 제재의 대상이 될 수 있습니다.</p>
                 </div>
               </div>

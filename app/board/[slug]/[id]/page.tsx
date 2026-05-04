@@ -259,11 +259,14 @@ export default function BoardPostDetailPage() {
           {post?.title ?? "게시글 없음"}
         </h1>
         <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-gray-600">
-          <IdentityBadge 
-            profile={post?.profiles} 
-            fallback={{ nickname: post?.author_email?.split('@')[0] || "Anonymous" }}
-            size="md"
-          />
+          <div className="flex items-center gap-1.5 min-w-0 text-sm text-gray-500 flex-wrap">
+            <IdentityBadge 
+              profile={post?.profiles} 
+              fallback={{ nickname: post?.author_email?.split('@')[0] || "Anonymous" }}
+              size="md"
+            />
+            {post && <span className="truncate">@{post.profiles?.handle || post.profiles?.nickname || post.author_email?.split('@')[0]}</span>}
+          </div>
           {post && userId && post.author_id !== userId && (
             <button
               onClick={toggleFollowUser}
