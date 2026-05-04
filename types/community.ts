@@ -17,6 +17,7 @@ export type UserProfile = {
   bio: string | null;
   representative_character_id: string | null;
   nickname_type: NicknameType;
+  role: "USER" | "ADMIN";
   created_at: string;
   updated_at: string;
 };
@@ -160,4 +161,17 @@ export type Comment = {
   content: string | null;
   sticker_token: string | null;
   created_at: string;
+};
+
+export type Report = {
+  id: string;
+  created_at: string;
+  reporter_id: string;
+  target_type: "POST" | "COMMENT" | "PROFILE" | "STICKER";
+  target_id: string;
+  reason_category: string;
+  reason_detail: string | null;
+  status: "PENDING" | "REVIEWING" | "RESOLVED" | "REJECTED";
+  admin_note: string | null;
+  processed_at: string | null;
 };

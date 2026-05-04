@@ -6,6 +6,7 @@ import { Live2DModel, MotionPriority } from "@naari3/pixi-live2d-display";
 import { LIVE2D_VIEWPORT } from "@/lib/live2d/viewport";
 import { useCharacterStore } from "@/store/useCharacterStore";
 import type { CharacterActionKey } from "@/types/character";
+import { supabase } from "@/lib/supabase/client";
 
 declare global {
   interface Window {
@@ -428,6 +429,57 @@ export default function Live2DWrapper() {
       cancelled = true;
     };
   }, [modelPath, appReady, setLoading, setReady, setError, setModelConfig]);
+
+  // --------------------------------------------------------------------
+  // Effect 3 · 실시간 알림 연동 (말풍선)
+  // --------------------------------------------------------------------
+  useEffect(() => {
+    let isMounted = true;
+    let userId: string | null = null;
+
+    const setup = async () => {
+      const { data } = await supabase.auth.getUser();
+      if (data.user) {
+        userId = data.user.id;
+      }
+    };
+    setup();
+
+    const notificationChannel = supabase
+      .channel('live2d-notifications')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications' },
+        (payload) => {
+          if (isMounted && userId && payload.new.receiver_id === userId) {
+            // 알림 메시지 표시
+            const typeLabel = 
+              payload.new.type === 'COMMENT' ? '새 댓글' :
+              payload.new.type === 'REPLY' ? '새 답글' :
+              payload.new.type === 'REACTION' ? '새 리액션' : '새로운 알림';
+            
+            useCharacterStore.getState().setMessage(`${typeLabel}이 도착했어요!`);
+            
+            // 기분 좋음 표시
+            useCharacterStore.getState().setEmotion('happy');
+            
+            // 일정 시간 후 메시지 초기화
+            setTimeout(() => {
+              if (isMounted) {
+                useCharacterStore.getState().setMessage(null);
+                useCharacterStore.getState().setEmotion('neutral');
+              }
+            }, 5000);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(notificationChannel);
+    };
+  }, []);
 
   // --------------------------------------------------------------------
   // Effect 3 · 유휴 / 타이핑 핸들러

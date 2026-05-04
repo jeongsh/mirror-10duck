@@ -173,6 +173,31 @@ export default function BoardPostDetailPage() {
     }
   };
 
+  const handleReportPost = async () => {
+    if (!userId) {
+      alert("로그인이 필요합니다.");
+      return;
+    }
+    if (!post) return;
+    
+    const reason = window.prompt("게시글 신고 사유를 입력해주세요 (예: 욕설, 광고, 부적절한 이미지 등)");
+    if (!reason) return;
+
+    const { error } = await supabase.from("reports").insert({
+      reporter_id: userId,
+      target_type: "POST",
+      target_id: post.id,
+      reason_category: "기타",
+      reason_detail: reason
+    });
+
+    if (error) {
+      alert(`신고 실패: ${error.message}`);
+    } else {
+      alert("게시글 신고가 접수되었습니다.");
+    }
+  };
+
   const toggleHotPost = async () => {
     if (!post) return;
     const newHotStatus = !post.is_hot;
@@ -260,7 +285,7 @@ export default function BoardPostDetailPage() {
               setPost((p) => (p ? { ...p, upvote_count: next.upvote_count, downvote_count: next.downvote_count } : null))
             }
           />
-          <ReactionBar postId={post.id} viewerId={userId || null} />
+          <ReactionBar postId={post.id} viewerId={userId || null} authorId={post.author_id} />
         </div>
       ) : null}
 
@@ -299,6 +324,16 @@ export default function BoardPostDetailPage() {
           {shareLoading ? "공유 중..." : "내 피드에 공유"}
         </button>
 
+        {!canEdit && (
+          <button
+            type="button"
+            onClick={handleReportPost}
+            className="border border-dashed border-gray-400 bg-white px-3 py-2 text-sm text-gray-500 hover:bg-gray-50"
+          >
+            신고
+          </button>
+        )}
+
         {/* 테스트용 개념글 토글 (개발 환경에서만 노출) */}
         {process.env.NODE_ENV === "development" && post && (
           <button
@@ -318,6 +353,7 @@ export default function BoardPostDetailPage() {
       {post ? (
         <CommentSection
           postId={post.id}
+          postAuthorId={post.author_id}
           viewerId={userId || null}
           viewerEmail={userEmail || null}
           onThreadChanged={refetchPost}

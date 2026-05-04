@@ -9,6 +9,7 @@ import StickerPicker from "@/components/stickers/StickerPicker";
 import CharacterSticker from "@/components/stickers/CharacterSticker";
 import { insertAtTextarea } from "@/lib/stickers/insertAtCursor";
 import IdentityBadge from "@/components/community/IdentityBadge";
+import { createNotification } from "@/lib/community/notifications";
 
 /**
  * 게시글 한 개의 댓글 섹션.
@@ -19,19 +20,23 @@ import IdentityBadge from "@/components/community/IdentityBadge";
  */
 interface Props {
   postId: string;
+  postAuthorId?: string; // 알림용 게시글 작성자 ID
   viewerId: string | null;
   viewerEmail: string | null;
   /** 댓글 스레드가 바뀐 뒤(등록/삭제) 상위에서 글 집계를 다시 읽을 때 */
   onThreadChanged?: () => void;
 }
 
-export default function CommentSection({ postId, viewerId, viewerEmail, onThreadChanged }: Props) {
+export default function CommentSection({ postId, postAuthorId, viewerId, viewerEmail, onThreadChanged }: Props) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editRef = useRef<HTMLTextAreaElement>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -83,6 +88,31 @@ export default function CommentSection({ postId, viewerId, viewerEmail, onThread
       alert(`등록 실패: ${error.message}`);
       return;
     }
+
+    // 알림 전송
+    if (replyTo) {
+      const parent = comments.find(c => c.id === replyTo);
+      if (parent && parent.author_id !== viewerId) {
+        createNotification({
+          receiverId: parent.author_id,
+          senderId: viewerId,
+          type: 'REPLY',
+          title: '새 답글',
+          content: '내 댓글에 새로운 답글이 달렸습니다.',
+          linkUrl: window.location.pathname
+        });
+      }
+    } else if (postAuthorId && postAuthorId !== viewerId) {
+      createNotification({
+        receiverId: postAuthorId,
+        senderId: viewerId,
+        type: 'COMMENT',
+        title: '새 댓글',
+        content: '내 글에 새로운 댓글이 달렸습니다.',
+        linkUrl: window.location.pathname
+      });
+    }
+
     setText("");
     setReplyTo(null);
     await refresh();
@@ -108,6 +138,31 @@ export default function CommentSection({ postId, viewerId, viewerEmail, onThread
       alert(`등록 실패: ${error.message}`);
       return;
     }
+
+    // 알림 전송 (스티커 전용)
+    if (replyTo) {
+      const parent = comments.find(c => c.id === replyTo);
+      if (parent && parent.author_id !== viewerId) {
+        createNotification({
+          receiverId: parent.author_id,
+          senderId: viewerId,
+          type: 'REPLY',
+          title: '새 답글 (스티커)',
+          content: '내 댓글에 새로운 스티커 답글이 달렸습니다.',
+          linkUrl: window.location.pathname
+        });
+      }
+    } else if (postAuthorId && postAuthorId !== viewerId) {
+      createNotification({
+        receiverId: postAuthorId,
+        senderId: viewerId,
+        type: 'COMMENT',
+        title: '새 댓글 (스티커)',
+        content: '내 글에 새로운 스티커 댓글이 달렸습니다.',
+        linkUrl: window.location.pathname
+      });
+    }
+
     setReplyTo(null);
     await refresh();
     onThreadChanged?.();
@@ -121,8 +176,49 @@ export default function CommentSection({ postId, viewerId, viewerEmail, onThread
       return;
     }
     if (replyTo === commentId) setReplyTo(null);
+    if (editingCommentId === commentId) setEditingCommentId(null);
     await refresh();
     onThreadChanged?.();
+  };
+
+  const handleUpdate = async (commentId: string) => {
+    if (!editText.trim()) return;
+    setSubmitting(true);
+    const { error } = await supabase
+      .from("comments")
+      .update({ content: editText })
+      .eq("id", commentId);
+    
+    setSubmitting(false);
+    if (error) {
+      alert(`수정 실패: ${error.message}`);
+      return;
+    }
+    setEditingCommentId(null);
+    await refresh();
+  };
+
+  const handleReport = async (commentId: string) => {
+    if (!viewerId) {
+      alert("로그인이 필요합니다.");
+      return;
+    }
+    const reason = window.prompt("신고 사유를 입력해주세요 (예: 욕설, 도배 등)");
+    if (!reason) return;
+
+    const { error } = await supabase.from("reports").insert({
+      reporter_id: viewerId,
+      target_type: "COMMENT",
+      target_id: commentId,
+      reason_category: "기타",
+      reason_detail: reason
+    });
+
+    if (error) {
+      alert(`신고 실패: ${error.message}`);
+    } else {
+      alert("신고가 접수되었습니다.");
+    }
   };
 
   const root = comments.filter(c => !c.parent_comment_id);
@@ -170,7 +266,31 @@ export default function CommentSection({ postId, viewerId, viewerEmail, onThread
                         </span>
                       ) : null}
                     </div>
-                    {stickerToken ? (
+                    {editingCommentId === c.id ? (
+                      <div className="flex flex-col gap-2">
+                        <textarea
+                          ref={editRef}
+                          value={editText}
+                          onChange={(e) => setEditText(e.target.value)}
+                          className="w-full border border-dashed border-gray-400 p-2 text-sm focus:outline-none"
+                          rows={3}
+                        />
+                        <div className="flex justify-end gap-2">
+                          <button 
+                            onClick={() => setEditingCommentId(null)}
+                            className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:underline"
+                          >
+                            [취소]
+                          </button>
+                          <button 
+                            onClick={() => handleUpdate(c.id)}
+                            className="text-[10px] font-bold uppercase tracking-widest text-blue-500 hover:underline"
+                          >
+                            [수정 완료]
+                          </button>
+                        </div>
+                      </div>
+                    ) : stickerToken ? (
                       <div className="mt-1">
                         <CharacterSticker token={stickerToken} size="lg" />
                       </div>
@@ -188,12 +308,33 @@ export default function CommentSection({ postId, viewerId, viewerEmail, onThread
                         {replyTo === c.id ? "[취소]" : "[답글 달기]"}
                       </button>
                       {canDelete && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingCommentId(c.id);
+                              setEditText(c.content || "");
+                            }}
+                            className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:underline"
+                          >
+                            [수정]
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(c.id)}
+                            className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:underline"
+                          >
+                            [삭제]
+                          </button>
+                        </>
+                      )}
+                      {!canDelete && (
                         <button
                           type="button"
-                          onClick={() => handleDelete(c.id)}
-                          className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:underline"
+                          onClick={() => handleReport(c.id)}
+                          className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:underline"
                         >
-                          [삭제]
+                          [신고]
                         </button>
                       )}
                     </div>
@@ -231,13 +372,34 @@ export default function CommentSection({ postId, viewerId, viewerEmail, onThread
                               <p className="text-xs italic text-gray-400">(빈 답글)</p>
                             )}
                             {canDeleteReply && (
-                              <div className="mt-2">
+                              <div className="mt-2 flex items-center gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingCommentId(r.id);
+                                    setEditText(r.content || "");
+                                  }}
+                                  className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:underline"
+                                >
+                                  [수정]
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => handleDelete(r.id)}
                                   className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:underline"
                                 >
                                   [삭제]
+                                </button>
+                              </div>
+                            )}
+                            {!canDeleteReply && (
+                              <div className="mt-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleReport(r.id)}
+                                  className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:underline"
+                                >
+                                  [신고]
                                 </button>
                               </div>
                             )}

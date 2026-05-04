@@ -17,6 +17,7 @@ import {
 import { getProfile } from "@/lib/supabase/profiles";
 import IdentityBadge from "./IdentityBadge";
 import { UserProfile } from "@/types/community";
+import { createNotification } from "@/lib/community/notifications";
 
 /**
  * 게시글 한 개의 리액션 6종 + 최근 반응자의 유저 프로필(닉네임·아바타)을 노출하는 바.
@@ -30,9 +31,10 @@ import { UserProfile } from "@/types/community";
 interface Props {
   postId: string;
   viewerId: string | null;
+  authorId?: string; // 알림용 글 작성자 ID
 }
 
-export default function ReactionBar({ postId, viewerId }: Props) {
+export default function ReactionBar({ postId, viewerId, authorId }: Props) {
   const [summary, setSummary] = useState<PostReactionSummary | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [busy, setBusy] = useState<ReactionType | null>(null);
@@ -104,6 +106,19 @@ export default function ReactionBar({ postId, viewerId }: Props) {
       displayName: userProfile?.nickname || profileDisplayName,
       avatarUrl: userProfile?.avatar_url || profileAvatarUrl,
     });
+
+    if (result.ok && !isSameType && authorId && authorId !== viewerId) {
+      // 새로운 리액션 알림
+      const meta = REACTION_META[reactionType];
+      createNotification({
+        receiverId: authorId,
+        senderId: viewerId,
+        type: 'REACTION',
+        title: '새 리액션',
+        content: `${userProfile?.nickname || "누군가"}님이 내 글에 ${meta.emoji} 반응을 남겼습니다.`,
+        linkUrl: `${window.location.pathname}`
+      });
+    }
 
     setBusy(null);
 

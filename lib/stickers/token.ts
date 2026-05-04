@@ -13,6 +13,7 @@ import type { StickerToken } from "@/types/community";
  */
 
 const STICKER_TOKEN_PATTERN = /:sticker\/([A-Za-z0-9_-]+)\/([A-Za-z0-9_-]+):/g;
+const IMAGE_TOKEN_PATTERN = /!image\[([^\]]+)\]/g;
 
 export function buildStickerToken(characterId: string, emotion: string): string {
   return `:sticker/${characterId}/${emotion}:`;
@@ -30,27 +31,43 @@ export function parseStickerToken(input: string): StickerToken | null {
  */
 export type ContentSegment =
   | { type: "text"; value: string }
-  | { type: "sticker"; token: StickerToken };
+  | { type: "sticker"; token: StickerToken }
+  | { type: "image"; url: string };
 
 export function splitContentSegments(content: string): ContentSegment[] {
   if (!content) return [];
 
   const segments: ContentSegment[] = [];
+  
+  // 모든 토큰(스티커, 이미지)을 하나의 정규식으로 통합하여 순서대로 처리
+  const combinedPattern = new RegExp(
+    `(${STICKER_TOKEN_PATTERN.source})|(${IMAGE_TOKEN_PATTERN.source})`,
+    "g"
+  );
+
   let lastIndex = 0;
-
-  // 정규식 인스턴스 매 호출마다 재생성: stateful lastIndex 공유 방지.
-  const pattern = new RegExp(STICKER_TOKEN_PATTERN.source, "g");
-
   let match: RegExpExecArray | null;
-  while ((match = pattern.exec(content)) !== null) {
-    const [raw, characterId, emotion] = match;
+  
+  while ((match = combinedPattern.exec(content)) !== null) {
+    const [raw, stickerRaw, characterId, emotion, imageRaw, imageUrl] = match;
+    
+    // 이전 텍스트 추가
     if (match.index > lastIndex) {
       segments.push({ type: "text", value: content.slice(lastIndex, match.index) });
     }
-    segments.push({
-      type: "sticker",
-      token: { characterId, emotion, raw },
-    });
+    
+    if (stickerRaw) {
+      segments.push({
+        type: "sticker",
+        token: { characterId, emotion, raw: stickerRaw },
+      });
+    } else if (imageRaw) {
+      segments.push({
+        type: "image",
+        url: imageUrl,
+      });
+    }
+    
     lastIndex = match.index + raw.length;
   }
 
