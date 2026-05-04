@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
+  deleteNotification,
+  deleteReadNotifications,
   fetchNotifications,
   markAllAsRead,
   markNotificationAsRead,
@@ -18,6 +20,18 @@ const TYPE_LABEL: Record<NotificationRow["type"], string> = {
   HOT_PROMOTED: "인기글",
   SYSTEM: "시스템",
 };
+
+function formatExpiresAt(value: string | null) {
+  if (!value) return "만료 없음";
+
+  const expiresAt = new Date(value);
+  const diffMs = expiresAt.getTime() - Date.now();
+  const diffDays = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
+
+  if (diffDays <= 0) return "곧 만료";
+  if (diffDays === 1) return "1일 후 만료";
+  return `${diffDays}일 후 만료`;
+}
 
 export default function NotificationsPage() {
   const authUser = useAuthUser();
@@ -61,21 +75,48 @@ export default function NotificationsPage() {
     await markNotificationAsRead(notificationId, userId);
   };
 
+  const removeOne = async (notificationId: string) => {
+    if (!userId) return;
+    setNotifications((prev) => prev.filter((item) => item.id !== notificationId));
+    await deleteNotification(notificationId, userId);
+  };
+
+  const removeRead = async () => {
+    if (!userId) return;
+    if (!window.confirm("읽은 알림을 모두 삭제할까요?")) return;
+
+    setNotifications((prev) => prev.filter((item) => !item.is_read));
+    await deleteReadNotifications(userId);
+    await refresh();
+  };
+
   return (
     <main className="flex w-full flex-col gap-4">
       <header className="flex flex-wrap items-center justify-between gap-3 border border-dashed border-gray-500 bg-white/70 p-4">
         <div>
           <h1 className="text-xl font-bold">알림</h1>
-          <p className="text-sm text-gray-600">댓글, 답글, 리액션과 팔로우 소식을 확인합니다.</p>
+          <p className="text-sm text-gray-600">
+            댓글, 답글, 리액션과 팔로우 소식을 확인합니다. 기본 보관 기간은 30일입니다.
+          </p>
         </div>
-        <button
-          type="button"
-          onClick={readAll}
-          disabled={!userId || notifications.every((item) => item.is_read)}
-          className="border border-dashed border-gray-500 bg-white px-3 py-2 text-sm hover:bg-gray-100 disabled:opacity-50"
-        >
-          모두 읽음
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={readAll}
+            disabled={!userId || notifications.every((item) => item.is_read)}
+            className="border border-dashed border-gray-500 bg-white px-3 py-2 text-sm hover:bg-gray-100 disabled:opacity-50"
+          >
+            모두 읽음
+          </button>
+          <button
+            type="button"
+            onClick={removeRead}
+            disabled={!userId || notifications.every((item) => !item.is_read)}
+            className="border border-dashed border-red-400 bg-red-50 px-3 py-2 text-sm text-red-700 hover:bg-red-100 disabled:opacity-50"
+          >
+            읽은 알림 삭제
+          </button>
+        </div>
       </header>
 
       {!userId && authUser !== undefined ? (
@@ -96,8 +137,8 @@ export default function NotificationsPage() {
       ) : (
         <section className="flex flex-col border border-dashed border-gray-500 bg-white/70">
           {notifications.map((item) => {
-            const content = (
-              <article className="flex flex-col gap-1 border-b border-dashed border-gray-300 p-4 last:border-b-0">
+            const body = (
+              <article className="flex flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   {!item.is_read && (
                     <span className="h-2 w-2 rounded-full bg-red-500" aria-label="읽지 않음" />
@@ -111,27 +152,38 @@ export default function NotificationsPage() {
                   </time>
                 </div>
                 <p className="text-sm text-gray-600">{item.content}</p>
+                <span className="text-[11px] text-gray-400">
+                  {formatExpiresAt(item.expires_at)}
+                </span>
               </article>
             );
 
-            return item.link_url ? (
-              <Link
+            return (
+              <div
                 key={item.id}
-                href={item.link_url}
-                onClick={() => void readOne(item.id)}
-                className="block hover:bg-gray-50"
+                className="grid grid-cols-[1fr_auto] gap-2 border-b border-dashed border-gray-300 p-4 last:border-b-0 hover:bg-gray-50"
               >
-                {content}
-              </Link>
-            ) : (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => void readOne(item.id)}
-                className="block w-full text-left hover:bg-gray-50"
-              >
-                {content}
-              </button>
+                {item.link_url ? (
+                  <Link href={item.link_url} onClick={() => void readOne(item.id)} className="min-w-0">
+                    {body}
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void readOne(item.id)}
+                    className="min-w-0 text-left"
+                  >
+                    {body}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void removeOne(item.id)}
+                  className="self-start border border-dashed border-gray-400 bg-white px-2 py-1 text-[11px] text-gray-500 hover:border-red-400 hover:text-red-600"
+                >
+                  삭제
+                </button>
+              </div>
             );
           })}
         </section>

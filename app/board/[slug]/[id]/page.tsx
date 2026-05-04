@@ -226,7 +226,7 @@ export default function BoardPostDetailPage() {
       alert(error.message);
     } else {
       setPost({ ...post, is_hot: newHotStatus });
-      if (newHotStatus && post.author_id !== userId) {
+      if (newHotStatus && userId && post.author_id !== userId) {
         await createNotification({
           receiverId: post.author_id,
           senderId: userId || null,

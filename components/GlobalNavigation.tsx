@@ -66,6 +66,20 @@ export default function GlobalNavigation() {
           });
         },
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "notifications",
+          filter: `receiver_id=eq.${userId}`,
+        },
+        () => {
+          getUnreadNotificationCount(userId).then((count) => {
+            if (isMounted) setUnreadCount(count);
+          });
+        },
+      )
       .subscribe();
 
     return () => {
