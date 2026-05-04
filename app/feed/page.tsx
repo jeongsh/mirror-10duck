@@ -175,12 +175,27 @@ export default function FeedPage() {
 
     const { data, error } = await supabase.rpc("get_hybrid_feed", {
       viewer_id: userId,
-      limit_cnt: 30,
+      limit_cnt: 50, // 좀 더 넉넉히 가져와서 필터링
       offset_cnt: 0,
     });
 
     if (error) console.error("Feed Fetch Error:", error);
-    setPosts(await enrichProfiles((data as CommunityPost[] | null) ?? []));
+
+    let feedPosts = (data as CommunityPost[] | null) ?? [];
+
+    if (userId) {
+      const { data: followUsers } = await supabase
+        .from("follows_user")
+        .select("following_id")
+        .eq("follower_id", userId);
+      
+      const followedUserIds = new Set(followUsers?.map(f => f.following_id) || []);
+      if (followedUserIds.size > 0) {
+        feedPosts = feedPosts.filter(post => !followedUserIds.has(post.author_id));
+      }
+    }
+
+    setPosts(await enrichProfiles(feedPosts.slice(0, 30)));
     setLoading(false);
   }, [activeTab, authUser, enrichProfiles]);
 

@@ -11,9 +11,9 @@ type AuthMode = "login" | "signup";
 export default function AuthPage() {
   const authUser = useAuthUser();
   const [mode, setMode] = useState<AuthMode>("login");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [loginId, setLoginId] = useState("");
   const [handle, setHandle] = useState("");
+  const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -46,31 +46,48 @@ export default function AuthPage() {
         setLoading(false);
         return;
       }
-    }
 
-    const action =
-      mode === "login"
-        ? supabase.auth.signInWithPassword({ email, password })
-        : supabase.auth.signUp({ 
-            email, 
-            password,
-            options: {
-              data: {
-                handle,
-                nickname: handle // 초기 닉네임을 아이디로 설정
-              }
-            }
-          });
-    const { error } = await action;
-
-    if (error) {
-      setMessage(error.message);
+      if (!loginId.includes("@")) {
+        setMessage("회원가입 시에는 이메일을 입력해야 합니다.");
+        setLoading(false);
+        return;
+      }
+      
+      const { error } = await supabase.auth.signUp({ 
+        email: loginId, 
+        password,
+        options: {
+          data: {
+            handle,
+            nickname: handle
+          }
+        }
+      });
+      
+      if (error) {
+        setMessage(error.message);
+      } else {
+        setMessage("회원가입 성공. 메일 인증이 켜져 있으면 받은 메일함을 확인해 주세요.");
+      }
     } else {
-      setMessage(
-        mode === "login"
-          ? "로그인 성공. 채널 목록에서 글을 작성해 보세요."
-          : "회원가입 성공. 메일 인증이 켜져 있으면 받은 메일함을 확인해 주세요.",
-      );
+      let targetEmail = loginId;
+      if (!loginId.includes("@")) {
+        const { data, error } = await supabase.rpc("get_email_by_handle", { p_handle: loginId });
+        if (error || !data) {
+          setMessage("해당 아이디를 가진 사용자를 찾을 수 없습니다.");
+          setLoading(false);
+          return;
+        }
+        targetEmail = data as string;
+      }
+
+      const { error } = await supabase.auth.signInWithPassword({ email: targetEmail, password });
+      
+      if (error) {
+        setMessage(error.message);
+      } else {
+        setMessage("로그인 성공. 채널 목록에서 글을 작성해 보세요.");
+      }
     }
 
     setLoading(false);
@@ -131,14 +148,14 @@ export default function AuthPage() {
         )}
 
         <label className="text-sm">
-          이메일
+          {mode === "login" ? "아이디 또는 이메일" : "이메일"}
           <input
-            type="email"
+            type={mode === "login" ? "text" : "email"}
             required
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            value={loginId}
+            onChange={(event) => setLoginId(event.target.value)}
             className="mt-1 w-full border border-dashed border-gray-500 bg-white px-3 py-2"
-            placeholder="duck@example.com"
+            placeholder={mode === "login" ? "아이디 혹은 이메일 입력" : "duck@example.com"}
           />
         </label>
 
