@@ -1,9 +1,16 @@
 "use client";
 
-import { Image as ImageIcon, Loader2, Send, X } from "lucide-react";
+import {
+  BadgeCheck,
+  BarChart3,
+  Image as ImageIcon,
+  ListFilter,
+  Loader2,
+  Smile,
+} from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
+import FeedMediaGrid from "@/components/community/feed/FeedMediaGrid";
 import StickerPicker from "@/components/stickers/StickerPicker";
-import RichContent from "@/components/stickers/RichContent";
 import { insertAtTextarea } from "@/lib/stickers/insertAtCursor";
 import { supabase } from "@/lib/supabase/client";
 
@@ -21,6 +28,8 @@ interface FeedComposerProps {
   userEmail: string;
   onPosted: () => void;
   disabled?: boolean;
+  autoFocus?: boolean;
+  showReplyControl?: boolean;
 }
 
 export default function FeedComposer({
@@ -28,9 +37,12 @@ export default function FeedComposer({
   userEmail,
   onPosted,
   disabled = false,
+  autoFocus = false,
+  showReplyControl = true,
 }: FeedComposerProps) {
   const [content, setContent] = useState("");
   const [media, setMedia] = useState<MediaDraft[]>([]);
+  const [focused, setFocused] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -39,20 +51,27 @@ export default function FeedComposer({
 
   const remaining = MAX_FEED_LENGTH - content.length;
   const isOverLimit = remaining < 0;
-  const canPost = !disabled && !loading && !isOverLimit && Boolean(userId) && (
-    content.trim().length > 0 || media.length > 0
-  );
+  const canPost =
+    !disabled &&
+    !loading &&
+    !isOverLimit &&
+    Boolean(userId) &&
+    (content.trim().length > 0 || media.length > 0);
 
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
     textarea.style.height = "auto";
-    textarea.style.height = `${Math.max(textarea.scrollHeight, 144)}px`;
+    textarea.style.height = `${Math.max(textarea.scrollHeight, 84)}px`;
   }, [content]);
 
   useEffect(() => {
     mediaRef.current = media;
   }, [media]);
+
+  useEffect(() => {
+    if (autoFocus) focusComposer();
+  }, [autoFocus]);
 
   useEffect(() => {
     return () => {
@@ -98,11 +117,11 @@ export default function FeedComposer({
     focusComposer();
   };
 
-  const removeMedia = (id: string) => {
+  const removeMediaAt = (index: number) => {
     setMedia((prev) => {
-      const target = prev.find((item) => item.id === id);
+      const target = prev[index];
       if (target) URL.revokeObjectURL(target.previewUrl);
-      return prev.filter((item) => item.id !== id);
+      return prev.filter((_, itemIndex) => itemIndex !== index);
     });
   };
 
@@ -153,6 +172,7 @@ export default function FeedComposer({
       if (error) throw error;
 
       setContent("");
+      setFocused(false);
       setMedia((prev) => {
         prev.forEach((item) => URL.revokeObjectURL(item.previewUrl));
         return [];
@@ -165,19 +185,17 @@ export default function FeedComposer({
     }
   };
 
-  const previewContent = [
-    content,
-    ...media.map((item) => `!image[${item.previewUrl}]`),
-  ].filter(Boolean).join("\n");
+  const iconButtonClass =
+    "flex h-9 w-9 items-center justify-center border border-dashed border-gray-300 bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-40";
 
   return (
     <form
       onSubmit={onSubmit}
-      className="border border-dashed border-gray-500 bg-white/80"
+      className="border-b border-dashed border-gray-500 bg-white/70"
       onClick={focusComposer}
     >
       <div className="flex gap-3 p-4">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center border border-dashed border-gray-400 bg-gray-50 text-[10px] font-bold uppercase text-gray-400">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden border border-dashed border-gray-400 bg-gray-50 text-[10px] font-bold uppercase text-gray-400">
           {userEmail ? userEmail.slice(0, 2) : "Me"}
         </div>
 
@@ -186,51 +204,30 @@ export default function FeedComposer({
             ref={textareaRef}
             value={content}
             onChange={(event) => setContent(event.target.value)}
+            onFocus={() => setFocused(true)}
             disabled={disabled || loading}
-            className="block min-h-36 w-full resize-none bg-transparent text-lg leading-7 text-gray-900 outline-none placeholder:text-gray-400 disabled:opacity-60"
-            placeholder={disabled ? "로그인 후 작성할 수 있습니다." : "무슨 일이 일어나고 있나요?"}
+            className="block min-h-20 w-full resize-none bg-transparent text-lg leading-7 text-gray-900 outline-none placeholder:text-gray-500 disabled:opacity-60"
+            placeholder={disabled ? "로그인 후 작성할 수 있습니다." : "What's happening?"}
           />
 
-          {media.length > 0 ? (
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              {media.map((item) => (
-                <div
-                  key={item.id}
-                  className="relative aspect-video overflow-hidden border border-dashed border-gray-400 bg-gray-50"
-                >
-                  <img
-                    src={item.previewUrl}
-                    alt="첨부 이미지 미리보기"
-                    className="h-full w-full object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      removeMedia(item.id);
-                    }}
-                    className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center bg-black/70 text-white hover:bg-black"
-                    title="이미지 제거"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              ))}
-            </div>
+          {showReplyControl && (focused || content || media.length > 0) ? (
+            <button
+              type="button"
+              className="mb-3 flex items-center gap-1 border border-dashed border-gray-300 bg-white px-2 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-100"
+            >
+              <BadgeCheck size={15} />
+              Everyone can reply
+            </button>
           ) : null}
 
-          {previewContent ? (
-            <div className="mt-4 border-t border-dashed border-gray-300 pt-3">
-              <div className="mb-2 text-[11px] font-bold uppercase tracking-widest text-gray-500">
-                미리보기
-              </div>
-              <RichContent content={previewContent} />
-            </div>
-          ) : null}
+          <FeedMediaGrid
+            imageUrls={media.map((item) => item.previewUrl)}
+            onRemove={removeMediaAt}
+          />
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-t border-dashed border-gray-300 px-4 py-3">
+      <div className="ml-16 flex flex-wrap items-center gap-1 border-t border-dashed border-gray-300 px-4 py-3">
         <input
           ref={fileInputRef}
           type="file"
@@ -247,10 +244,20 @@ export default function FeedComposer({
             fileInputRef.current?.click();
           }}
           disabled={disabled || loading || media.length >= MAX_MEDIA_COUNT}
-          className="flex h-9 w-9 items-center justify-center border border-dashed border-gray-400 bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-40"
+          className={iconButtonClass}
           title="이미지 추가"
         >
           <ImageIcon size={18} />
+        </button>
+
+        <button type="button" disabled className={iconButtonClass} title="GIF">
+          <span className="text-[10px] font-black">GIF</span>
+        </button>
+        <button type="button" disabled className={iconButtonClass} title="Grok">
+          <Smile size={18} />
+        </button>
+        <button type="button" disabled className={iconButtonClass} title="투표">
+          <ListFilter size={18} />
         </button>
 
         <StickerPicker
@@ -260,9 +267,14 @@ export default function FeedComposer({
         />
 
         <div className="ml-auto flex items-center gap-3">
+          <BarChart3 size={16} className="text-gray-400" />
           <span
             className={`text-xs tabular-nums ${
-              isOverLimit ? "font-bold text-red-600" : remaining <= 30 ? "text-amber-600" : "text-gray-500"
+              isOverLimit
+                ? "font-bold text-red-600"
+                : remaining <= 30
+                  ? "text-amber-600"
+                  : "text-gray-500"
             }`}
           >
             {remaining}
@@ -270,10 +282,9 @@ export default function FeedComposer({
           <button
             type="submit"
             disabled={!canPost}
-            className="flex items-center gap-2 border border-dashed border-gray-700 bg-gray-900 px-4 py-2 text-sm font-bold text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
+            className="border border-dashed border-gray-500 bg-gray-200 px-5 py-2 text-sm font-bold text-gray-900 hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-            게시
+            {loading ? <Loader2 size={16} className="animate-spin" /> : "Post"}
           </button>
         </div>
       </div>

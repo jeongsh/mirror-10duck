@@ -1,59 +1,52 @@
 "use client";
 
+import { SmilePlus, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useAuthUser } from "@/lib/supabase/useAuthUser";
-import { useCharacterLibraryStore } from "@/store/useCharacterLibraryStore";
-import {
-  ALL_REACTION_TYPES,
-  type PostReactionSummary,
-  type ReactionType,
-} from "@/types/community";
+import { createNotification } from "@/lib/community/notifications";
 import {
   REACTION_META,
   fetchReactionsByPost,
   setReaction,
   summarizeReactions,
 } from "@/lib/community/reactions";
+import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { getProfile } from "@/lib/supabase/profiles";
-import IdentityBadge from "./IdentityBadge";
-import { UserProfile } from "@/types/community";
-import { createNotification } from "@/lib/community/notifications";
+import { useCharacterLibraryStore } from "@/store/useCharacterLibraryStore";
+import {
+  ALL_REACTION_TYPES,
+  type PostReactionSummary,
+  type ReactionType,
+  type UserProfile,
+} from "@/types/community";
 
-/**
- * 게시글 한 개의 리액션 6종 + 최근 반응자의 유저 프로필(닉네임·아바타)을 노출하는 바.
- *
- * - 비로그인 사용자도 카운트는 볼 수 있고, 클릭 시 안내 alert.
- * - 클릭 한 번에 토글 (켜져 있으면 취소, 꺼져 있으면 추가).
- * - "반응한 사람" 영역: 프로필 사진(없으면 캐릭터 썸네일, 둘 다 없으면 이니셜) + 닉네임.
- *
- * 한 클릭에 본인의 유저 메타(닉·아바타) + 활성 캐릭터 스냅샷 + 감정 종류가 기록된다.
- */
 interface Props {
   postId: string;
   viewerId: string | null;
-  authorId?: string; // 알림용 글 작성자 ID
+  authorId?: string;
 }
 
 export default function ReactionBar({ postId, viewerId, authorId }: Props) {
   const [summary, setSummary] = useState<PostReactionSummary | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [busy, setBusy] = useState<ReactionType | null>(null);
+  const [open, setOpen] = useState(false);
 
   const authUser = useAuthUser();
-  const profileDisplayName = useMemo(() => {
-    if (!authUser) return null;
-    const n = authUser.user_metadata?.nickname;
-    return typeof n === "string" && n.trim() ? n.trim() : null;
-  }, [authUser]);
-  const profileAvatarUrl = useMemo(() => {
-    if (!authUser) return null;
-    const u = authUser.user_metadata?.avatar_url;
-    return typeof u === "string" && u ? u : null;
-  }, [authUser]);
-
   const activeId = useCharacterLibraryStore((s) => s.activeId);
   const profiles = useCharacterLibraryStore((s) => s.profiles);
   const activeProfile = activeId ? profiles.find((p) => p.id === activeId) ?? null : null;
+
+  const profileDisplayName = useMemo(() => {
+    if (!authUser) return null;
+    const nickname = authUser.user_metadata?.nickname;
+    return typeof nickname === "string" && nickname.trim() ? nickname.trim() : null;
+  }, [authUser]);
+
+  const profileAvatarUrl = useMemo(() => {
+    if (!authUser) return null;
+    const avatarUrl = authUser.user_metadata?.avatar_url;
+    return typeof avatarUrl === "string" && avatarUrl ? avatarUrl : null;
+  }, [authUser]);
 
   const refresh = useCallback(async () => {
     const rows = await fetchReactionsByPost(postId);
@@ -61,28 +54,29 @@ export default function ReactionBar({ postId, viewerId, authorId }: Props) {
   }, [postId, viewerId]);
 
   useEffect(() => {
-    refresh();
-    if (viewerId) {
-      getProfile(viewerId).then(setUserProfile);
-    }
+    void refresh();
+    if (viewerId) void getProfile(viewerId).then(setUserProfile);
   }, [refresh, viewerId]);
+
+  const totalCount = summary
+    ? ALL_REACTION_TYPES.reduce((sum, type) => sum + (summary.counts[type] ?? 0), 0)
+    : 0;
+  const mineType = summary?.mine.values().next().value ?? null;
 
   const handleClick = async (reactionType: ReactionType) => {
     if (!viewerId) {
-      alert("리액션은 로그인 후 가능합니다.");
+      alert("리액션은 로그인 후 사용할 수 있습니다.");
       return;
     }
     if (!summary) return;
 
     setBusy(reactionType);
 
-    // 한 글당 한 사용자 1리액션 정책: mine 은 0개 또는 1개.
     const currentMineType: ReactionType | null = summary.mine.values().next().value ?? null;
     const isSameType = currentMineType === reactionType;
-
-    // 낙관적 업데이트 (실패 시 refresh 로 정정)
     const nextCounts = { ...summary.counts };
     const nextMine = new Set<ReactionType>();
+
     if (currentMineType) {
       nextCounts[currentMineType] = Math.max(0, (nextCounts[currentMineType] ?? 0) - 1);
     }
@@ -90,6 +84,7 @@ export default function ReactionBar({ postId, viewerId, authorId }: Props) {
       nextCounts[reactionType] = (nextCounts[reactionType] ?? 0) + 1;
       nextMine.add(reactionType);
     }
+
     setSummary({
       counts: nextCounts,
       mine: nextMine,
@@ -108,15 +103,14 @@ export default function ReactionBar({ postId, viewerId, authorId }: Props) {
     });
 
     if (result.ok && !isSameType && authorId && authorId !== viewerId) {
-      // 새로운 리액션 알림
       const meta = REACTION_META[reactionType];
       await createNotification({
         receiverId: authorId,
         senderId: viewerId,
-        type: 'REACTION',
-        title: '새 리액션',
-        content: `${userProfile?.nickname || "누군가"}님이 내 글에 ${meta.emoji} 반응을 남겼습니다.`,
-        linkUrl: `${window.location.pathname}`
+        type: "REACTION",
+        title: "새 리액션",
+        content: `${userProfile?.nickname || "누군가"}님이 글에 ${meta.emoji} 반응을 남겼습니다.`,
+        linkUrl: window.location.pathname,
       });
     }
 
@@ -125,71 +119,74 @@ export default function ReactionBar({ postId, viewerId, authorId }: Props) {
     if (!result.ok) {
       alert(`리액션 처리 실패: ${result.error ?? "알 수 없는 오류"}`);
     }
-    // DB 와 강제 동기화 (썸네일/타 사용자 반응 포함 최신화)
-    refresh();
+
+    void refresh();
   };
 
-  const counts = summary?.counts;
-  const mine = summary?.mine;
-  const reactors = summary?.recentReactors ?? [];
-
   return (
-    <div className="flex flex-col gap-2 border border-dashed border-gray-400 bg-white/80 p-3">
-      <div className="flex flex-wrap gap-2">
-        {ALL_REACTION_TYPES.map((type) => {
-          const meta = REACTION_META[type];
-          const count = counts?.[type] ?? 0;
-          const isMine = mine?.has(type) ?? false;
-          return (
-            <button
-              key={type}
-              type="button"
-              onClick={() => handleClick(type)}
-              disabled={busy === type}
-              className={`flex items-center gap-1 border border-dashed px-3 py-1.5 text-xs transition-colors disabled:opacity-50 ${
-                isMine
-                  ? "border-gray-800 bg-gray-900 text-white"
-                  : "border-gray-400 bg-white text-gray-700 hover:bg-gray-100"
-              }`}
-              aria-pressed={isMine}
-              title={meta.label}
-            >
-              <span className="text-base leading-none">{meta.emoji}</span>
-              <span className="font-bold">{meta.label}</span>
-              <span className={`tabular-nums ${isMine ? "text-white" : meta.color}`}>{count}</span>
-            </button>
-          );
-        })}
-      </div>
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-1 hover:text-gray-900"
+        title="리액션"
+      >
+        <SmilePlus size={17} />
+        <span className="tabular-nums">{totalCount}</span>
+      </button>
 
-      {reactors.length > 0 ? (
-        <div className="border-t border-dashed border-gray-300 pt-2">
-          <div className="mb-1.5 text-[11px] font-medium uppercase tracking-widest text-gray-500">
-            반응한 사람
-          </div>
-          <div className="flex flex-wrap items-end gap-3">
-            {reactors.map((r) => {
-              const src = r.avatarUrl || r.characterThumbnailUrl;
-              const name = r.displayName?.trim() || "사용자";
-              return (
-                <div
-                  key={r.userId}
-                  className="flex flex-col items-center gap-0.5"
-                  title={name}
-                >
-                  <IdentityBadge 
-                    fallback={{ 
-                        nickname: name, 
-                        avatar_url: src 
-                    }}
-                    size="sm"
-                  />
-                </div>
-              );
-            })}
+      {open ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm border border-dashed border-gray-500 bg-white p-4"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-bold">리액션</h2>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="flex h-8 w-8 items-center justify-center border border-dashed border-gray-400 bg-white hover:bg-gray-100"
+                title="닫기"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              {ALL_REACTION_TYPES.map((type) => {
+                const meta = REACTION_META[type];
+                const count = summary?.counts[type] ?? 0;
+                const isMine = mineType === type;
+
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => handleClick(type)}
+                    disabled={busy === type}
+                    className={`flex items-center justify-between border border-dashed px-3 py-2 text-xs disabled:opacity-50 ${
+                      isMine
+                        ? "border-gray-800 bg-gray-900 text-white"
+                        : "border-gray-400 bg-white text-gray-700 hover:bg-gray-100"
+                    }`}
+                    aria-pressed={isMine}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-base leading-none">{meta.emoji}</span>
+                      <span className="font-bold">{meta.label}</span>
+                    </span>
+                    <span className="tabular-nums">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       ) : null}
-    </div>
+    </>
   );
 }
