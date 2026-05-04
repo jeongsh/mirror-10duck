@@ -80,6 +80,10 @@ export type PostReaction = {
   reaction_type: ReactionType;
   character_id: string | null;
   character_thumbnail_url: string | null;
+  /** 리액션 시점 `user_metadata.nickname` 스냅샷 (마이그레이션 이전 행은 생략 가능) */
+  display_name?: string | null;
+  /** 리액션 시점 `user_metadata.avatar_url` 스냅샷 (마이그레이션 이전 행은 생략 가능) */
+  avatar_url?: string | null;
   created_at: string;
 };
 
@@ -89,8 +93,13 @@ export type PostReactionSummary = {
   counts: Record<ReactionType, number>;
   /** 내가 누른 reaction_type 집합 */
   mine: Set<ReactionType>;
-  /** 최근 반응자 캐릭터 썸네일들 (최대 N장) */
-  recentThumbnails: { url: string; characterId: string | null; userId: string }[];
+  /** 최근 반응자 (유저 프로필 우선, 없으면 캐릭터 썸네일) */
+  recentReactors: {
+    userId: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+    characterThumbnailUrl: string | null;
+  }[];
 };
 
 /**

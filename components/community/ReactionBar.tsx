@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { useCharacterLibraryStore } from "@/store/useCharacterLibraryStore";
 import {
   ALL_REACTION_TYPES,
@@ -15,14 +16,13 @@ import {
 } from "@/lib/community/reactions";
 
 /**
- * 게시글 한 개의 리액션 6종 + 누른 사람들의 캐릭터 스티커 썸네일을 노출하는 바.
+ * 게시글 한 개의 리액션 6종 + 최근 반응자의 유저 프로필(닉네임·아바타)을 노출하는 바.
  *
  * - 비로그인 사용자도 카운트는 볼 수 있고, 클릭 시 안내 alert.
  * - 클릭 한 번에 토글 (켜져 있으면 취소, 꺼져 있으면 추가).
- * - "응답한 캐릭터" 영역에 최근 반응자 캐릭터 썸네일을 최대 6장까지 가로 스택으로 노출.
+ * - "반응한 사람" 영역: 프로필 사진(없으면 캐릭터 썸네일, 둘 다 없으면 이니셜) + 닉네임.
  *
- * 텍스트 없이 누를 수 있는 "스티커 답글" 1차 버전 = 이 바 자체.
- * 한 클릭에 본인의 활성 캐릭터 + 감정 종류가 모두 기록된다.
+ * 한 클릭에 본인의 유저 메타(닉·아바타) + 활성 캐릭터 스냅샷 + 감정 종류가 기록된다.
  */
 interface Props {
   postId: string;
@@ -32,6 +32,18 @@ interface Props {
 export default function ReactionBar({ postId, viewerId }: Props) {
   const [summary, setSummary] = useState<PostReactionSummary | null>(null);
   const [busy, setBusy] = useState<ReactionType | null>(null);
+
+  const authUser = useAuthUser();
+  const profileDisplayName = useMemo(() => {
+    if (!authUser) return null;
+    const n = authUser.user_metadata?.nickname;
+    return typeof n === "string" && n.trim() ? n.trim() : null;
+  }, [authUser]);
+  const profileAvatarUrl = useMemo(() => {
+    if (!authUser) return null;
+    const u = authUser.user_metadata?.avatar_url;
+    return typeof u === "string" && u ? u : null;
+  }, [authUser]);
 
   const activeId = useCharacterLibraryStore((s) => s.activeId);
   const profiles = useCharacterLibraryStore((s) => s.profiles);
@@ -72,7 +84,7 @@ export default function ReactionBar({ postId, viewerId }: Props) {
     setSummary({
       counts: nextCounts,
       mine: nextMine,
-      recentThumbnails: summary.recentThumbnails,
+      recentReactors: summary.recentReactors,
     });
 
     const result = await setReaction({
@@ -82,6 +94,8 @@ export default function ReactionBar({ postId, viewerId }: Props) {
       currentMineType,
       characterId: activeProfile?.id ?? null,
       characterThumbnailUrl: activeProfile?.thumbnailUrl ?? null,
+      displayName: profileDisplayName,
+      avatarUrl: profileAvatarUrl,
     });
 
     setBusy(null);
@@ -95,7 +109,7 @@ export default function ReactionBar({ postId, viewerId }: Props) {
 
   const counts = summary?.counts;
   const mine = summary?.mine;
-  const thumbs = summary?.recentThumbnails ?? [];
+  const reactors = summary?.recentReactors ?? [];
 
   return (
     <div className="flex flex-col gap-2 border border-dashed border-gray-400 bg-white/80 p-3">
@@ -126,25 +140,43 @@ export default function ReactionBar({ postId, viewerId }: Props) {
         })}
       </div>
 
-      {thumbs.length > 0 ? (
-        <div className="flex items-center gap-2 border-t border-dashed border-gray-300 pt-2">
-          <span className="text-[11px] uppercase tracking-widest text-gray-500">반응한 캐릭터</span>
-          <div className="flex -space-x-1">
-            {thumbs.map((t) => (
-              <span
-                key={`${t.userId}-${t.url}`}
-                className="inline-block h-7 w-7 overflow-hidden rounded-full border border-dashed border-gray-400 bg-white"
-                title={t.characterId ?? ""}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={t.url}
-                  alt="반응자 캐릭터"
-                  className="h-full w-full object-cover"
-                  draggable={false}
-                />
-              </span>
-            ))}
+      {reactors.length > 0 ? (
+        <div className="border-t border-dashed border-gray-300 pt-2">
+          <div className="mb-1.5 text-[11px] font-medium uppercase tracking-widest text-gray-500">
+            반응한 사람
+          </div>
+          <div className="flex flex-wrap items-end gap-3">
+            {reactors.map((r) => {
+              const src = r.avatarUrl || r.characterThumbnailUrl;
+              const name = r.displayName?.trim() || "사용자";
+              const initial = name.length > 0 ? name[0] : "?";
+              return (
+                <div
+                  key={r.userId}
+                  className="flex max-w-[5rem] flex-col items-center gap-0.5"
+                  title={name}
+                >
+                  {src ? (
+                    <span className="inline-block h-9 w-9 overflow-hidden rounded-full border border-dashed border-gray-400 bg-white">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={src}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        draggable={false}
+                      />
+                    </span>
+                  ) : (
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full border border-dashed border-gray-400 bg-gray-100 text-xs font-semibold text-gray-600">
+                      {initial}
+                    </span>
+                  )}
+                  <span className="w-full truncate text-center text-[10px] leading-tight text-gray-600">
+                    {name}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       ) : null}

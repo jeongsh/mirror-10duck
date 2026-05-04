@@ -40,7 +40,7 @@ export function summarizeReactions(
   const counts = emptyReactionCounts();
   const mine = new Set<ReactionType>();
   const seenUsers = new Set<string>();
-  const recentThumbnails: PostReactionSummary["recentThumbnails"] = [];
+  const recentReactors: PostReactionSummary["recentReactors"] = [];
 
   // created_at 내림차순 정렬 (최신부터)
   const sorted = [...rows].sort((a, b) =>
@@ -51,21 +51,19 @@ export function summarizeReactions(
     counts[row.reaction_type] = (counts[row.reaction_type] ?? 0) + 1;
     if (viewerId && row.user_id === viewerId) mine.add(row.reaction_type);
 
-    if (
-      row.character_thumbnail_url &&
-      !seenUsers.has(row.user_id) &&
-      recentThumbnails.length < thumbnailLimit
-    ) {
+    if (!seenUsers.has(row.user_id) && recentReactors.length < thumbnailLimit) {
       seenUsers.add(row.user_id);
-      recentThumbnails.push({
-        url: row.character_thumbnail_url,
-        characterId: row.character_id,
+      const dn = row.display_name?.trim();
+      recentReactors.push({
         userId: row.user_id,
+        displayName: dn || null,
+        avatarUrl: row.avatar_url ?? null,
+        characterThumbnailUrl: row.character_thumbnail_url ?? null,
       });
     }
   }
 
-  return { counts, mine, recentThumbnails };
+  return { counts, mine, recentReactors };
 }
 
 /**
@@ -100,6 +98,8 @@ export async function setReaction(params: {
   currentMineType: ReactionType | null;
   characterId: string | null;
   characterThumbnailUrl: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
   const { postId, userId, reactionType, currentMineType } = params;
 
@@ -122,6 +122,8 @@ export async function setReaction(params: {
         reaction_type: reactionType,
         character_id: params.characterId,
         character_thumbnail_url: params.characterThumbnailUrl,
+        display_name: params.displayName,
+        avatar_url: params.avatarUrl,
       },
       { onConflict: "post_id,user_id" },
     );

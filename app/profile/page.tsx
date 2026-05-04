@@ -37,6 +37,9 @@ export default function ProfilePage() {
   const [nickname, setNickname] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [tempAvatarUrl, setTempAvatarUrl] = useState("");
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
+  /** 모달 안에서만 편집; 확인 시 tempAvatarUrl 로 반영 */
+  const [modalAvatarDraft, setModalAvatarDraft] = useState("");
   const [isFixedNickname, setIsFixedNickname] = useState(true);
   
   // 계정 보안 상태
@@ -76,39 +79,38 @@ export default function ProfilePage() {
   }, []);
 
   useEffect(() => {
-    if (user) {
-      setNickname(user.user_metadata?.nickname || "");
-      setAvatarUrl(user.user_metadata?.avatar_url || "");
-      setTempAvatarUrl(user.user_metadata?.avatar_url || "");
-      
-      const syncData = async () => {
-        // 1. 구독 채널 페칭
-        setBoardsLoading(true);
-        const { data: followRows } = await supabase
-          .from("follows_board")
-          .select("board_id")
-          .eq("user_id", user.id);
-        
-        const boardIds = (followRows as any[])?.map((row) => row.board_id) ?? [];
-        if (boardIds.length > 0) {
-          const { data: boardRows } = await supabase
-            .from("boards")
-            .select("*")
-            .in("id", boardIds);
-          setFollowedBoards(boardRows || []);
-        } else {
-          setFollowedBoards([]);
-        }
-        setBoardsLoading(false);
+    if (!user) return;
+    setNickname(user.user_metadata?.nickname || "");
+    const savedAvatar = user.user_metadata?.avatar_url || "";
+    setAvatarUrl(savedAvatar);
+    setTempAvatarUrl(savedAvatar);
+  }, [user]);
 
-        // 2. 캐릭터 라이브러리 동기화 (전역 스토어 업데이트)
-        const savedProfiles = await listCharacterProfiles();
-        const allProfiles = mergeProfiles(BASE_PROFILES, savedProfiles);
-        setProfiles(allProfiles);
-      };
-      
-      syncData();
-    }
+  useEffect(() => {
+    if (!user) return;
+
+    const syncData = async () => {
+      setBoardsLoading(true);
+      const { data: followRows } = await supabase
+        .from("follows_board")
+        .select("board_id")
+        .eq("user_id", user.id);
+
+      const boardIds = (followRows as any[])?.map((row) => row.board_id) ?? [];
+      if (boardIds.length > 0) {
+        const { data: boardRows } = await supabase.from("boards").select("*").in("id", boardIds);
+        setFollowedBoards(boardRows || []);
+      } else {
+        setFollowedBoards([]);
+      }
+      setBoardsLoading(false);
+
+      const savedProfiles = await listCharacterProfiles();
+      const allProfiles = mergeProfiles(BASE_PROFILES, savedProfiles);
+      setProfiles(allProfiles);
+    };
+
+    void syncData();
   }, [user, setProfiles]);
 
   if (user === undefined) {
@@ -234,12 +236,32 @@ export default function ProfilePage() {
         .from('character-assets')
         .getPublicUrl(filePath);
 
-      setTempAvatarUrl(publicUrl);
+      setModalAvatarDraft(publicUrl);
     } catch (err: any) {
       alert(`업로드 오류: ${err.message}`);
     } finally {
       setLoading(false);
+      e.target.value = "";
     }
+  };
+
+  const openAvatarModal = () => {
+    setModalAvatarDraft(tempAvatarUrl);
+    setShowAvatarModal(true);
+  };
+
+  const cancelAvatarModal = () => {
+    setShowAvatarModal(false);
+  };
+
+  const confirmAvatarModal = () => {
+    setTempAvatarUrl(modalAvatarDraft);
+    setShowAvatarModal(false);
+  };
+
+  const pickModalCharacterThumbnail = (thumbnailUrl: string | undefined) => {
+    if (!thumbnailUrl) return;
+    setModalAvatarDraft(thumbnailUrl);
   };
 
   const handleUnfollow = async (boardId: string) => {
@@ -309,19 +331,28 @@ export default function ProfilePage() {
             <div className="flex flex-col md:flex-row gap-6 md:gap-20">
               <label className="w-40 text-sm font-bold shrink-0 pt-1 uppercase tracking-tight">프로필 이미지</label>
               <div className="space-y-4">
-                <div 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-32 h-32 border border-dashed border-gray-400 bg-gray-100 flex items-center justify-center cursor-pointer overflow-hidden group relative"
-                >
-                  {tempAvatarUrl ? (
-                    <img src={tempAvatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-[10px] text-gray-400">NO IMAGE</span>
-                  )}
-                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[8px] text-white transition-opacity uppercase font-bold">CHANGE</div>
+                <div className="flex flex-wrap items-end gap-4">
+                  <div className="h-32 w-32 shrink-0 overflow-hidden border border-dashed border-gray-400 bg-gray-100">
+                    {tempAvatarUrl ? (
+                      <img src={tempAvatarUrl} alt="Avatar" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full items-center justify-center px-2 text-center text-[10px] text-gray-400">
+                        NO IMAGE
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={openAvatarModal}
+                    className="border border-dashed border-gray-800 bg-white px-5 py-2.5 text-xs font-bold uppercase tracking-widest text-gray-800 transition-colors hover:bg-gray-800 hover:text-white"
+                  >
+                    프로필 변경
+                  </button>
                 </div>
+                <p className="text-[11px] text-gray-400 italic">
+                  ※ 모달에서 썸네일·업로드를 고른 뒤 확인하면 미리보기에 반영됩니다. 계정 반영은 [정보 저장]을 눌러 주세요.
+                </p>
                 <input type="file" ref={fileInputRef} onChange={handleAvatarUpload} className="hidden" accept="image/*" />
-                <p className="text-[11px] text-gray-400 italic">※ 이미지는 자동으로 최적화되어 서버에 저장됩니다.</p>
               </div>
             </div>
 
@@ -594,6 +625,134 @@ export default function ProfilePage() {
           - Logout from this account -
         </button>
       </div>
+
+      {showAvatarModal && (
+        <div
+          className="fixed inset-0 z-[58] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+          onClick={cancelAvatarModal}
+          role="presentation"
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden border border-dashed border-gray-500 bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-dashed border-gray-300 px-5 py-4">
+              <h3 className="text-sm font-bold uppercase tracking-widest text-gray-800">프로필 이미지</h3>
+              <p className="mt-1 text-[11px] text-gray-500">
+                캐릭터 썸네일을 고르거나 이미지를 업로드한 뒤 <span className="font-bold text-gray-700">확인</span>을 누르면
+                아래 미리보기에 반영됩니다.
+              </p>
+            </div>
+
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+              <div className="flex flex-col items-center gap-2 border border-dashed border-gray-300 bg-gray-50/60 py-4">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">모달 미리보기</span>
+                <div className="h-28 w-28 overflow-hidden border border-dashed border-gray-400 bg-gray-100">
+                  {modalAvatarDraft ? (
+                    <img src={modalAvatarDraft} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full items-center justify-center px-2 text-center text-[10px] text-gray-400">
+                      NO IMAGE
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <section>
+                <h4 className="mb-3 text-[11px] font-bold uppercase tracking-widest text-gray-500">
+                  캐릭터 썸네일
+                </h4>
+                {profiles.length === 0 ? (
+                  <p className="border border-dashed border-gray-300 bg-gray-50/60 py-8 text-center text-[11px] text-gray-400">
+                    라이브러리에 캐릭터가 없습니다. 캐릭터 관리 탭에서 등록해 주세요.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+                    {profiles.map((p) => {
+                      const hasThumb = Boolean(p.thumbnailUrl);
+                      const isSelected = Boolean(
+                        modalAvatarDraft && p.thumbnailUrl && modalAvatarDraft === p.thumbnailUrl
+                      );
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          disabled={!hasThumb}
+                          onClick={() => pickModalCharacterThumbnail(p.thumbnailUrl)}
+                          className={`flex flex-col gap-1 text-left transition-colors ${
+                            hasThumb
+                              ? `border border-dashed p-1.5 hover:border-gray-800 hover:bg-gray-50 ${
+                                  isSelected ? "border-gray-800 bg-gray-50 ring-1 ring-gray-800" : "border-gray-400 bg-white"
+                                }`
+                              : "cursor-not-allowed border border-dashed border-gray-200 bg-gray-50/80 opacity-60"
+                          }`}
+                        >
+                          <div
+                            className="relative flex w-full items-center justify-center overflow-hidden border border-dashed border-gray-300 bg-gray-100"
+                            style={{ aspectRatio: "320 / 420" }}
+                          >
+                            {p.thumbnailUrl ? (
+                              <img
+                                src={p.thumbnailUrl}
+                                alt=""
+                                className="h-full w-full object-contain"
+                              />
+                            ) : (
+                              <span className="px-1 text-center text-[9px] font-bold text-gray-400">
+                                NO THUMB
+                              </span>
+                            )}
+                            {p.id === activeCharacterId && (
+                              <span className="absolute right-0.5 top-0.5 bg-red-100 px-1 text-[8px] font-bold text-red-600">
+                                ACTIVE
+                              </span>
+                            )}
+                          </div>
+                          <span className="truncate px-0.5 text-[10px] font-bold text-gray-800">{p.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+
+              <section className="border-t border-dashed border-gray-200 pt-5">
+                <h4 className="mb-3 text-[11px] font-bold uppercase tracking-widest text-gray-500">
+                  이미지 업로드
+                </h4>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full border border-dashed border-gray-800 bg-white py-3 text-xs font-bold uppercase tracking-widest text-gray-800 transition-colors hover:bg-gray-800 hover:text-white disabled:opacity-50"
+                >
+                  {loading ? "업로드 중…" : "파일에서 선택"}
+                </button>
+                <p className="mt-2 text-[11px] text-gray-400">
+                  업로드가 끝나면 모달 미리보기에만 반영됩니다. 확인 후 프로필 미리보기로 옮기고, [정보 저장]으로 계정에 저장하세요.
+                </p>
+              </section>
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-dashed border-gray-300 px-5 py-4">
+              <button
+                type="button"
+                onClick={cancelAvatarModal}
+                className="border border-dashed border-gray-400 bg-white px-6 py-2.5 text-xs font-bold uppercase tracking-widest text-gray-600 hover:bg-gray-100"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={confirmAvatarModal}
+                className="border border-dashed border-gray-800 bg-gray-800 px-6 py-2.5 text-xs font-bold uppercase tracking-widest text-white hover:bg-gray-700"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showWithdrawModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
