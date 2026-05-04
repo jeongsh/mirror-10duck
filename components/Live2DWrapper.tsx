@@ -622,7 +622,9 @@ export default function Live2DWrapper() {
       }
     };
 
-    app.ticker.add(tick);
+    if (app.ticker) {
+      app.ticker.add(tick);
+    }
     return () => {
       // StrictMode/언마운트 경합으로 app 이 이미 destroy 된 경우 ticker 가 null 일 수 있다.
       const ticker = app?.ticker as { remove?: (fn: () => void) => void } | null | undefined;
