@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import FeedComposer from "@/components/community/feed/FeedComposer";
 import FeedMediaGrid from "@/components/community/feed/FeedMediaGrid";
@@ -58,6 +59,7 @@ function profileName(profile: UserProfile) {
 }
 
 export default function FeedPage() {
+  const router = useRouter();
   const authUser = useAuthUser();
   const [activeTab, setActiveTab] = useState<TimelineTab>("for-you");
   const [posts, setPosts] = useState<CommunityPost[]>([]);
@@ -332,7 +334,11 @@ export default function FeedPage() {
                       type="button"
                       onClick={() => {
                         const handleStr = profile.handle || profile.nickname;
-                        setSearchQuery(handleStr ? `@${handleStr}` : profileName(profile));
+                        if (handleStr) {
+                          router.push(`/user/${encodeURIComponent(handleStr)}`);
+                        } else {
+                          setSearchQuery(profileName(profile));
+                        }
                         setSearchFocused(false);
                       }}
                       className="flex w-full items-center gap-3 border-b border-dashed border-gray-200 px-2 py-3 text-left hover:bg-gray-100"
@@ -458,25 +464,29 @@ export default function FeedPage() {
               >
                 <div className="flex gap-3">
                   <div className="pt-1">
-                    <IdentityBadge
-                      profile={post.profiles}
-                      fallback={{ nickname: authorHandle }}
-                      size="md"
-                      showAvatar={true}
-                      showName={false}
-                    />
+                    <button onClick={() => authorHandle && router.push(`/user/${encodeURIComponent(authorHandle)}`)}>
+                      <IdentityBadge
+                        profile={post.profiles}
+                        fallback={{ nickname: authorHandle }}
+                        size="md"
+                        showAvatar={true}
+                        showName={false}
+                      />
+                    </button>
                   </div>
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 min-w-0 text-sm text-gray-500 flex-wrap">
-                        <IdentityBadge
-                          profile={post.profiles}
-                          fallback={{ nickname: authorHandle }}
-                          size="md"
-                          showAvatar={false}
-                          showName={true}
-                        />
+                        <button onClick={() => authorHandle && router.push(`/user/${encodeURIComponent(authorHandle)}`)}>
+                          <IdentityBadge
+                            profile={post.profiles}
+                            fallback={{ nickname: authorHandle }}
+                            size="md"
+                            showAvatar={false}
+                            showName={true}
+                          />
+                        </button>
                         <span className="truncate">@{authorHandle}</span>
                         <span>· {formatCommunityDate(post.created_at)}</span>
                       </div>
