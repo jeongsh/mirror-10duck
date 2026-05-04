@@ -11,15 +11,18 @@
 ## 2. 반드시 먼저 읽을 문서
 
 1. `docs/plan.md`
-- 제품 목표, 단계별 마일스톤, 현재 진행 범위를 확인
+- 제품 목표, 문서 참조 지도, 현재 진행 범위를 확인
 
-2. `docs/ARCHITECTURE_OVERVIEW.md`
+2. `docs/plans/checklist.md`
+- Phase별 완료/미완료 상태를 확인
+
+3. `docs/ARCHITECTURE_OVERVIEW.md`
 - 페이지/컴포넌트/스토어/업로드 파이프라인 역할 파악
 
-3. `docs/LIVE2D_CHARACTER_GUIDE.md`
+4. `docs/LIVE2D_CHARACTER_GUIDE.md`
 - Live2D/캐릭터 시스템이 실제로 어떤 흐름과 구조로 동작하는지 빠르게 파악
 
-> 새 기능 작업 전 위 세 문서를 먼저 읽고, 작업 후 변경점이 생기면 문서도 같이 갱신하는 것을 기본 규칙으로 합니다.
+> 새 기능 작업 전 `docs/plan.md`의 참조 지도를 먼저 보고, 작업 영역에 맞는 `docs/plans/*.md`만 추가로 읽습니다. 작업 후 변경점이 생기면 체크리스트와 해당 도메인 문서를 같이 갱신하는 것을 기본 규칙으로 합니다.
 
 ## 3. 협업 시 꼭 지킬 것
 
@@ -35,10 +38,12 @@
 ### Cursor 사용 시
 - 규칙 파일: `.cursor/rules/end-of-day-automation.mdc`
 - `퇴근` 요청 시 다음을 수행하도록 설정됨:
-  - `docs/plan.md` 업데이트
+  - `docs/plan.md` 일일 마감 로그 업데이트
+  - `docs/plans/checklist.md` 진행 상태 업데이트
+  - 관련 `docs/plans/*.md` 세부 기획 업데이트
   - `docs/ARCHITECTURE_OVERVIEW.md` 업데이트
   - `docs/DB_TABLES.md` 업데이트
-  - 세 파일만 커밋 + 푸시
+  - 실제 변경된 문서만 커밋 + 푸시
 
 ### Antigravity 사용 시
 - 워크플로: `.agent/workflows/퇴근.md`
@@ -47,4 +52,4 @@
 
 ---
 
-문의/인수인계는 우선 `docs/plan.md`의 현재 페이즈 기준으로 진행합니다.
+문의/인수인계는 우선 `docs/plan.md`의 참조 지도와 `docs/plans/checklist.md`의 현재 페이즈 기준으로 진행합니다.

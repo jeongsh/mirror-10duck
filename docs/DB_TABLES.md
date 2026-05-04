@@ -171,4 +171,6 @@ Phase 2.3 캐릭터-커뮤니티 연결의 댓글 시스템입니다.
 
 ## 10) 참고 문서
 - `docs/SUPABASE_SETUP.md`: 초기 SQL + RLS 설정
-- `docs/plan.md`: 전체 단계별 개발 계획
+- `docs/plan.md`: 전체 플랜 허브 및 문서 참조 지도
+- `docs/plans/checklist.md`: 단계별 완료/미완료 체크리스트
+- `docs/plans/data-model.md`: 추후 DB 확장 계획
