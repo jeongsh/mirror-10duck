@@ -1,29 +1,44 @@
 import { supabase } from "@/lib/supabase/client";
 
-export type NotificationType = 'COMMENT' | 'REPLY' | 'REACTION' | 'FOLLOW' | 'HOT_PROMOTED' | 'SYSTEM';
+export type NotificationType =
+  | "COMMENT"
+  | "REPLY"
+  | "REACTION"
+  | "FOLLOW"
+  | "HOT_PROMOTED"
+  | "SYSTEM";
 
-interface CreateNotificationParams {
-  receiverId: string;
-  senderId?: string;
+export type NotificationRow = {
+  id: string;
+  created_at: string;
+  receiver_id: string;
+  sender_id: string | null;
   type: NotificationType;
   title: string;
   content: string;
-  linkUrl: string;
-}
+  link_url: string | null;
+  is_read: boolean;
+  read_at: string | null;
+};
 
-/**
- * 알림을 생성합니다.
- * (추후 DB 트리거나 Edge Function으로 옮기는 것이 좋으나, 현재는 클라이언트에서 호출)
- */
+type CreateNotificationParams = {
+  receiverId: string;
+  senderId?: string | null;
+  type: NotificationType;
+  title: string;
+  content: string;
+  linkUrl?: string | null;
+};
+
 export async function createNotification({
   receiverId,
-  senderId,
+  senderId = null,
   type,
   title,
   content,
-  linkUrl
-}: CreateNotificationParams) {
-  if (receiverId === senderId) return; // 본인 알림은 무시
+  linkUrl = null,
+}: CreateNotificationParams): Promise<{ ok: boolean; error?: string }> {
+  if (!receiverId || receiverId === senderId) return { ok: true };
 
   const { error } = await supabase.from("notifications").insert({
     receiver_id: receiverId,
@@ -31,35 +46,64 @@ export async function createNotification({
     type,
     title,
     content,
-    link_url: linkUrl
+    link_url: linkUrl,
   });
 
   if (error) {
-    console.error("Failed to create notification:", error);
+    console.error("[notifications] create failed:", error.message);
+    return { ok: false, error: error.message };
   }
+
+  return { ok: true };
 }
 
-/**
- * 읽지 않은 알림 수를 가져옵니다.
- */
+export async function fetchNotifications(userId: string, limit = 50): Promise<NotificationRow[]> {
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("id, created_at, receiver_id, sender_id, type, title, content, link_url, is_read, read_at")
+    .eq("receiver_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("[notifications] fetch failed:", error.message);
+    return [];
+  }
+
+  return (data ?? []) as NotificationRow[];
+}
+
 export async function getUnreadNotificationCount(userId: string): Promise<number> {
   const { count, error } = await supabase
     .from("notifications")
     .select("*", { count: "exact", head: true })
     .eq("receiver_id", userId)
     .eq("is_read", false);
-  
-  if (error) return 0;
+
+  if (error) {
+    console.error("[notifications] unread count failed:", error.message);
+    return 0;
+  }
+
   return count ?? 0;
 }
 
-/**
- * 모든 알림을 읽음 처리합니다.
- */
+export async function markNotificationAsRead(notificationId: string, userId: string) {
+  const { error } = await supabase
+    .from("notifications")
+    .update({ is_read: true, read_at: new Date().toISOString() })
+    .eq("id", notificationId)
+    .eq("receiver_id", userId);
+
+  if (error) console.error("[notifications] mark read failed:", error.message);
+}
+
 export async function markAllAsRead(userId: string) {
-  await supabase
+  const { error } = await supabase
     .from("notifications")
     .update({ is_read: true, read_at: new Date().toISOString() })
     .eq("receiver_id", userId)
     .eq("is_read", false);
+
+  if (error) console.error("[notifications] mark all read failed:", error.message);
 }

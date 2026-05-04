@@ -235,7 +235,11 @@ export default function FeedPage() {
                     })
                   }
                 />
-                <ReactionBar postId={post.id} viewerId={currentUser?.id ?? null} />
+                <ReactionBar
+                  postId={post.id}
+                  viewerId={currentUser?.id ?? null}
+                  authorId={post.author_id}
+                />
               </div>
 
               {post.source_type === "FEED" && (

@@ -2,18 +2,21 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase/client";
-import { markAllAsRead } from "@/lib/community/notifications";
+import {
+  fetchNotifications,
+  markAllAsRead,
+  markNotificationAsRead,
+  type NotificationRow,
+} from "@/lib/community/notifications";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 
-type NotificationRow = {
-  id: string;
-  created_at: string;
-  type: string;
-  title: string;
-  content: string;
-  link_url: string | null;
-  is_read: boolean;
+const TYPE_LABEL: Record<NotificationRow["type"], string> = {
+  COMMENT: "댓글",
+  REPLY: "답글",
+  REACTION: "리액션",
+  FOLLOW: "팔로우",
+  HOT_PROMOTED: "인기글",
+  SYSTEM: "시스템",
 };
 
 export default function NotificationsPage() {
@@ -22,7 +25,7 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const userId = authUser?.id ?? null;
 
-  const fetchNotifications = useCallback(async () => {
+  const refresh = useCallback(async () => {
     if (authUser === undefined) return;
 
     if (!userId) {
@@ -32,25 +35,30 @@ export default function NotificationsPage() {
     }
 
     setLoading(true);
-    const { data } = await supabase
-      .from("notifications")
-      .select("id, created_at, type, title, content, link_url, is_read")
-      .eq("receiver_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(50);
-
-    setNotifications((data as NotificationRow[] | null) ?? []);
+    setNotifications(await fetchNotifications(userId));
     setLoading(false);
   }, [authUser, userId]);
 
   useEffect(() => {
-    void fetchNotifications();
-  }, [fetchNotifications]);
+    void refresh();
+  }, [refresh]);
 
   const readAll = async () => {
     if (!userId) return;
     await markAllAsRead(userId);
-    await fetchNotifications();
+    await refresh();
+  };
+
+  const readOne = async (notificationId: string) => {
+    if (!userId) return;
+    setNotifications((prev) =>
+      prev.map((item) =>
+        item.id === notificationId
+          ? { ...item, is_read: true, read_at: new Date().toISOString() }
+          : item,
+      ),
+    );
+    await markNotificationAsRead(notificationId, userId);
   };
 
   return (
@@ -58,7 +66,7 @@ export default function NotificationsPage() {
       <header className="flex flex-wrap items-center justify-between gap-3 border border-dashed border-gray-500 bg-white/70 p-4">
         <div>
           <h1 className="text-xl font-bold">알림</h1>
-          <p className="text-sm text-gray-600">최근 알림을 확인합니다.</p>
+          <p className="text-sm text-gray-600">댓글, 답글, 리액션과 팔로우 소식을 확인합니다.</p>
         </div>
         <button
           type="button"
@@ -95,8 +103,8 @@ export default function NotificationsPage() {
                     <span className="h-2 w-2 rounded-full bg-red-500" aria-label="읽지 않음" />
                   )}
                   <h2 className="font-bold">{item.title}</h2>
-                  <span className="text-[10px] uppercase tracking-widest text-gray-400">
-                    {item.type}
+                  <span className="border border-dashed border-gray-300 px-1.5 py-0.5 text-[10px] font-bold text-gray-500">
+                    {TYPE_LABEL[item.type] ?? item.type}
                   </span>
                   <time className="ml-auto text-[11px] text-gray-500">
                     {new Date(item.created_at).toLocaleString("ko-KR")}
@@ -107,11 +115,23 @@ export default function NotificationsPage() {
             );
 
             return item.link_url ? (
-              <Link key={item.id} href={item.link_url} className="block hover:bg-gray-50">
+              <Link
+                key={item.id}
+                href={item.link_url}
+                onClick={() => void readOne(item.id)}
+                className="block hover:bg-gray-50"
+              >
                 {content}
               </Link>
             ) : (
-              <div key={item.id}>{content}</div>
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => void readOne(item.id)}
+                className="block w-full text-left hover:bg-gray-50"
+              >
+                {content}
+              </button>
             );
           })}
         </section>

@@ -75,14 +75,18 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
       return;
     }
     setSubmitting(true);
-    const { error } = await supabase.from("comments").insert({
-      post_id: postId,
-      author_id: viewerId,
-      author_email: viewerEmail,
-      content: text,
-      sticker_token: null,
-      parent_comment_id: replyTo,
-    });
+    const { data: insertedComment, error } = await supabase
+      .from("comments")
+      .insert({
+        post_id: postId,
+        author_id: viewerId,
+        author_email: viewerEmail,
+        content: text,
+        sticker_token: null,
+        parent_comment_id: replyTo,
+      })
+      .select("id")
+      .single();
     setSubmitting(false);
     if (error) {
       alert(`등록 실패: ${error.message}`);
@@ -93,23 +97,23 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
     if (replyTo) {
       const parent = comments.find(c => c.id === replyTo);
       if (parent && parent.author_id !== viewerId) {
-        createNotification({
+        await createNotification({
           receiverId: parent.author_id,
           senderId: viewerId,
           type: 'REPLY',
           title: '새 답글',
           content: '내 댓글에 새로운 답글이 달렸습니다.',
-          linkUrl: window.location.pathname
+          linkUrl: `${window.location.pathname}#comment-${insertedComment?.id ?? replyTo}`,
         });
       }
     } else if (postAuthorId && postAuthorId !== viewerId) {
-      createNotification({
+      await createNotification({
         receiverId: postAuthorId,
         senderId: viewerId,
         type: 'COMMENT',
         title: '새 댓글',
         content: '내 글에 새로운 댓글이 달렸습니다.',
-        linkUrl: window.location.pathname
+        linkUrl: `${window.location.pathname}#comment-${insertedComment?.id ?? ""}`,
       });
     }
 
@@ -125,14 +129,18 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
       return;
     }
     setSubmitting(true);
-    const { error } = await supabase.from("comments").insert({
-      post_id: postId,
-      author_id: viewerId,
-      author_email: viewerEmail,
-      content: null,
-      sticker_token: token,
-      parent_comment_id: replyTo,
-    });
+    const { data: insertedComment, error } = await supabase
+      .from("comments")
+      .insert({
+        post_id: postId,
+        author_id: viewerId,
+        author_email: viewerEmail,
+        content: null,
+        sticker_token: token,
+        parent_comment_id: replyTo,
+      })
+      .select("id")
+      .single();
     setSubmitting(false);
     if (error) {
       alert(`등록 실패: ${error.message}`);
@@ -143,23 +151,23 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
     if (replyTo) {
       const parent = comments.find(c => c.id === replyTo);
       if (parent && parent.author_id !== viewerId) {
-        createNotification({
+        await createNotification({
           receiverId: parent.author_id,
           senderId: viewerId,
           type: 'REPLY',
           title: '새 답글 (스티커)',
           content: '내 댓글에 새로운 스티커 답글이 달렸습니다.',
-          linkUrl: window.location.pathname
+          linkUrl: `${window.location.pathname}#comment-${insertedComment?.id ?? replyTo}`,
         });
       }
     } else if (postAuthorId && postAuthorId !== viewerId) {
-      createNotification({
+      await createNotification({
         receiverId: postAuthorId,
         senderId: viewerId,
         type: 'COMMENT',
         title: '새 댓글 (스티커)',
         content: '내 글에 새로운 스티커 댓글이 달렸습니다.',
-        linkUrl: window.location.pathname
+        linkUrl: `${window.location.pathname}#comment-${insertedComment?.id ?? ""}`,
       });
     }
 
@@ -249,7 +257,7 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
 
             return (
               <div key={c.id} className="flex flex-col gap-2">
-                <li className="flex items-start gap-3 border border-dashed border-gray-300 bg-white p-3">
+                <li id={`comment-${c.id}`} className="scroll-mt-24 flex items-start gap-3 border border-dashed border-gray-300 bg-white p-3">
                   <div className="min-w-0 flex-1">
                     <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
                       <IdentityBadge 
@@ -348,7 +356,7 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
                       const rStickerToken = r.sticker_token ? parseStickerToken(r.sticker_token) : null;
                       const canDeleteReply = viewerId === r.author_id;
                       return (
-                        <li key={r.id} className="flex items-start gap-3 border border-dashed border-gray-200 bg-gray-50/50 p-3">
+                        <li id={`comment-${r.id}`} key={r.id} className="scroll-mt-24 flex items-start gap-3 border border-dashed border-gray-200 bg-gray-50/50 p-3">
                           <div className="min-w-0 flex-1">
                             <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
                               <IdentityBadge 

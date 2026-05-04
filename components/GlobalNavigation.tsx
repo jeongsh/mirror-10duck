@@ -52,13 +52,27 @@ export default function GlobalNavigation() {
           if (isMounted) setUnreadCount((prev) => prev + 1);
         },
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notifications",
+          filter: `receiver_id=eq.${userId}`,
+        },
+        () => {
+          getUnreadNotificationCount(userId).then((count) => {
+            if (isMounted) setUnreadCount(count);
+          });
+        },
+      )
       .subscribe();
 
     return () => {
       isMounted = false;
       supabase.removeChannel(notificationSubscription);
     };
-  }, [userId]);
+  }, [pathname, userId]);
 
   return (
     <nav className="sticky top-0 z-40 border-b border-dashed border-gray-500 bg-white/85 backdrop-blur">

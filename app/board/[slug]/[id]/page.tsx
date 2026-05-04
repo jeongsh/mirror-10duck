@@ -11,6 +11,7 @@ import ReactionBar from "@/components/community/ReactionBar";
 import PostVoteBar from "@/components/community/PostVoteBar";
 import CommentSection from "@/components/community/CommentSection";
 import IdentityBadge from "@/components/community/IdentityBadge";
+import { createNotification } from "@/lib/community/notifications";
 
 export default function BoardPostDetailPage() {
   const router = useRouter();
@@ -130,6 +131,14 @@ export default function BoardPostDetailPage() {
         .from("follows_user")
         .insert({ follower_id: userId, following_id: post.author_id });
       setIsFollowingAuthor(true);
+      await createNotification({
+        receiverId: post.author_id,
+        senderId: userId,
+        type: "FOLLOW",
+        title: "새 팔로워",
+        content: "회원님을 새로 팔로우했습니다.",
+        linkUrl: "/profile",
+      });
     }
   };
 
@@ -217,6 +226,16 @@ export default function BoardPostDetailPage() {
       alert(error.message);
     } else {
       setPost({ ...post, is_hot: newHotStatus });
+      if (newHotStatus && post.author_id !== userId) {
+        await createNotification({
+          receiverId: post.author_id,
+          senderId: userId || null,
+          type: "HOT_PROMOTED",
+          title: "인기글 선정",
+          content: "작성한 글이 인기글로 선정되었습니다.",
+          linkUrl: window.location.pathname,
+        });
+      }
     }
   };
 

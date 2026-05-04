@@ -110,7 +110,7 @@ export default function ReactionBar({ postId, viewerId, authorId }: Props) {
     if (result.ok && !isSameType && authorId && authorId !== viewerId) {
       // 새로운 리액션 알림
       const meta = REACTION_META[reactionType];
-      createNotification({
+      await createNotification({
         receiverId: authorId,
         senderId: viewerId,
         type: 'REACTION',
