@@ -1,64 +1,76 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase/client";
-import { Report } from "@/types/community";
 import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase/client";
+import { useAuthUser } from "@/lib/supabase/useAuthUser";
+import { Report } from "@/types/community";
 
 export default function AdminReportsPage() {
+  const authUser = useAuthUser();
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  useEffect(() => {
-    const checkAdmin = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("user_id", user.id)
-        .single();
-      
-      if (profile?.role === "ADMIN") {
-        setIsAdmin(true);
-        fetchReports();
-      } else {
-        setLoading(false);
-      }
-    };
-
-    checkAdmin();
-  }, []);
-
-  const fetchReports = async () => {
+  const fetchReports = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("reports")
       .select("*")
       .order("created_at", { ascending: false });
-    
-    if (!error && data) {
-      setReports(data as Report[]);
-    }
+
+    if (!error && data) setReports(data as Report[]);
     setLoading(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkAdmin = async () => {
+      if (authUser === undefined) return;
+
+      if (!authUser) {
+        setIsAdmin(false);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("user_id", authUser.id)
+        .single();
+
+      if (cancelled) return;
+
+      if (profile?.role === "ADMIN") {
+        setIsAdmin(true);
+        await fetchReports();
+      } else {
+        setIsAdmin(false);
+        setLoading(false);
+      }
+    };
+
+    void checkAdmin();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser, fetchReports]);
 
   const updateReportStatus = async (reportId: string, status: Report["status"]) => {
     const { error } = await supabase
       .from("reports")
-      .update({ 
-        status, 
-        processed_at: new Date().toISOString() 
+      .update({
+        status,
+        processed_at: new Date().toISOString(),
       })
       .eq("id", reportId);
-    
-    if (error) {
-      alert("상태 업데이트 실패: " + error.message);
-    } else {
-      fetchReports();
-    }
+
+    if (error) alert("상태 업데이트 실패: " + error.message);
+    else void fetchReports();
   };
 
   const hideTarget = async (report: Report) => {
@@ -67,12 +79,12 @@ export default function AdminReportsPage() {
       .from(table)
       .update({ status: "HIDDEN" })
       .eq("id", report.target_id);
-    
+
     if (error) {
       alert("숨김 처리 실패: " + error.message);
     } else {
-      alert("숨물 처리가 완료되었습니다.");
-      updateReportStatus(report.id, "RESOLVED");
+      alert("숨김 처리가 완료되었습니다.");
+      void updateReportStatus(report.id, "RESOLVED");
     }
   };
 
@@ -82,7 +94,9 @@ export default function AdminReportsPage() {
     return (
       <main className="flex min-h-[400px] flex-col items-center justify-center gap-4 p-6">
         <h1 className="text-2xl font-bold text-red-600">접근 권한 없음</h1>
-        <p className="text-gray-600">관리자 계정으로 로그인해야 접근할 수 있습니다.</p>
+        <p className="text-gray-600">
+          관리자 계정으로 로그인해야 접근할 수 있습니다.
+        </p>
         <Link href="/" className="border border-dashed border-gray-500 px-4 py-2 hover:bg-gray-100">
           홈으로 돌아가기
         </Link>
@@ -94,10 +108,10 @@ export default function AdminReportsPage() {
     <main className="flex w-full flex-col gap-6 p-6">
       <header className="flex items-center justify-between border-b border-dashed border-gray-500 pb-4">
         <div>
-          <h1 className="text-2xl font-bold uppercase tracking-widest">신고 관리 대기열</h1>
-          <p className="text-sm text-gray-500">커뮤니티의 신고 내역을 검토하고 처리합니다.</p>
+          <h1 className="text-2xl font-bold uppercase tracking-widest">신고 관리</h1>
+          <p className="text-sm text-gray-500">커뮤니티 신고 내역을 검토하고 처리합니다.</p>
         </div>
-        <button 
+        <button
           onClick={fetchReports}
           className="border border-dashed border-gray-800 bg-white px-3 py-1.5 text-xs font-bold uppercase tracking-widest hover:bg-gray-100"
         >
@@ -124,9 +138,13 @@ export default function AdminReportsPage() {
                   {new Date(report.created_at).toLocaleString("ko-KR")}
                 </td>
                 <td className="px-4 py-3">
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                    report.target_type === 'POST' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'
-                  }`}>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                      report.target_type === "POST"
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-orange-100 text-orange-700"
+                    }`}
+                  >
                     {report.target_type}
                   </span>
                 </td>
@@ -140,34 +158,38 @@ export default function AdminReportsPage() {
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <span className={`text-xs font-bold ${
-                    report.status === 'PENDING' ? 'text-red-500' : 
-                    report.status === 'REVIEWING' ? 'text-orange-500' : 
-                    'text-green-600'
-                  }`}>
+                  <span
+                    className={`text-xs font-bold ${
+                      report.status === "PENDING"
+                        ? "text-red-500"
+                        : report.status === "REVIEWING"
+                          ? "text-orange-500"
+                          : "text-green-600"
+                    }`}
+                  >
                     {report.status}
                   </span>
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
-                    {report.status === 'PENDING' && (
-                      <button 
+                    {report.status === "PENDING" && (
+                      <button
                         onClick={() => updateReportStatus(report.id, "REVIEWING")}
                         className="text-[10px] font-bold uppercase tracking-widest text-orange-500 hover:underline"
                       >
-                        [검토 중으로]
+                        [검토 중]
                       </button>
                     )}
-                    {report.status !== 'RESOLVED' && (
-                      <button 
+                    {report.status !== "RESOLVED" && (
+                      <button
                         onClick={() => hideTarget(report)}
                         className="text-[10px] font-bold uppercase tracking-widest text-red-600 hover:underline"
                       >
                         [숨김 처리]
                       </button>
                     )}
-                    {report.status !== 'REJECTED' && report.status !== 'RESOLVED' && (
-                      <button 
+                    {report.status !== "REJECTED" && report.status !== "RESOLVED" && (
+                      <button
                         onClick={() => updateReportStatus(report.id, "REJECTED")}
                         className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:underline"
                       >

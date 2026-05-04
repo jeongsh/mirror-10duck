@@ -7,6 +7,7 @@ import { LIVE2D_VIEWPORT } from "@/lib/live2d/viewport";
 import { useCharacterStore } from "@/store/useCharacterStore";
 import type { CharacterActionKey } from "@/types/character";
 import { supabase } from "@/lib/supabase/client";
+import { useAuthUser } from "@/lib/supabase/useAuthUser";
 
 declare global {
   interface Window {
@@ -63,6 +64,8 @@ export default function Live2DWrapper() {
   const [appReady, setAppReady] = useState(false);
 
   const modelPath = useCharacterStore((s) => s.modelPath);
+  const authUser = useAuthUser();
+  const userId = authUser?.id ?? null;
   const setLoading = useCharacterStore((s) => s.setLoading);
   const setReady = useCharacterStore((s) => s.setReady);
   const setError = useCharacterStore((s) => s.setError);
@@ -435,21 +438,23 @@ export default function Live2DWrapper() {
   // --------------------------------------------------------------------
   useEffect(() => {
     let isMounted = true;
-    let userId: string | null = null;
 
-    const setup = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (data.user) {
-        userId = data.user.id;
-      }
-    };
-    setup();
+    if (!userId) {
+      return () => {
+        isMounted = false;
+      };
+    }
 
     const notificationChannel = supabase
-      .channel('live2d-notifications')
+      .channel(`live2d-notifications:${userId}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notifications' },
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `receiver_id=eq.${userId}`,
+        },
         (payload) => {
           if (isMounted && userId && payload.new.receiver_id === userId) {
             // 알림 메시지 표시
@@ -467,7 +472,7 @@ export default function Live2DWrapper() {
             setTimeout(() => {
               if (isMounted) {
                 useCharacterStore.getState().setMessage(null);
-                useCharacterStore.getState().setEmotion('neutral');
+                useCharacterStore.getState().setEmotion('idle');
               }
             }, 5000);
           }
@@ -479,7 +484,7 @@ export default function Live2DWrapper() {
       isMounted = false;
       supabase.removeChannel(notificationChannel);
     };
-  }, []);
+  }, [userId]);
 
   // --------------------------------------------------------------------
   // Effect 3 · 유휴 / 타이핑 핸들러

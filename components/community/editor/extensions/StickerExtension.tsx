@@ -49,7 +49,11 @@ export const StickerExtension = Node.create({
       return (
         <span className="mx-1 inline-block align-middle outline-none">
           <CharacterSticker 
-            token={`:sticker/${characterId}/${emotion}:`} 
+            token={{
+              characterId,
+              emotion,
+              raw: `:sticker/${characterId}/${emotion}:`,
+            }}
             size="md" 
           />
         </span>

@@ -1,34 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { User } from "@supabase/supabase-js";
+import {
+  createContext,
+  createElement,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
 
-/**
- * 현재 로그인한 Supabase 사용자 상태를 구독한다.
- *
- * - 초기값: `undefined` (아직 확인 전, hydration / 첫 fetch 대기)
- * - 비로그인: `null`
- * - 로그인: `User`
- *
- * `undefined` 와 `null` 을 구분하기 때문에 호출부는 첫 렌더에서 깜빡거림 없이
- * 로딩/비로그인/로그인 분기를 안전하게 처리할 수 있다.
- */
-export function useAuthUser(): User | null | undefined {
+type AuthState = {
+  session: Session | null | undefined;
+  user: User | null | undefined;
+};
+
+const AuthContext = createContext<AuthState | null>(null);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [user, setUser] = useState<User | null | undefined>(undefined);
 
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
-      setUser(data.user ?? null);
+      setSession(data.session ?? null);
+      setUser(data.session?.user ?? null);
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession ?? null);
+      setUser(nextSession?.user ?? null);
     });
 
     return () => {
@@ -37,5 +45,17 @@ export function useAuthUser(): User | null | undefined {
     };
   }, []);
 
-  return user;
+  const value = useMemo<AuthState>(() => ({ session, user }), [session, user]);
+
+  return createElement(AuthContext.Provider, { value }, children);
+}
+
+export function useAuthState(): AuthState {
+  const state = useContext(AuthContext);
+  if (!state) return { session: undefined, user: undefined };
+  return state;
+}
+
+export function useAuthUser(): User | null | undefined {
+  return useAuthState().user;
 }

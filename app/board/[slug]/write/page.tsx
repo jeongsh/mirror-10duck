@@ -2,43 +2,45 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { Board } from "@/types/community";
-import StickerPicker from "@/components/stickers/StickerPicker";
-import RichContent from "@/components/stickers/RichContent";
 import CommunityEditor from "@/components/community/editor/CommunityEditor";
 
 export default function WritePostPage() {
   const router = useRouter();
   const params = useParams();
   const slug = params.slug as string;
+  const authUser = useAuthUser();
 
   const [board, setBoard] = useState<Board | null>(null);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [userId, setUserId] = useState("");
-  const [userEmail, setUserEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-  const contentRef = useRef<HTMLDivElement>(null);
 
-  const handleInsertSticker = (token: string) => {
-    // Tiptap 에디터 내부에서 처리하므로 여기서는 사용하지 않음
-  };
+  const userId = authUser?.id ?? "";
+  const userEmail = authUser?.email ?? "";
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const user = data.user;
-      setUserId(user?.id ?? "");
-      setUserEmail(user?.email ?? "");
-    });
+    let cancelled = false;
 
-    if (slug) {
-      supabase.from("boards").select("*").eq("slug", slug).single().then(({ data }) => {
-        if (data) setBoard(data);
-      });
-    }
+    const fetchBoard = async () => {
+      if (!slug) return;
+      const { data } = await supabase
+        .from("boards")
+        .select("*")
+        .eq("slug", slug)
+        .single();
+      if (!cancelled) setBoard((data as Board | null) ?? null);
+    };
+
+    void fetchBoard();
+
+    return () => {
+      cancelled = true;
+    };
   }, [slug]);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -81,7 +83,9 @@ export default function WritePostPage() {
   return (
     <main className="flex w-full flex-col gap-4">
       <header className="border border-dashed border-gray-500 bg-white/70 p-4">
-        <h1 className="text-lg font-bold">{board ? `${board.name} - 글쓰기` : "게시글 작성"}</h1>
+        <h1 className="text-lg font-bold">
+          {board ? `${board.name} - 글쓰기` : "게시글 작성"}
+        </h1>
         <p className="mt-1 text-sm text-gray-600">
           로그인 계정: {userEmail || "미로그인"}
         </p>
@@ -90,11 +94,16 @@ export default function WritePostPage() {
       {!userId ? (
         <div className="border border-dashed border-gray-500 bg-white/70 p-4 text-sm">
           글쓰기를 위해 먼저 로그인해 주세요.{" "}
-          <Link href="/auth" className="underline">로그인 페이지로 이동</Link>
+          <Link href="/auth" className="underline">
+            로그인 페이지로 이동
+          </Link>
         </div>
       ) : null}
 
-      <form onSubmit={onSubmit} className="flex flex-col gap-3 border border-dashed border-gray-500 bg-white/70 p-4">
+      <form
+        onSubmit={onSubmit}
+        className="flex flex-col gap-3 border border-dashed border-gray-500 bg-white/70 p-4"
+      >
         <label className="text-sm">
           제목
           <input
@@ -102,17 +111,17 @@ export default function WritePostPage() {
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             className="mt-1 w-full border border-dashed border-gray-500 bg-white px-3 py-2"
-            placeholder="제목을 입력해 주세요."
+            placeholder="제목을 입력해 주세요"
           />
         </label>
 
         <div className="flex flex-col gap-1">
           <span className="text-sm">내용</span>
-          <CommunityEditor 
-            content={content} 
-            onChange={setContent} 
-            userId={userId} 
-            placeholder="내용을 작성해 주세요. 캐릭터 스티커와 이미지는 툴바에서 삽입할 수 있습니다."
+          <CommunityEditor
+            content={content}
+            onChange={setContent}
+            userId={userId}
+            placeholder="내용을 작성해 주세요."
           />
         </div>
 
@@ -124,14 +133,19 @@ export default function WritePostPage() {
           >
             {loading ? "등록 중..." : "등록"}
           </button>
-          <Link href={`/board/${slug}`} className="border border-dashed border-gray-500 bg-white px-3 py-2 text-sm">
+          <Link
+            href={`/board/${slug}`}
+            className="border border-dashed border-gray-500 bg-white px-3 py-2 text-sm"
+          >
             취소
           </Link>
         </div>
       </form>
 
       {message ? (
-        <p className="border border-dashed border-gray-500 bg-white/70 p-3 text-sm">{message}</p>
+        <p className="border border-dashed border-gray-500 bg-white/70 p-3 text-sm">
+          {message}
+        </p>
       ) : null}
     </main>
   );

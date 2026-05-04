@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { getUnreadNotificationCount } from "@/lib/community/notifications";
+import { useAuthUser } from "@/lib/supabase/useAuthUser";
 
 const NAV_ITEMS = [
   { href: "/", label: "홈" },
@@ -14,67 +15,47 @@ const NAV_ITEMS = [
 
 export default function GlobalNavigation() {
   const pathname = usePathname();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [nickname, setNickname] = useState<string | null>(null);
+  const authUser = useAuthUser();
   const [unreadCount, setUnreadCount] = useState(0);
-  const [userId, setUserId] = useState<string | null>(null);
+
+  const userId = authUser?.id ?? null;
+  const nickname = useMemo(() => {
+    const value = authUser?.user_metadata?.nickname;
+    return typeof value === "string" && value.trim() ? value : null;
+  }, [authUser?.user_metadata?.nickname]);
 
   useEffect(() => {
     let isMounted = true;
+    setUnreadCount(0);
 
-    const syncAuthState = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (isMounted) {
-        const user = data.user;
-        setIsLoggedIn(Boolean(user));
-        setUserId(user?.id || null);
-        setNickname(user?.user_metadata?.nickname || null);
-        
-        if (user) {
-          const count = await getUnreadNotificationCount(user.id);
-          setUnreadCount(count);
-        }
-      }
-    };
+    if (!userId) {
+      return () => {
+        isMounted = false;
+      };
+    }
 
-    syncAuthState();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (isMounted) {
-        const user = session?.user;
-        setIsLoggedIn(Boolean(user));
-        setUserId(user?.id || null);
-        setNickname(user?.user_metadata?.nickname || null);
-        
-        if (user) {
-          getUnreadNotificationCount(user.id).then(setUnreadCount);
-        } else {
-          setUnreadCount(0);
-        }
-      }
+    getUnreadNotificationCount(userId).then((count) => {
+      if (isMounted) setUnreadCount(count);
     });
 
-    // 실시간 알림 구독
     const notificationSubscription = supabase
-      .channel('schema-db-changes')
+      .channel(`notifications:${userId}`)
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `receiver_id=eq.${userId}`,
         },
-        (payload) => {
-          if (isMounted && userId && payload.new.receiver_id === userId) {
-            setUnreadCount(prev => prev + 1);
-          }
-        }
+        () => {
+          if (isMounted) setUnreadCount((prev) => prev + 1);
+        },
       )
       .subscribe();
 
     return () => {
       isMounted = false;
-      authListener.subscription.unsubscribe();
       supabase.removeChannel(notificationSubscription);
     };
   }, [userId]);
@@ -107,13 +88,15 @@ export default function GlobalNavigation() {
           })}
         </div>
         <div className="ml-auto flex items-center gap-2">
-          {isLoggedIn && (
-            <Link 
-              href="/notifications" 
-              className={`relative border border-dashed border-gray-500 bg-white p-1.5 transition-colors hover:bg-gray-100 ${unreadCount > 0 ? "text-red-600 border-red-400" : "text-gray-500"}`}
+          {authUser && (
+            <Link
+              href="/notifications"
+              className={`relative border border-dashed border-gray-500 bg-white p-1.5 transition-colors hover:bg-gray-100 ${
+                unreadCount > 0 ? "border-red-400 text-red-600" : "text-gray-500"
+              }`}
               title="알림"
             >
-              <span className="text-lg leading-none">🔔</span>
+              <span className="text-lg leading-none">!</span>
               {unreadCount > 0 && (
                 <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
                   {unreadCount > 99 ? "99+" : unreadCount}
@@ -122,10 +105,10 @@ export default function GlobalNavigation() {
             </Link>
           )}
           <Link
-            href={isLoggedIn ? "/profile" : "/auth"}
+            href={authUser ? "/profile" : "/auth"}
             className="border border-dashed border-gray-500 bg-white px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-100"
           >
-            {isLoggedIn ? (nickname || "프로필") : "로그인"}
+            {authUser ? nickname || "프로필" : "로그인"}
           </Link>
         </div>
       </div>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import Script from "next/script";
 import { usePathname } from "next/navigation";
 import { getTrackingPreference } from "@/lib/supabase/characterPreferences";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
@@ -13,19 +14,12 @@ import {
   mergeProfiles,
   resolvePreferredProfile,
 } from "@/lib/live2d/profileSync";
-import { preloadLive2DModel } from "@/lib/live2d/preload";
 
-/**
- * Live2DWrapper 는 window, WebGL, Live2DCubismCore 전역에 의존하므로
- * SSR 중에 번들 import 되면 안 된다.
- * Next.js 16 부터 `ssr: false` 는 Client Component 안에서만 허용되므로
- * 이 래퍼를 경유해서 동적 import 한다.
- */
 const Live2DWrapper = dynamic(() => import("./Live2DWrapper"), {
   ssr: false,
   loading: () => (
     <div className="fixed bottom-0 right-0 z-50 border-2 border-dashed border-gray-500 bg-gray-200/60 p-4 text-[11px] tracking-widest text-gray-500 uppercase">
-      [Live2D 영역 · 로딩 중...]
+      [Live2D loading...]
     </div>
   ),
 });
@@ -33,24 +27,22 @@ const Live2DWrapper = dynamic(() => import("./Live2DWrapper"), {
 export default function Live2DClientOnly() {
   const pathname = usePathname();
   const authUser = useAuthUser();
-  
+  const [coreReady, setCoreReady] = useState(false);
+
   const setProfiles = useCharacterLibraryStore((s) => s.setProfiles);
   const setActive = useCharacterLibraryStore((s) => s.setActive);
-  const activeId = useCharacterLibraryStore((s) => s.activeId);
-  const profile = useCharacterStore((s) => s.profile);
   const setProfile = useCharacterStore((s) => s.setProfile);
   const setTracking = useCharacterStore((s) => s.setTracking);
 
   useEffect(() => {
-    for (const baseProfile of BASE_PROFILES) {
-      preloadLive2DModel(baseProfile.modelPath);
+    if (typeof window !== "undefined" && window.Live2DCubismCore) {
+      setCoreReady(true);
     }
   }, []);
 
-  // 전역 초기화: 로그인 상태에 따라 라이브러리 동기화 + 활성 캐릭터 복원
-  // CharacterControls 가 홈에만 있기 때문에, 홈이 아닌 곳에서 새로고침 시에도
-  // 캐릭터가 로드되도록 여기서도 동기화를 수행한다.
   useEffect(() => {
+    let cancelled = false;
+
     if (authUser === undefined) return;
 
     if (!authUser) {
@@ -63,36 +55,49 @@ export default function Live2DClientOnly() {
 
     void (async () => {
       const savedProfiles = await listCharacterProfiles();
+      if (cancelled) return;
+
       const allProfiles = mergeProfiles(BASE_PROFILES, savedProfiles);
-      
-      // 스토어 업데이트
       setProfiles(allProfiles);
 
       const preferredId =
         typeof authUser.user_metadata?.activeCharacterId === "string"
           ? (authUser.user_metadata.activeCharacterId as string)
           : undefined;
-      
+
       const preferredProfile = resolvePreferredProfile(allProfiles, preferredId);
       if (!preferredProfile) return;
 
-      // 이미 설정된 상태면 중복 호출 방지
-      if (activeId !== preferredProfile.id) {
+      const libraryState = useCharacterLibraryStore.getState();
+      const characterState = useCharacterStore.getState();
+
+      if (libraryState.activeId !== preferredProfile.id) {
         setActive(preferredProfile.id);
       }
-      if (profile?.id !== preferredProfile.id) {
+      if (characterState.profile?.id !== preferredProfile.id) {
         setProfile(preferredProfile);
       }
-      preloadLive2DModel(preferredProfile.modelPath);
       setTracking(getTrackingPreference(authUser.user_metadata, preferredProfile.id, true));
     })();
-    // authUser 가 확정된 시점에 1회만 실행 (내부 상태 변화로 인한 루프 방지)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authUser]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser, setActive, setProfile, setProfiles, setTracking]);
 
   const isCharacterManagePage = pathname.startsWith("/library/");
 
   if (!authUser || isCharacterManagePage) return null;
-  
-  return <Live2DWrapper />;
+
+  return (
+    <>
+      <Script
+        src="/live2dcubismcore.min.js"
+        strategy="afterInteractive"
+        onLoad={() => setCoreReady(true)}
+        onReady={() => setCoreReady(true)}
+      />
+      {coreReady ? <Live2DWrapper /> : null}
+    </>
+  );
 }

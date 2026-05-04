@@ -1,24 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { useAuthUser } from "@/lib/supabase/useAuthUser";
 
 type AuthMode = "login" | "signup";
 
 export default function AuthPage() {
+  const authUser = useAuthUser();
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [currentEmail, setCurrentEmail] = useState<string | null>(null);
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setCurrentEmail(data.user?.email ?? null);
-    });
-  }, []);
+  const currentEmail = authUser?.email ?? null;
 
   const buttonLabel = useMemo(
     () => (mode === "login" ? "로그인" : "회원가입"),
@@ -41,11 +38,9 @@ export default function AuthPage() {
     } else {
       setMessage(
         mode === "login"
-          ? "로그인 성공. 채널 목록으로 이동해서 글을 작성해보세요."
-          : "회원가입 성공. 이메일 인증이 켜져 있으면 메일함을 확인하세요.",
+          ? "로그인 성공. 채널 목록에서 글을 작성해 보세요."
+          : "회원가입 성공. 메일 인증이 켜져 있으면 받은 메일함을 확인해 주세요.",
       );
-      const { data } = await supabase.auth.getUser();
-      setCurrentEmail(data.user?.email ?? null);
     }
 
     setLoading(false);
@@ -55,12 +50,7 @@ export default function AuthPage() {
     setLoading(true);
     const { error } = await supabase.auth.signOut();
     setLoading(false);
-    if (error) {
-      setMessage(error.message);
-      return;
-    }
-    setCurrentEmail(null);
-    setMessage("로그아웃 완료.");
+    setMessage(error ? error.message : "로그아웃 완료.");
   };
 
   return (
@@ -68,7 +58,7 @@ export default function AuthPage() {
       <header className="border border-dashed border-gray-500 bg-white/70 p-4">
         <h1 className="text-lg font-bold">Supabase 인증</h1>
         <p className="mt-2 text-sm text-gray-600">
-          Phase 2.2 범위: 회원가입/로그인 후 게시판 작성 가능 상태를 만듭니다.
+          로그인, 회원가입, 로그아웃을 처리합니다.
         </p>
       </header>
 

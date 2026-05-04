@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { CommunityPost, Board, postAggregateDefaults } from "@/types/community";
 import RichContent from "@/components/stickers/RichContent";
 import ReactionBar from "@/components/community/ReactionBar";
@@ -16,6 +17,7 @@ export default function BoardPostDetailPage() {
   const params = useParams();
   const slug = params.slug as string;
   const postId = params.id as string;
+  const authUser = useAuthUser();
 
   const [post, setPost] = useState<CommunityPost | null>(null);
   const [board, setBoard] = useState<Board | null>(null);
@@ -38,17 +40,19 @@ export default function BoardPostDetailPage() {
 
   useEffect(() => {
     const fetchData = async () => {
+      if (authUser === undefined) return;
+
       setLoading(true);
       setMessage("");
 
-      const [{ data: authData }, postResponse, boardResponse] = await Promise.all([
-        supabase.auth.getUser(),
+      const [postResponse, boardResponse] = await Promise.all([
         supabase.from("posts").select("*, profiles(*)").eq("id", postId).single(),
         supabase.from("boards").select("*").eq("slug", slug).single()
       ]);
 
-      setUserId(authData.user?.id ?? "");
-      setUserEmail(authData.user?.email ?? "");
+      setUserId(authUser?.id ?? "");
+      setUserEmail(authUser?.email ?? "");
+      setIsFollowingAuthor(false);
 
       if (boardResponse.data) setBoard(boardResponse.data);
 
@@ -60,14 +64,14 @@ export default function BoardPostDetailPage() {
         setPost(postData);
 
         // 작성자 팔로우 여부 확인
-        if (authData.user?.id && postData.author_id) {
-          if (authData.user.id === postData.author_id) {
+        if (authUser?.id && postData.author_id) {
+          if (authUser.id === postData.author_id) {
             // 본인인 경우 체크 생략
           } else {
             const { data: followData } = await supabase
               .from("follows_user")
               .select("*")
-              .eq("follower_id", authData.user.id)
+              .eq("follower_id", authUser.id)
               .eq("following_id", postData.author_id)
               .single();
             if (followData) setIsFollowingAuthor(true);
@@ -100,7 +104,7 @@ export default function BoardPostDetailPage() {
     };
 
     if (postId && slug) fetchData();
-  }, [postId, slug]);
+  }, [authUser, postId, slug]);
 
   const canEdit = useMemo(() => {
     if (!post || !userId) return false;

@@ -13,8 +13,9 @@ function isPersistableProfile(profile: CharacterProfile): boolean {
 
 export async function listCharacterProfiles(): Promise<CharacterProfile[]> {
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user;
   if (!user) return [];
 
   const { data, error } = await supabase
@@ -37,8 +38,9 @@ export async function upsertCharacterProfile(profile: CharacterProfile): Promise
   if (!isPersistableProfile(profile)) return;
 
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user;
   if (!user) return;
 
   const payload = {
@@ -61,8 +63,9 @@ export async function upsertCharacterProfile(profile: CharacterProfile): Promise
 
 export async function deleteCharacterProfileById(characterId: string): Promise<void> {
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user;
   if (!user) return;
 
   const { error } = await supabase

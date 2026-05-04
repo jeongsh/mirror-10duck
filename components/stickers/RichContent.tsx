@@ -175,7 +175,11 @@ function TiptapJsonRenderer({ json }: { json: any }) {
         return (
           <span key={index} className="mx-1 inline-block align-middle">
             <CharacterSticker 
-              token={`:sticker/${characterId}/${emotion}:`} 
+              token={{
+                characterId,
+                emotion,
+                raw: `:sticker/${characterId}/${emotion}:`,
+              }}
               size="md" 
             />
           </span>
