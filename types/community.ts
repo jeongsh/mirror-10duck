@@ -22,7 +22,25 @@ export type CommunityPost = {
   origin_post_id: string | null;
   is_hot: boolean;
   hot_promoted_at: string | null;
+
+  /** 목록/상세 집계 (마이그레이션 전 DB에서는 undefined) */
+  view_count?: number;
+  comment_count?: number;
+  upvote_count?: number;
+  downvote_count?: number;
 };
+
+/** 클라이언트 표시용 기본값 */
+export function postAggregateDefaults(post: CommunityPost) {
+  return {
+    view_count: post.view_count ?? 0,
+    comment_count: post.comment_count ?? 0,
+    upvote_count: post.upvote_count ?? 0,
+    downvote_count: post.downvote_count ?? 0,
+  };
+}
+
+export type PostVoteType = "up" | "down";
 
 /**
  * Phase 2.3 캐릭터-커뮤니티 연결 도메인 타입.

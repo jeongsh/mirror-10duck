@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
-import { Board, CommunityPost } from "@/types/community";
+import { Board, CommunityPost, postAggregateDefaults } from "@/types/community";
 import { useParams } from "next/navigation";
 
 export default function BoardPage() {
@@ -99,22 +99,30 @@ export default function BoardPage() {
 
       <section className="border border-dashed border-gray-500 bg-white/70 p-4">
         <div className="overflow-x-auto border border-dashed border-gray-500">
-          <div className="grid min-w-[740px] grid-cols-[1fr_120px_190px] bg-gray-200 px-3 py-2 text-sm font-semibold">
+          <div className="grid min-w-[920px] grid-cols-[1fr_100px_52px_52px_72px_160px] bg-gray-200 px-3 py-2 text-sm font-semibold">
             <span>제목</span>
             <span>작성자</span>
+            <span className="text-center">조회</span>
+            <span className="text-center">댓글</span>
+            <span className="text-center">추천</span>
             <span>작성일</span>
           </div>
           {posts.map((post) => (
             <Link
               key={post.id}
               href={`/board/${slug}/${post.id}`}
-              className="grid min-w-[740px] grid-cols-[1fr_120px_190px] border-t border-dashed border-gray-400 px-3 py-3 text-sm hover:bg-gray-100"
+              className="grid min-w-[920px] grid-cols-[1fr_100px_52px_52px_72px_160px] border-t border-dashed border-gray-400 px-3 py-3 text-sm hover:bg-gray-100"
             >
               <span className="truncate font-semibold">
                 {post.is_hot && <span className="mr-2 rounded bg-red-100 px-1 text-xs text-red-600">🔥 개념글</span>}
                 {post.source_type === 'FEED' ? '🔄 피드에서 공유된 글' : post.title || '제목 없음'}
               </span>
               <span className="truncate text-gray-600">{post.author_email}</span>
+              <span className="text-center tabular-nums text-gray-600">{postAggregateDefaults(post).view_count}</span>
+              <span className="text-center tabular-nums text-gray-600">{postAggregateDefaults(post).comment_count}</span>
+              <span className="text-center tabular-nums text-gray-600">
+                {postAggregateDefaults(post).upvote_count}/{postAggregateDefaults(post).downvote_count}
+              </span>
               <span className="text-gray-600">
                 {new Date(post.created_at).toLocaleString("ko-KR")}
               </span>

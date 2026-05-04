@@ -20,9 +20,11 @@ interface Props {
   postId: string;
   viewerId: string | null;
   viewerEmail: string | null;
+  /** 댓글 스레드가 바뀐 뒤(등록/삭제) 상위에서 글 집계를 다시 읽을 때 */
+  onThreadChanged?: () => void;
 }
 
-export default function CommentSection({ postId, viewerId, viewerEmail }: Props) {
+export default function CommentSection({ postId, viewerId, viewerEmail, onThreadChanged }: Props) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
@@ -79,7 +81,8 @@ export default function CommentSection({ postId, viewerId, viewerEmail }: Props)
       return;
     }
     setText("");
-    refresh();
+    await refresh();
+    onThreadChanged?.();
   };
 
   const handleSubmitStickerOnly = async (token: string) => {
@@ -100,7 +103,8 @@ export default function CommentSection({ postId, viewerId, viewerEmail }: Props)
       alert(`등록 실패: ${error.message}`);
       return;
     }
-    refresh();
+    await refresh();
+    onThreadChanged?.();
   };
 
   const handleDelete = async (commentId: string) => {
@@ -110,7 +114,8 @@ export default function CommentSection({ postId, viewerId, viewerEmail }: Props)
       alert(`삭제 실패: ${error.message}`);
       return;
     }
-    refresh();
+    await refresh();
+    onThreadChanged?.();
   };
 
   return (

@@ -15,7 +15,7 @@
 ## 2. 우선 추가 후보
 
 - [ ] `profiles`: user_id, fixed_nickname, display_name, avatar_url, bio, representative_character_id, nickname_type
-- [ ] `post_votes`: post_id, user_id, vote_type, created_at
+- [x] `post_votes`: post_id, user_id, vote_type, created_at (마이그레이션 `docs/migrations/2026-05-04-post-aggregates-and-votes.sql`)
 - [ ] `comment_votes`: comment_id, user_id, vote_type, created_at
 - [ ] `post_views`: post_id, viewer_user_id, viewer_hash, viewed_at
 - [ ] `bookmarks`: user_id, post_id, created_at
@@ -37,10 +37,10 @@
 - [ ] `posts.author_nickname_type`
 - [ ] `posts.author_avatar_url`
 - [ ] `posts.author_character_id`
-- [ ] `posts.comment_count`
-- [ ] `posts.view_count`
-- [ ] `posts.upvote_count`
-- [ ] `posts.downvote_count`
+- [x] `posts.comment_count`
+- [x] `posts.view_count`
+- [x] `posts.upvote_count`
+- [x] `posts.downvote_count`
 - [ ] `posts.status`
 - [ ] `posts.board_tab`
 - [ ] `comments.parent_comment_id`

@@ -43,7 +43,13 @@ Supabase Auth가 자동으로 관리하는 사용자 테이블입니다.
 - `origin_post_id` `uuid` NULL, `posts(id)` FK (크로스포스트 시 원본 스냅샷 추적)
 - `is_hot` `boolean` 기본값 `false` (개념글 여부)
 - `hot_promoted_at` `timestamptz` NULL (개념글 등극 시간)
+- `view_count` `integer` NOT NULL 기본값 `0` (조회수; `increment_post_view` RPC로 증가)
+- `comment_count` `integer` NOT NULL 기본값 `0` (댓글 수; `comments` 트리거로 유지)
+- `upvote_count` `integer` NOT NULL 기본값 `0` (추천 수; `post_votes` 트리거로 유지)
+- `downvote_count` `integer` NOT NULL 기본값 `0` (비추천 수; `post_votes` 트리거로 유지)
 *참고: 과거 사용되던 `category` 컬럼은 폐기(비활성화)되었습니다.*
+
+마이그레이션: `docs/migrations/2026-05-04-post-aggregates-and-votes.sql`
 
 ### RLS 정책
 - `select`: 누구나 조회 가능
@@ -53,7 +59,31 @@ Supabase Auth가 자동으로 관리하는 사용자 테이블입니다.
 
 ---
 
-## 4) `public.follows_user` (유저 팔로우)
+## 4) `public.post_votes` (게시글 추천/비추천)
+
+글당 사용자 1표(`up` / `down`). 집계 컬럼은 `posts` 트리거로 동기화한다.
+
+### 컬럼
+- `id` `uuid` PK, 기본값 `gen_random_uuid()`
+- `post_id` `uuid` NOT NULL, `posts(id)` FK ON DELETE CASCADE
+- `user_id` `uuid` NOT NULL, `auth.users(id)` FK ON DELETE CASCADE
+- `vote_type` `text` NOT NULL, CHECK IN (`'up'`, `'down'`)
+- `created_at` `timestamptz` NOT NULL, 기본값 `now()`
+
+### 인덱스/키
+- Unique: `(post_id, user_id)`
+- Index: `post_id`
+
+### RLS 정책
+- `select`: 누구나 조회 가능
+- `insert` / `update` / `delete`: 본인 행만 (`auth.uid() = user_id`)
+
+### RPC
+- `increment_post_view(pid uuid)`: 조회수 +1 (SECURITY DEFINER, `anon`·`authenticated` 실행 허용)
+
+---
+
+## 5) `public.follows_user` (유저 팔로우)
 
 피드 타임라인 구성을 위한 유저 간 팔로우 관계 테이블입니다.
 
@@ -67,7 +97,7 @@ Supabase Auth가 자동으로 관리하는 사용자 테이블입니다.
 
 ---
 
-## 5) `public.follows_board` (게시판 팔로우)
+## 6) `public.follows_board` (게시판 팔로우)
 
 특정 게시판을 팔로우(구독)하여 개념글을 피드로 받아보기 위한 테이블입니다.
 
@@ -81,7 +111,7 @@ Supabase Auth가 자동으로 관리하는 사용자 테이블입니다.
 
 ---
 
-## 6) `public.characters` (유저별 캐릭터 프로필)
+## 7) `public.characters` (유저별 캐릭터 프로필)
 
 캐릭터 라이브러리 관리(이름/소개/기본 뷰/매핑/대사 등) 저장용 테이블입니다.
 
@@ -104,7 +134,7 @@ Supabase Auth가 자동으로 관리하는 사용자 테이블입니다.
 
 ---
 
-## 7) `public.post_reactions` (감정 리액션)
+## 8) `public.post_reactions` (감정 리액션)
 
 Phase 2.3 캐릭터-커뮤니티 연결의 "좋아요 2.0" 데이터입니다.
 
@@ -133,7 +163,7 @@ Phase 2.3 캐릭터-커뮤니티 연결의 "좋아요 2.0" 데이터입니다.
 
 ---
 
-## 8) `public.comments` (댓글 + 스티커 답글)
+## 9) `public.comments` (댓글 + 스티커 답글)
 
 Phase 2.3 캐릭터-커뮤니티 연결의 댓글 시스템입니다.  
 `content` 또는 `sticker_token` 중 하나만 채워지는 "양립형" 구조입니다.
@@ -160,7 +190,7 @@ Phase 2.3 캐릭터-커뮤니티 연결의 댓글 시스템입니다.
 
 ---
 
-## 9) 추후 확장 후보 테이블
+## 10) 추후 확장 후보 테이블
 
 향후 `Phase 3+`에서 분리/추가 권장:
 - `profiles` 또는 `user_profiles`: 닉네임, 아바타, 소개 등 사용자 공개 프로필
@@ -169,7 +199,7 @@ Phase 2.3 캐릭터-커뮤니티 연결의 댓글 시스템입니다.
 
 ---
 
-## 10) 참고 문서
+## 11) 참고 문서
 - `docs/SUPABASE_SETUP.md`: 초기 SQL + RLS 설정
 - `docs/plan.md`: 전체 플랜 허브 및 문서 참조 지도
 - `docs/plans/checklist.md`: 단계별 완료/미완료 체크리스트

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
-import { Board, CommunityPost } from "@/types/community";
+import { Board, CommunityPost, postAggregateDefaults } from "@/types/community";
 
 /**
  * 게시판 글 상세는 `/board/[slug]/[id]` 라우트로만 접근 가능하므로,
@@ -112,6 +112,10 @@ export default function HomeContent() {
                     </span>
                     <span className="shrink-0 text-xs text-gray-500 w-24 text-right truncate">
                       {post.author_email.split('@')[0]}
+                    </span>
+                    <span className="shrink-0 tabular-nums text-[10px] text-gray-400 w-28 text-right">
+                      👁{postAggregateDefaults(post).view_count} · 💬{postAggregateDefaults(post).comment_count} · ▲
+                      {postAggregateDefaults(post).upvote_count}
                     </span>
                     <span className="shrink-0 text-xs text-red-500 font-bold w-8 text-right">
                       {post.is_hot ? "🔥" : "N"}

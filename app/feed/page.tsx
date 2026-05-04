@@ -3,12 +3,19 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
-import { CommunityPost, Board } from "@/types/community";
+import { CommunityPost, Board, postAggregateDefaults } from "@/types/community";
 import RichContent from "@/components/stickers/RichContent";
 import ReactionBar from "@/components/community/ReactionBar";
+import PostVoteBar from "@/components/community/PostVoteBar";
 
 export default function FeedPage() {
   const [posts, setPosts] = useState<CommunityPost[]>([]);
+
+  const patchPostStats = (postId: string, patch: Partial<CommunityPost>) => {
+    setPosts((prev) =>
+      prev.map((p) => (p.id === postId ? { ...p, ...patch } : p)),
+    );
+  };
   const [loading, setLoading] = useState(true);
   
   const [boards, setBoards] = useState<Board[]>([]);
@@ -166,8 +173,11 @@ export default function FeedPage() {
         ) : (
           posts.map((post) => (
             <article key={post.id} className="flex flex-col gap-2 border border-dashed border-gray-500 bg-white/70 p-4 transition-colors hover:bg-gray-50">
-              <div className="flex items-center justify-between text-sm text-gray-600">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-gray-600">
                 <span className="font-semibold">{post.author_email}</span>
+                <span className="tabular-nums text-xs text-gray-500">
+                  👁 {postAggregateDefaults(post).view_count} · 💬 {postAggregateDefaults(post).comment_count}
+                </span>
                 <span>{new Date(post.created_at).toLocaleString("ko-KR")}</span>
               </div>
               
@@ -189,7 +199,21 @@ export default function FeedPage() {
                 <RichContent content={post.content} />
               </div>
 
-              <ReactionBar postId={post.id} viewerId={currentUser?.id ?? null} />
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                <PostVoteBar
+                  postId={post.id}
+                  viewerId={currentUser?.id ?? null}
+                  upvoteCount={postAggregateDefaults(post).upvote_count}
+                  downvoteCount={postAggregateDefaults(post).downvote_count}
+                  onCountsSynced={(next) =>
+                    patchPostStats(post.id, {
+                      upvote_count: next.upvote_count,
+                      downvote_count: next.downvote_count,
+                    })
+                  }
+                />
+                <ReactionBar postId={post.id} viewerId={currentUser?.id ?? null} />
+              </div>
 
               {post.source_type === 'FEED' && (
                 <div className="mt-2 flex gap-2">

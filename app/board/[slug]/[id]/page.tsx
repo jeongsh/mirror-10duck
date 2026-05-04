@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
-import { CommunityPost, Board } from "@/types/community";
+import { CommunityPost, Board, postAggregateDefaults } from "@/types/community";
 import RichContent from "@/components/stickers/RichContent";
 import ReactionBar from "@/components/community/ReactionBar";
+import PostVoteBar from "@/components/community/PostVoteBar";
 import CommentSection from "@/components/community/CommentSection";
 
 export default function BoardPostDetailPage() {
@@ -23,6 +24,16 @@ export default function BoardPostDetailPage() {
   const [loading, setLoading] = useState(true);
   const [shareLoading, setShareLoading] = useState(false);
   const [message, setMessage] = useState("");
+
+  const refetchPost = useCallback(async () => {
+    const { data, error } = await supabase.from("posts").select("*").eq("id", postId).single();
+    if (error) {
+      setMessage(error.message);
+      setPost(null);
+      return;
+    }
+    setPost(data as CommunityPost);
+  }, [postId]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -59,6 +70,27 @@ export default function BoardPostDetailPage() {
               .eq("following_id", postData.author_id)
               .single();
             if (followData) setIsFollowingAuthor(true);
+          }
+        }
+
+        // 탭 세션당 1회 조회수 반영 (마이그레이션된 RPC가 있을 때만 유효)
+        const viewKey = `post_view:${postId}`;
+        let shouldBump = false;
+        try {
+          shouldBump = typeof sessionStorage !== "undefined" && !sessionStorage.getItem(viewKey);
+        } catch {
+          shouldBump = true;
+        }
+        if (shouldBump) {
+          const { error: viewErr } = await supabase.rpc("increment_post_view", { pid: postId });
+          if (!viewErr) {
+            try {
+              sessionStorage.setItem(viewKey, "1");
+            } catch {
+              /* ignore */
+            }
+            const { data: refreshed } = await supabase.from("posts").select("*").eq("id", postId).single();
+            if (refreshed) setPost(refreshed as CommunityPost);
           }
         }
       }
@@ -177,7 +209,7 @@ export default function BoardPostDetailPage() {
           {post?.is_hot && <span className="mr-2 text-red-500">🔥</span>}
           {post?.title ?? "게시글 없음"}
         </h1>
-        <div className="mt-2 flex items-center gap-3 text-sm text-gray-600">
+        <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-gray-600">
           <span>{post?.author_email}</span>
           {post && userId && post.author_id !== userId && (
             <button
@@ -192,6 +224,11 @@ export default function BoardPostDetailPage() {
           <span>|</span>
           <span>{post ? new Date(post.created_at).toLocaleString("ko-KR") : "-"}</span>
         </div>
+        {post ? (
+          <p className="mt-2 text-xs text-gray-500">
+            조회 {postAggregateDefaults(post).view_count} · 댓글 {postAggregateDefaults(post).comment_count}
+          </p>
+        ) : null}
       </header>
 
       <article className="min-h-[320px] border border-dashed border-gray-500 bg-white/70 p-4 text-sm">
@@ -207,7 +244,20 @@ export default function BoardPostDetailPage() {
         )}
       </article>
 
-      {post ? <ReactionBar postId={post.id} viewerId={userId || null} /> : null}
+      {post ? (
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start">
+          <PostVoteBar
+            postId={post.id}
+            viewerId={userId || null}
+            upvoteCount={postAggregateDefaults(post).upvote_count}
+            downvoteCount={postAggregateDefaults(post).downvote_count}
+            onCountsSynced={(next) =>
+              setPost((p) => (p ? { ...p, upvote_count: next.upvote_count, downvote_count: next.downvote_count } : null))
+            }
+          />
+          <ReactionBar postId={post.id} viewerId={userId || null} />
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
         <Link href={`/board/${slug}`} className="border border-dashed border-gray-500 bg-white px-3 py-2 text-sm">
@@ -265,6 +315,7 @@ export default function BoardPostDetailPage() {
           postId={post.id}
           viewerId={userId || null}
           viewerEmail={userEmail || null}
+          onThreadChanged={refetchPost}
         />
       ) : null}
 
