@@ -8,6 +8,7 @@ import RichContent from "@/components/stickers/RichContent";
 import StickerPicker from "@/components/stickers/StickerPicker";
 import CharacterSticker from "@/components/stickers/CharacterSticker";
 import { insertAtTextarea } from "@/lib/stickers/insertAtCursor";
+import IdentityBadge from "@/components/community/IdentityBadge";
 
 /**
  * 게시글 한 개의 댓글 섹션.
@@ -29,13 +30,14 @@ export default function CommentSection({ postId, viewerId, viewerEmail, onThread
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [replyTo, setReplyTo] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("comments")
-      .select("*")
+      .select("*, profiles(*)")
       .eq("post_id", postId)
       .order("created_at", { ascending: true });
 
@@ -74,6 +76,7 @@ export default function CommentSection({ postId, viewerId, viewerEmail, onThread
       author_email: viewerEmail,
       content: text,
       sticker_token: null,
+      parent_comment_id: replyTo,
     });
     setSubmitting(false);
     if (error) {
@@ -81,6 +84,7 @@ export default function CommentSection({ postId, viewerId, viewerEmail, onThread
       return;
     }
     setText("");
+    setReplyTo(null);
     await refresh();
     onThreadChanged?.();
   };
@@ -97,12 +101,14 @@ export default function CommentSection({ postId, viewerId, viewerEmail, onThread
       author_email: viewerEmail,
       content: null,
       sticker_token: token,
+      parent_comment_id: replyTo,
     });
     setSubmitting(false);
     if (error) {
       alert(`등록 실패: ${error.message}`);
       return;
     }
+    setReplyTo(null);
     await refresh();
     onThreadChanged?.();
   };
@@ -114,9 +120,13 @@ export default function CommentSection({ postId, viewerId, viewerEmail, onThread
       alert(`삭제 실패: ${error.message}`);
       return;
     }
+    if (replyTo === commentId) setReplyTo(null);
     await refresh();
     onThreadChanged?.();
   };
+
+  const root = comments.filter(c => !c.parent_comment_id);
+  const replies = comments.filter(c => !!c.parent_comment_id);
 
   return (
     <section className="flex flex-col gap-3 border border-dashed border-gray-500 bg-white/70 p-4">
@@ -136,51 +146,123 @@ export default function CommentSection({ postId, viewerId, viewerEmail, onThread
             아직 댓글이 없습니다. 첫 댓글을 남겨 보세요.
           </li>
         ) : (
-          comments.map((c) => {
+          root.map((c) => {
             const stickerToken = c.sticker_token ? parseStickerToken(c.sticker_token) : null;
             const canDelete = viewerId === c.author_id;
+            const commentReplies = replies.filter(r => r.parent_comment_id === c.id);
+
             return (
-              <li
-                key={c.id}
-                className="flex items-start gap-3 border border-dashed border-gray-300 bg-white p-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="mb-1 flex items-center gap-2 text-[11px] text-gray-500">
-                    <span className="font-bold text-gray-700">{c.author_email}</span>
-                    <span>·</span>
-                    <span>{new Date(c.created_at).toLocaleString("ko-KR")}</span>
-                    {c.sticker_token ? (
-                      <span className="rounded border border-dashed border-gray-300 px-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">
-                        Sticker
+              <div key={c.id} className="flex flex-col gap-2">
+                <li className="flex items-start gap-3 border border-dashed border-gray-300 bg-white p-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <IdentityBadge 
+                        profile={c.profiles} 
+                        fallback={{ nickname: c.author_email.split('@')[0] }}
+                        size="sm"
+                      />
+                      <span className="text-[10px] text-gray-400">
+                        {new Date(c.created_at).toLocaleString("ko-KR")}
                       </span>
-                    ) : null}
-                  </div>
-                  {stickerToken ? (
-                    <div className="mt-1">
-                      <CharacterSticker token={stickerToken} size="lg" />
+                      {c.sticker_token ? (
+                        <span className="rounded border border-dashed border-gray-300 px-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                          Sticker
+                        </span>
+                      ) : null}
                     </div>
-                  ) : c.content ? (
-                    <RichContent content={c.content} />
-                  ) : (
-                    <p className="text-xs italic text-gray-400">(빈 댓글)</p>
-                  )}
-                </div>
-                {canDelete ? (
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(c.id)}
-                    className="shrink-0 border border-dashed border-red-300 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-600 hover:bg-red-100"
-                  >
-                    삭제
-                  </button>
-                ) : null}
-              </li>
+                    {stickerToken ? (
+                      <div className="mt-1">
+                        <CharacterSticker token={stickerToken} size="lg" />
+                      </div>
+                    ) : c.content ? (
+                      <RichContent content={c.content} />
+                    ) : (
+                      <p className="text-xs italic text-gray-400">(빈 댓글)</p>
+                    )}
+
+                    <div className="mt-3 flex items-center gap-3">
+                      <button 
+                        onClick={() => setReplyTo(replyTo === c.id ? null : c.id)}
+                        className={`text-[10px] font-bold uppercase tracking-widest ${replyTo === c.id ? "text-red-500" : "text-blue-500 hover:underline"}`}
+                      >
+                        {replyTo === c.id ? "[취소]" : "[답글 달기]"}
+                      </button>
+                      {canDelete && (
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(c.id)}
+                          className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:underline"
+                        >
+                          [삭제]
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </li>
+
+                {/* 대댓글 영역 */}
+                {commentReplies.length > 0 && (
+                  <ul className="ml-8 flex flex-col gap-2 border-l-2 border-dashed border-gray-200 pl-4">
+                    {commentReplies.map(r => {
+                      const rStickerToken = r.sticker_token ? parseStickerToken(r.sticker_token) : null;
+                      const canDeleteReply = viewerId === r.author_id;
+                      return (
+                        <li key={r.id} className="flex items-start gap-3 border border-dashed border-gray-200 bg-gray-50/50 p-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                              <IdentityBadge 
+                                profile={r.profiles} 
+                                fallback={{ nickname: r.author_email.split('@')[0] }}
+                                size="sm"
+                              />
+                              <span className="text-[10px] text-gray-400">
+                                {new Date(r.created_at).toLocaleString("ko-KR")}
+                              </span>
+                            </div>
+                            {rStickerToken ? (
+                              <div className="mt-1">
+                                <CharacterSticker token={rStickerToken} size="md" />
+                              </div>
+                            ) : r.content ? (
+                              <div className="text-sm">
+                                <RichContent content={r.content} />
+                              </div>
+                            ) : (
+                              <p className="text-xs italic text-gray-400">(빈 답글)</p>
+                            )}
+                            {canDeleteReply && (
+                              <div className="mt-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(r.id)}
+                                  className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:underline"
+                                >
+                                  [삭제]
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
             );
           })
         )}
       </ul>
 
       <div className="flex flex-col gap-2 border-t border-dashed border-gray-300 pt-3">
+        {replyTo && (
+          <div className="flex items-center justify-between border border-dashed border-blue-200 bg-blue-50 px-3 py-1.5 text-[10px] font-bold text-blue-700">
+            <span>
+              {root.find(c => c.id === replyTo)?.profiles?.nickname || 
+               root.find(c => c.id === replyTo)?.author_email?.split('@')[0]} 님에게 답글 작성 중...
+            </span>
+            <button onClick={() => setReplyTo(null)} className="text-gray-400 hover:text-red-500 uppercase tracking-widest">[취소]</button>
+          </div>
+        )}
         <textarea
           ref={textareaRef}
           rows={3}

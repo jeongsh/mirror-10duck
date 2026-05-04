@@ -14,6 +14,9 @@ import {
   setReaction,
   summarizeReactions,
 } from "@/lib/community/reactions";
+import { getProfile } from "@/lib/supabase/profiles";
+import IdentityBadge from "./IdentityBadge";
+import { UserProfile } from "@/types/community";
 
 /**
  * 게시글 한 개의 리액션 6종 + 최근 반응자의 유저 프로필(닉네임·아바타)을 노출하는 바.
@@ -31,6 +34,7 @@ interface Props {
 
 export default function ReactionBar({ postId, viewerId }: Props) {
   const [summary, setSummary] = useState<PostReactionSummary | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [busy, setBusy] = useState<ReactionType | null>(null);
 
   const authUser = useAuthUser();
@@ -56,7 +60,10 @@ export default function ReactionBar({ postId, viewerId }: Props) {
 
   useEffect(() => {
     refresh();
-  }, [refresh]);
+    if (viewerId) {
+      getProfile(viewerId).then(setUserProfile);
+    }
+  }, [refresh, viewerId]);
 
   const handleClick = async (reactionType: ReactionType) => {
     if (!viewerId) {
@@ -94,8 +101,8 @@ export default function ReactionBar({ postId, viewerId }: Props) {
       currentMineType,
       characterId: activeProfile?.id ?? null,
       characterThumbnailUrl: activeProfile?.thumbnailUrl ?? null,
-      displayName: profileDisplayName,
-      avatarUrl: profileAvatarUrl,
+      displayName: userProfile?.nickname || profileDisplayName,
+      avatarUrl: userProfile?.avatar_url || profileAvatarUrl,
     });
 
     setBusy(null);
@@ -149,31 +156,19 @@ export default function ReactionBar({ postId, viewerId }: Props) {
             {reactors.map((r) => {
               const src = r.avatarUrl || r.characterThumbnailUrl;
               const name = r.displayName?.trim() || "사용자";
-              const initial = name.length > 0 ? name[0] : "?";
               return (
                 <div
                   key={r.userId}
-                  className="flex max-w-[5rem] flex-col items-center gap-0.5"
+                  className="flex flex-col items-center gap-0.5"
                   title={name}
                 >
-                  {src ? (
-                    <span className="inline-block h-9 w-9 overflow-hidden rounded-full border border-dashed border-gray-400 bg-white">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={src}
-                        alt=""
-                        className="h-full w-full object-cover"
-                        draggable={false}
-                      />
-                    </span>
-                  ) : (
-                    <span className="flex h-9 w-9 items-center justify-center rounded-full border border-dashed border-gray-400 bg-gray-100 text-xs font-semibold text-gray-600">
-                      {initial}
-                    </span>
-                  )}
-                  <span className="w-full truncate text-center text-[10px] leading-tight text-gray-600">
-                    {name}
-                  </span>
+                  <IdentityBadge 
+                    fallback={{ 
+                        nickname: name, 
+                        avatar_url: src 
+                    }}
+                    size="sm"
+                  />
                 </div>
               );
             })}

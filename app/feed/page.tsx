@@ -7,6 +7,8 @@ import { CommunityPost, Board, postAggregateDefaults } from "@/types/community";
 import RichContent from "@/components/stickers/RichContent";
 import ReactionBar from "@/components/community/ReactionBar";
 import PostVoteBar from "@/components/community/PostVoteBar";
+import IdentityBadge from "@/components/community/IdentityBadge";
+import { formatCommunityDate } from "@/lib/utils/formatDate";
 
 export default function FeedPage() {
   const [posts, setPosts] = useState<CommunityPost[]>([]);
@@ -174,11 +176,17 @@ export default function FeedPage() {
           posts.map((post) => (
             <article key={post.id} className="flex flex-col gap-2 border border-dashed border-gray-500 bg-white/70 p-4 transition-colors hover:bg-gray-50">
               <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-gray-600">
-                <span className="font-semibold">{post.author_email}</span>
+                <IdentityBadge 
+                  profile={post.profiles} 
+                  fallback={{ nickname: post.author_email.split('@')[0] }}
+                  size="sm"
+                />
                 <span className="tabular-nums text-xs text-gray-500">
                   👁 {postAggregateDefaults(post).view_count} · 💬 {postAggregateDefaults(post).comment_count}
                 </span>
-                <span>{new Date(post.created_at).toLocaleString("ko-KR")}</span>
+                <span className="text-[10px] tabular-nums text-gray-400">
+                  {formatCommunityDate(post.created_at)}
+                </span>
               </div>
               
               <div className="flex gap-2">

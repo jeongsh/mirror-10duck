@@ -11,6 +11,7 @@ Supabase Auth가 자동으로 관리하는 사용자 테이블입니다.
   - 회원가입/로그인 계정 저장
   - `public.posts.author_id` 참조 대상
   - `user_metadata.activeCharacterId`에 사용자 선호 Live2D 모델 ID 저장
+  - **참고**: 실제 공개 프로필 정보는 `public.profiles`에서 관리함.
 
 ---
 
@@ -47,6 +48,7 @@ Supabase Auth가 자동으로 관리하는 사용자 테이블입니다.
 - `comment_count` `integer` NOT NULL 기본값 `0` (댓글 수; `comments` 트리거로 유지)
 - `upvote_count` `integer` NOT NULL 기본값 `0` (추천 수; `post_votes` 트리거로 유지)
 - `downvote_count` `integer` NOT NULL 기본값 `0` (비추천 수; `post_votes` 트리거로 유지)
+- `profiles` (Virtual Join 대상) → `author_id`를 통한 `public.profiles(user_id)` FK 참조
 *참고: 과거 사용되던 `category` 컬럼은 폐기(비활성화)되었습니다.*
 
 마이그레이션: `docs/migrations/2026-05-04-post-aggregates-and-votes.sql`
@@ -119,7 +121,7 @@ Supabase Auth가 자동으로 관리하는 사용자 테이블입니다.
 - `id` `uuid` PK, 기본값 `gen_random_uuid()`
 - `created_at` `timestamptz` NOT NULL, 기본값 `now()`
 - `updated_at` `timestamptz` NOT NULL, 기본값 `now()` (trigger로 갱신)
-- `user_id` `uuid` NOT NULL, `auth.users(id)` FK
+- `user_id` `uuid` NOT NULL, `auth.users(id)` FK (연결된 `public.profiles(user_id)`)
 - `character_id` `text` NOT NULL (앱의 `CharacterProfile.id`)
 - `profile_json` `jsonb` NOT NULL (`CharacterProfile` 전체 스냅샷)
 
@@ -190,16 +192,32 @@ Phase 2.3 캐릭터-커뮤니티 연결의 댓글 시스템입니다.
 
 ---
 
-## 10) 추후 확장 후보 테이블
+## 10) `public.profiles` (사용자 프로필)
+
+계정 정보(`auth.users`)와 별개로 커뮤니티에서 활동할 때 보여지는 사용자 신원 정보를 관리합니다.
+
+### 컬럼
+- `user_id` `uuid` PK, `auth.users(id)` FK
+- `nickname` `text` (닉네임)
+- `avatar_url` `text` (아바타 이미지 URL)
+- `bio` `text` (자기소개)
+- `nickname_type` `text` NOT NULL 기본값 'NORMAL' ('NORMAL' | 'FIXED')
+- `updated_at` `timestamptz` 기본값 `now()`
+
+### 트리거
+- `on_auth_user_created`: `auth.users`에 신규 행 삽입 시 자동으로 기본 프로필 생성.
+
+---
+
+## 11) 추후 확장 후보 테이블
 
 향후 `Phase 3+`에서 분리/추가 권장:
-- `profiles` 또는 `user_profiles`: 닉네임, 아바타, 소개 등 사용자 공개 프로필
 - `stickers`, `sticker_assets`: 스티커 메타/파일 매핑 (현재는 라이브러리 캐릭터를 그대로 스티커 소스로 활용)
 - `character_assets`: 업로드 모델 파일(Zip/Texture/모션) 스토리지 메타
 
 ---
 
-## 11) 참고 문서
+## 12) 참고 문서
 - `docs/SUPABASE_SETUP.md`: 초기 SQL + RLS 설정
 - `docs/plan.md`: 전체 플랜 허브 및 문서 참조 지도
 - `docs/plans/checklist.md`: 단계별 완료/미완료 체크리스트

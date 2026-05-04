@@ -56,8 +56,8 @@ export function summarizeReactions(
       const dn = row.display_name?.trim();
       recentReactors.push({
         userId: row.user_id,
-        displayName: dn || null,
-        avatarUrl: row.avatar_url ?? null,
+        displayName: row.profiles?.nickname || dn || null,
+        avatarUrl: row.profiles?.avatar_url || row.avatar_url || null,
         characterThumbnailUrl: row.character_thumbnail_url ?? null,
       });
     }
@@ -72,7 +72,7 @@ export function summarizeReactions(
 export async function fetchReactionsByPost(postId: string): Promise<PostReaction[]> {
   const { data, error } = await supabase
     .from("post_reactions")
-    .select("*")
+    .select("*, profiles(*)")
     .eq("post_id", postId);
 
   if (error) {

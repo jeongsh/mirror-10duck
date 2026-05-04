@@ -6,6 +6,21 @@ export type Board = {
   created_at: string;
 };
 
+export type NicknameType = "FIXED" | "TEMPORARY";
+
+export type UserProfile = {
+  id: string;
+  user_id: string;
+  nickname: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  representative_character_id: string | null;
+  nickname_type: NicknameType;
+  created_at: string;
+  updated_at: string;
+};
+
 export type PostSourceType = "FEED" | "BOARD";
 
 export type CommunityPost = {
@@ -16,6 +31,9 @@ export type CommunityPost = {
   author_id: string;
   author_email: string;
   
+  /** 조인된 작성자 프로필 */
+  profiles?: UserProfile | null;
+
   // 하이브리드 게시판-피드용 필드
   board_id: string | null;
   source_type: PostSourceType;
@@ -98,6 +116,8 @@ export type PostReaction = {
   reaction_type: ReactionType;
   character_id: string | null;
   character_thumbnail_url: string | null;
+  /** 조인된 작성자 프로필 */
+  profiles?: UserProfile | null;
   /** 리액션 시점 `user_metadata.nickname` 스냅샷 (마이그레이션 이전 행은 생략 가능) */
   display_name?: string | null;
   /** 리액션 시점 `user_metadata.avatar_url` 스냅샷 (마이그레이션 이전 행은 생략 가능) */
@@ -132,6 +152,11 @@ export type Comment = {
   post_id: string;
   author_id: string;
   author_email: string;
+  
+  /** 조인된 작성자 프로필 */
+  profiles?: UserProfile | null;
+
+  parent_comment_id: string | null;
   content: string | null;
   sticker_token: string | null;
   created_at: string;

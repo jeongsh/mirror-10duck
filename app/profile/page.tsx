@@ -14,6 +14,7 @@ import CharacterUploader, {
 import { Board } from "@/types/community";
 import { listCharacterProfiles } from "@/lib/supabase/characters";
 import { BASE_PROFILES, mergeProfiles } from "@/lib/live2d/profileSync";
+import { getProfile, updateProfile } from "@/lib/supabase/profiles";
 
 type TabId = "profile" | "library" | "subscription" | "account";
 
@@ -105,6 +106,22 @@ export default function ProfilePage() {
       }
       setBoardsLoading(false);
 
+      // DB 프로필 동기화
+      const dbProfile = await getProfile(user.id);
+      if (dbProfile) {
+        setNickname(dbProfile.nickname);
+        const savedAvatar = dbProfile.avatar_url || "";
+        setAvatarUrl(savedAvatar);
+        setTempAvatarUrl(savedAvatar);
+        setIsFixedNickname(dbProfile.nickname_type === "FIXED");
+      } else {
+        // 하위 호환성: 메타데이터 사용
+        setNickname(user.user_metadata?.nickname || "");
+        const savedAvatar = user.user_metadata?.avatar_url || "";
+        setAvatarUrl(savedAvatar);
+        setTempAvatarUrl(savedAvatar);
+      }
+
       const savedProfiles = await listCharacterProfiles();
       const allProfiles = mergeProfiles(BASE_PROFILES, savedProfiles);
       setProfiles(allProfiles);
@@ -139,17 +156,28 @@ export default function ProfilePage() {
     setLoading(true);
     setMessage("");
 
-    const { error } = await supabase.auth.updateUser({
-      data: { nickname, avatar_url: tempAvatarUrl },
-    });
+    try {
+      // 1. 프로필 테이블 업데이트
+      await updateProfile(user!.id, {
+        nickname,
+        avatar_url: tempAvatarUrl,
+        nickname_type: isFixedNickname ? "FIXED" : "TEMPORARY"
+      });
 
-    if (error) {
-      setMessage(`오류: ${error.message}`);
-    } else {
+      // 2. Auth 메타데이터 업데이트 (편의상 유지)
+      const { error } = await supabase.auth.updateUser({
+        data: { nickname, avatar_url: tempAvatarUrl },
+      });
+
+      if (error) throw error;
+
       setMessage("성공적으로 저장되었습니다.");
       setAvatarUrl(tempAvatarUrl);
+    } catch (err: any) {
+      setMessage(`오류: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleVerifyPassword = async (e: React.FormEvent) => {
@@ -287,7 +315,13 @@ export default function ProfilePage() {
     if (selected) {
       setActiveCharacterId(profileId);
       setProfile(selected);
-      // user metadata에 상태 저장
+
+      // 1. 프로필 테이블 업데이트 (대표 캐릭터)
+      await updateProfile(user!.id, {
+        representative_character_id: profileId
+      });
+
+      // 2. user metadata에 상태 저장
       await supabase.auth.updateUser({
         data: { activeCharacterId: profileId },
       });

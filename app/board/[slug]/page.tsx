@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { Board, CommunityPost, postAggregateDefaults } from "@/types/community";
 import { useParams } from "next/navigation";
+import IdentityBadge from "@/components/community/IdentityBadge";
+import { formatCommunityDate } from "@/lib/utils/formatDate";
 
 export default function BoardPage() {
   const params = useParams();
@@ -40,10 +42,10 @@ export default function BoardPage() {
           if (followData) setIsFollowing(true);
         }
 
-        // 2. 해당 채널의 게시글 목록 조회
+        // 2. 해당 채널의 게시글 목록 조회 (작성자 프로필 조인)
         const { data: postsData } = await supabase
           .from("posts")
-          .select("*")
+          .select("*, profiles(*)")
           .eq("board_id", boardData.id)
           .order("created_at", { ascending: false });
         
@@ -99,32 +101,53 @@ export default function BoardPage() {
 
       <section className="border border-dashed border-gray-500 bg-white/70 p-4">
         <div className="overflow-x-auto border border-dashed border-gray-500">
-          <div className="grid min-w-[920px] grid-cols-[1fr_100px_52px_52px_72px_160px] bg-gray-200 px-3 py-2 text-sm font-semibold">
+          <div className="grid min-w-[800px] grid-cols-[60px_1fr_120px_60px_50px_50px_60px] bg-gray-100 px-3 py-2 text-xs font-bold uppercase tracking-widest text-gray-500">
+            <span className="text-center">번호</span>
             <span>제목</span>
             <span>작성자</span>
+            <span className="text-center">날짜</span>
             <span className="text-center">조회</span>
-            <span className="text-center">댓글</span>
             <span className="text-center">추천</span>
-            <span>작성일</span>
+            <span className="text-center">비추</span>
           </div>
           {posts.map((post) => (
             <Link
               key={post.id}
               href={`/board/${slug}/${post.id}`}
-              className="grid min-w-[920px] grid-cols-[1fr_100px_52px_52px_72px_160px] border-t border-dashed border-gray-400 px-3 py-3 text-sm hover:bg-gray-100"
+              className="grid min-w-[800px] grid-cols-[60px_1fr_120px_60px_50px_50px_60px] items-center border-t border-dashed border-gray-300 px-3 py-2.5 text-sm transition-colors hover:bg-white"
             >
-              <span className="truncate font-semibold">
-                {post.is_hot && <span className="mr-2 rounded bg-red-100 px-1 text-xs text-red-600">🔥 개념글</span>}
-                {post.source_type === 'FEED' ? '🔄 피드에서 공유된 글' : post.title || '제목 없음'}
+              <span className="text-center text-xs text-gray-400 tabular-nums">
+                {post.id.slice(0, 4)}
               </span>
-              <span className="truncate text-gray-600">{post.author_email}</span>
-              <span className="text-center tabular-nums text-gray-600">{postAggregateDefaults(post).view_count}</span>
-              <span className="text-center tabular-nums text-gray-600">{postAggregateDefaults(post).comment_count}</span>
-              <span className="text-center tabular-nums text-gray-600">
-                {postAggregateDefaults(post).upvote_count}/{postAggregateDefaults(post).downvote_count}
+              <span className="flex items-center gap-1 overflow-hidden">
+                <span className="truncate font-medium text-gray-800">
+                  {post.is_hot && <span className="mr-1 text-red-500">🔥</span>}
+                  {post.source_type === 'FEED' ? '🔄 피드 공유' : post.title || '제목 없음'}
+                </span>
+                {postAggregateDefaults(post).comment_count > 0 && (
+                  <span className="text-[11px] font-bold text-orange-500 tabular-nums">
+                    [{postAggregateDefaults(post).comment_count}]
+                  </span>
+                )}
               </span>
-              <span className="text-gray-600">
-                {new Date(post.created_at).toLocaleString("ko-KR")}
+              <div className="flex items-center overflow-hidden">
+                <IdentityBadge 
+                  profile={post.profiles} 
+                  fallback={{ nickname: post.author_email.split('@')[0] }}
+                  size="sm"
+                />
+              </div>
+              <span className="text-center text-xs text-gray-500 tabular-nums">
+                {formatCommunityDate(post.created_at)}
+              </span>
+              <span className="text-center text-xs text-gray-500 tabular-nums">
+                {postAggregateDefaults(post).view_count}
+              </span>
+              <span className="text-center text-xs font-bold text-blue-600 tabular-nums">
+                {postAggregateDefaults(post).upvote_count}
+              </span>
+              <span className="text-center text-xs text-gray-400 tabular-nums">
+                {postAggregateDefaults(post).downvote_count}
               </span>
             </Link>
           ))}

@@ -9,6 +9,7 @@ import RichContent from "@/components/stickers/RichContent";
 import ReactionBar from "@/components/community/ReactionBar";
 import PostVoteBar from "@/components/community/PostVoteBar";
 import CommentSection from "@/components/community/CommentSection";
+import IdentityBadge from "@/components/community/IdentityBadge";
 
 export default function BoardPostDetailPage() {
   const router = useRouter();
@@ -26,7 +27,7 @@ export default function BoardPostDetailPage() {
   const [message, setMessage] = useState("");
 
   const refetchPost = useCallback(async () => {
-    const { data, error } = await supabase.from("posts").select("*").eq("id", postId).single();
+    const { data, error } = await supabase.from("posts").select("*, profiles(*)").eq("id", postId).single();
     if (error) {
       setMessage(error.message);
       setPost(null);
@@ -42,7 +43,7 @@ export default function BoardPostDetailPage() {
 
       const [{ data: authData }, postResponse, boardResponse] = await Promise.all([
         supabase.auth.getUser(),
-        supabase.from("posts").select("*").eq("id", postId).single(),
+        supabase.from("posts").select("*, profiles(*)").eq("id", postId).single(),
         supabase.from("boards").select("*").eq("slug", slug).single()
       ]);
 
@@ -89,7 +90,7 @@ export default function BoardPostDetailPage() {
             } catch {
               /* ignore */
             }
-            const { data: refreshed } = await supabase.from("posts").select("*").eq("id", postId).single();
+            const { data: refreshed } = await supabase.from("posts").select("*, profiles(*)").eq("id", postId).single();
             if (refreshed) setPost(refreshed as CommunityPost);
           }
         }
@@ -209,8 +210,12 @@ export default function BoardPostDetailPage() {
           {post?.is_hot && <span className="mr-2 text-red-500">🔥</span>}
           {post?.title ?? "게시글 없음"}
         </h1>
-        <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-gray-600">
-          <span>{post?.author_email}</span>
+        <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-gray-600">
+          <IdentityBadge 
+            profile={post?.profiles} 
+            fallback={{ nickname: post?.author_email?.split('@')[0] || "Anonymous" }}
+            size="md"
+          />
           {post && userId && post.author_id !== userId && (
             <button
               onClick={toggleFollowUser}
