@@ -275,7 +275,7 @@ export default function BoardPostDetailPage() {
           <div className="flex items-center gap-1.5 min-w-0 text-sm text-gray-500 flex-wrap">
             <IdentityBadge 
               profile={post?.profiles} 
-              fallback={{ nickname: post?.author_email?.split('@')[0] || "Anonymous" }}
+              fallback={{ nickname: post?.anonymous_nickname || post?.author_email?.split('@')[0] || "익명" }}
               size="md"
             />
           </div>
@@ -399,6 +399,7 @@ export default function BoardPostDetailPage() {
           postAuthorId={post.author_id}
           viewerId={userId || null}
           viewerEmail={userEmail || null}
+          allowAnonymous={board?.allow_anonymous ?? false}
           onThreadChanged={refetchPost}
         />
       ) : null}

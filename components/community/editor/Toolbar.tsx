@@ -25,9 +25,10 @@ import { supabase } from "@/lib/supabase/client";
 interface Props {
   editor: Editor | null;
   userId?: string;
+  allowMedia?: boolean;
 }
 
-export default function Toolbar({ editor, userId }: Props) {
+export default function Toolbar({ editor, userId, allowMedia = true }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!editor) return null;
@@ -198,39 +199,43 @@ export default function Toolbar({ editor, userId }: Props) {
 
       <div className="mx-1 h-6 w-px bg-gray-300" />
 
-      <button
-        type="button"
-        onClick={() => fileInputRef.current?.click()}
-        className="p-1.5 hover:bg-gray-200"
-        title="이미지 업로드"
-      >
-        <ImageIcon size={18} />
-      </button>
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        onChange={handleImageUpload} 
-        className="hidden" 
-        accept="image/*"
-      />
+      {allowMedia && (
+        <>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="p-1.5 hover:bg-gray-200"
+            title="이미지 업로드"
+          >
+            <ImageIcon size={18} />
+          </button>
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleImageUpload} 
+            className="hidden" 
+            accept="image/*"
+          />
 
-      <button
-        type="button"
-        onClick={insertYoutube}
-        className="p-1.5 hover:bg-gray-200"
-        title="유튜브 영상"
-      >
-        <Video size={18} />
-      </button>
+          <button
+            type="button"
+            onClick={insertYoutube}
+            className="p-1.5 hover:bg-gray-200"
+            title="유튜브 영상"
+          >
+            <Video size={18} />
+          </button>
 
-      <button
-        type="button"
-        onClick={insertSns}
-        className="p-1.5 hover:bg-gray-200"
-        title="SNS 임베드"
-      >
-        <Share2 size={18} />
-      </button>
+          <button
+            type="button"
+            onClick={insertSns}
+            className="p-1.5 hover:bg-gray-200"
+            title="SNS 임베드"
+          >
+            <Share2 size={18} />
+          </button>
+        </>
+      )}
 
       <StickerPicker onInsert={handleInsertSticker} />
 

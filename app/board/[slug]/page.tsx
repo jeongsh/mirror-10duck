@@ -404,7 +404,7 @@ export default function BoardPage() {
                     <div className="flex items-center overflow-hidden">
                       <IdentityBadge
                         profile={post.profiles}
-                        fallback={{ nickname: post.author_email.split("@")[0] }}
+                        fallback={{ nickname: post.anonymous_nickname || post.author_email.split("@")[0] || "익명" }}
                         size="sm"
                       />
                     </div>
@@ -499,7 +499,7 @@ export default function BoardPage() {
                     <div className="flex items-center overflow-hidden">
                       <IdentityBadge
                         profile={post.profiles}
-                        fallback={{ nickname: post.author_email.split("@")[0] }}
+                        fallback={{ nickname: post.anonymous_nickname || post.author_email.split("@")[0] || "익명" }}
                         size="sm"
                       />
                     </div>

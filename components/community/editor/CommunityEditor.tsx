@@ -18,10 +18,11 @@ interface Props {
   content: string;
   onChange: (content: string) => void;
   userId?: string;
+  allowMedia?: boolean;
   placeholder?: string;
 }
 
-export default function CommunityEditor({ content, onChange, userId, placeholder }: Props) {
+export default function CommunityEditor({ content, onChange, userId, allowMedia = true, placeholder }: Props) {
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -78,7 +79,7 @@ export default function CommunityEditor({ content, onChange, userId, placeholder
 
   return (
     <div className="flex flex-col border border-dashed border-gray-500 bg-white tiptap-container">
-      <Toolbar editor={editor} userId={userId} />
+      <Toolbar editor={editor} userId={userId} allowMedia={allowMedia} />
       <EditorContent editor={editor} />
       <style>{`
         .tiptap-container .ProseMirror p.is-editor-empty:first-child::before {

@@ -17,6 +17,9 @@ export default function BoardManagementPage({ params }: { params: Promise<{ id: 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [hotThreshold, setHotThreshold] = useState<number>(5);
+  const [allowAnonymous, setAllowAnonymous] = useState(true);
+  const [allowMedia, setAllowMedia] = useState(true);
+  const [isNsfw, setIsNsfw] = useState(false);
 
   useEffect(() => {
     const fetchBoard = async () => {
@@ -33,6 +36,9 @@ export default function BoardManagementPage({ params }: { params: Promise<{ id: 
         setName(data.name);
         setDescription(data.description || "");
         setHotThreshold(data.hot_threshold);
+        setAllowAnonymous(data.allow_anonymous);
+        setAllowMedia(data.allow_media);
+        setIsNsfw(data.is_nsfw);
       } else if (error) {
         alert("게시판 정보를 불러오지 못했습니다.");
         router.push("/admin/boards");
@@ -49,7 +55,15 @@ export default function BoardManagementPage({ params }: { params: Promise<{ id: 
 
     const { error } = await supabase
       .from("boards")
-      .update({ slug, name, description, hot_threshold: hotThreshold })
+      .update({ 
+        slug, 
+        name, 
+        description, 
+        hot_threshold: hotThreshold,
+        allow_anonymous: allowAnonymous,
+        allow_media: allowMedia,
+        is_nsfw: isNsfw
+      })
       .eq("id", id);
       
     if (error) {
@@ -131,6 +145,49 @@ export default function BoardManagementPage({ params }: { params: Promise<{ id: 
             className="rounded border p-2 focus:border-black focus:outline-none"
           />
         </label>
+
+        <div className="flex flex-col gap-3 border-t border-dashed border-gray-300 pt-4 mt-2">
+          <h3 className="text-sm font-bold">운영 정책</h3>
+          
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={allowAnonymous}
+              onChange={(e) => setAllowAnonymous(e.target.checked)}
+              className="w-4 h-4"
+            />
+            <div className="flex flex-col">
+              <span className="text-sm font-semibold">익명 글쓰기 허용</span>
+              <p className="text-xs text-gray-500">비로그인 사용자가 글과 댓글을 작성할 수 있습니다.</p>
+            </div>
+          </label>
+
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={allowMedia}
+              onChange={(e) => setAllowMedia(e.target.checked)}
+              className="w-4 h-4"
+            />
+            <div className="flex flex-col">
+              <span className="text-sm font-semibold">미디어 첨부 허용</span>
+              <p className="text-xs text-gray-500">이미지, 영상 등 멀티미디어 업로드를 허용합니다.</p>
+            </div>
+          </label>
+
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isNsfw}
+              onChange={(e) => setIsNsfw(e.target.checked)}
+              className="w-4 h-4"
+            />
+            <div className="flex flex-col">
+              <span className="text-sm font-semibold">NSFW (성인용 콘텐츠)</span>
+              <p className="text-xs text-gray-500">성인용 콘텐츠가 포함될 수 있는 게시판으로 설정합니다.</p>
+            </div>
+          </label>
+        </div>
 
         <div className="mt-4 flex gap-2">
           <button

@@ -23,11 +23,12 @@ interface Props {
   postAuthorId?: string; // 알림용 게시글 작성자 ID
   viewerId: string | null;
   viewerEmail: string | null;
+  allowAnonymous?: boolean;
   /** 댓글 스레드가 바뀐 뒤(등록/삭제) 상위에서 글 집계를 다시 읽을 때 */
   onThreadChanged?: () => void;
 }
 
-export default function CommentSection({ postId, postAuthorId, viewerId, viewerEmail, onThreadChanged }: Props) {
+export default function CommentSection({ postId, postAuthorId, viewerId, viewerEmail, allowAnonymous = false, onThreadChanged }: Props) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
@@ -35,6 +36,8 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
+  const [anonymousNickname, setAnonymousNickname] = useState("");
+  const [anonymousPassword, setAnonymousPassword] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
 
@@ -66,8 +69,13 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
   };
 
   const handleSubmitText = async () => {
-    if (!viewerId || !viewerEmail) {
+    const isAnonymous = !viewerId;
+    if (isAnonymous && !allowAnonymous) {
       alert("댓글은 로그인 후 작성 가능합니다.");
+      return;
+    }
+    if (isAnonymous && (!anonymousNickname || !anonymousPassword)) {
+      alert("익명 닉네임과 비밀번호를 입력해 주세요.");
       return;
     }
     if (!text.trim()) {
@@ -79,11 +87,13 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
       .from("comments")
       .insert({
         post_id: postId,
-        author_id: viewerId,
-        author_email: viewerEmail,
+        author_id: isAnonymous ? null : viewerId,
+        author_email: isAnonymous ? "anonymous" : viewerEmail,
         content: text,
         sticker_token: null,
         parent_comment_id: replyTo,
+        anonymous_nickname: isAnonymous ? anonymousNickname : null,
+        anonymous_password_hash: isAnonymous ? anonymousPassword : null,
       })
       .select("id")
       .single();
@@ -96,7 +106,7 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
     // 알림 전송
     if (replyTo) {
       const parent = comments.find(c => c.id === replyTo);
-      if (parent && parent.author_id !== viewerId) {
+      if (parent && parent.author_id && parent.author_id !== viewerId) {
         await createNotification({
           receiverId: parent.author_id,
           senderId: viewerId,
@@ -124,8 +134,13 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
   };
 
   const handleSubmitStickerOnly = async (token: string) => {
-    if (!viewerId || !viewerEmail) {
+    const isAnonymous = !viewerId;
+    if (isAnonymous && !allowAnonymous) {
       alert("스티커 답글은 로그인 후 가능합니다.");
+      return;
+    }
+    if (isAnonymous && (!anonymousNickname || !anonymousPassword)) {
+      alert("익명 닉네임과 비밀번호를 입력해 주세요.");
       return;
     }
     setSubmitting(true);
@@ -133,11 +148,13 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
       .from("comments")
       .insert({
         post_id: postId,
-        author_id: viewerId,
-        author_email: viewerEmail,
+        author_id: isAnonymous ? null : viewerId,
+        author_email: isAnonymous ? "anonymous" : viewerEmail,
         content: null,
         sticker_token: token,
         parent_comment_id: replyTo,
+        anonymous_nickname: isAnonymous ? anonymousNickname : null,
+        anonymous_password_hash: isAnonymous ? anonymousPassword : null,
       })
       .select("id")
       .single();
@@ -150,7 +167,7 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
     // 알림 전송 (스티커 전용)
     if (replyTo) {
       const parent = comments.find(c => c.id === replyTo);
-      if (parent && parent.author_id !== viewerId) {
+      if (parent && parent.author_id && parent.author_id !== viewerId) {
         await createNotification({
           receiverId: parent.author_id,
           senderId: viewerId,
@@ -252,7 +269,7 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
         ) : (
           root.map((c) => {
             const stickerToken = c.sticker_token ? parseStickerToken(c.sticker_token) : null;
-            const canDelete = viewerId === c.author_id;
+            const canDelete = viewerId === c.author_id && viewerId !== null;
             const commentReplies = replies.filter(r => r.parent_comment_id === c.id);
 
             return (
@@ -262,7 +279,9 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
                     <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
                       <IdentityBadge 
                         profile={c.profiles} 
-                        fallback={{ nickname: c.author_email.split('@')[0] }}
+                        fallback={{ 
+                          nickname: c.anonymous_nickname || c.author_email?.split('@')[0] || "익명" 
+                        }}
                         size="sm"
                       />
                       <span className="text-[10px] text-gray-400">
@@ -354,14 +373,16 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
                   <ul className="ml-8 flex flex-col gap-2 border-l-2 border-dashed border-gray-200 pl-4">
                     {commentReplies.map(r => {
                       const rStickerToken = r.sticker_token ? parseStickerToken(r.sticker_token) : null;
-                      const canDeleteReply = viewerId === r.author_id;
+                      const canDeleteReply = viewerId === r.author_id && viewerId !== null;
                       return (
                         <li id={`comment-${r.id}`} key={r.id} className="scroll-mt-24 flex items-start gap-3 border border-dashed border-gray-200 bg-gray-50/50 p-3">
                           <div className="min-w-0 flex-1">
                             <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
                               <IdentityBadge 
                                 profile={r.profiles} 
-                                fallback={{ nickname: r.author_email.split('@')[0] }}
+                                fallback={{ 
+                                  nickname: r.anonymous_nickname || r.author_email?.split('@')[0] || "익명" 
+                                }}
                                 size="sm"
                               />
                               <span className="text-[10px] text-gray-400">
@@ -428,22 +449,43 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
           <div className="flex items-center justify-between border border-dashed border-blue-200 bg-blue-50 px-3 py-1.5 text-[10px] font-bold text-blue-700">
             <span>
               {root.find(c => c.id === replyTo)?.profiles?.nickname || 
+               root.find(c => c.id === replyTo)?.anonymous_nickname ||
                root.find(c => c.id === replyTo)?.author_email?.split('@')[0]} 님에게 답글 작성 중...
             </span>
             <button onClick={() => setReplyTo(null)} className="text-gray-400 hover:text-red-500 uppercase tracking-widest">[취소]</button>
           </div>
         )}
+
+        {!viewerId && allowAnonymous && (
+          <div className="flex gap-2 mb-2">
+            <input
+              type="text"
+              placeholder="닉네임"
+              value={anonymousNickname}
+              onChange={(e) => setAnonymousNickname(e.target.value)}
+              className="flex-1 border border-dashed border-gray-400 bg-white px-2 py-1 text-xs focus:outline-none"
+            />
+            <input
+              type="password"
+              placeholder="비밀번호"
+              value={anonymousPassword}
+              onChange={(e) => setAnonymousPassword(e.target.value)}
+              className="flex-1 border border-dashed border-gray-400 bg-white px-2 py-1 text-xs focus:outline-none"
+            />
+          </div>
+        )}
+
         <textarea
           ref={textareaRef}
           rows={3}
           placeholder={
-            viewerId
+            viewerId || allowAnonymous
               ? "텍스트 댓글을 작성하세요. 본문에 스티커 토큰을 섞을 수 있습니다."
               : "댓글을 작성하려면 로그인하세요."
           }
           value={text}
           onChange={(e) => setText(e.target.value)}
-          disabled={!viewerId}
+          disabled={!viewerId && !allowAnonymous}
           className="w-full border border-dashed border-gray-400 bg-white px-3 py-2 text-sm disabled:bg-gray-100 disabled:text-gray-400"
         />
 
@@ -456,7 +498,7 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
           <button
             type="button"
             onClick={handleSubmitText}
-            disabled={!viewerId || submitting || !text.trim()}
+            disabled={(!viewerId && !allowAnonymous) || submitting || !text.trim()}
             className="ml-auto border border-dashed border-gray-800 bg-gray-900 px-4 py-2 text-xs font-bold uppercase tracking-widest text-white hover:bg-gray-700 disabled:opacity-50"
           >
             {submitting ? "등록 중..." : "댓글 등록"}

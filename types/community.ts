@@ -5,6 +5,9 @@ export type Board = {
   description: string | null;
   created_at: string;
   hot_threshold: number;
+  allow_anonymous: boolean;
+  allow_media: boolean;
+  is_nsfw: boolean;
 };
 
 export type NicknameType = "FIXED" | "TEMPORARY";
@@ -33,8 +36,10 @@ export type CommunityPost = {
   updated_at?: string | null;
   title: string | null; // 피드 글은 제목이 없을 수 있음
   content: string;
-  author_id: string;
-  author_email: string;
+  author_id: string | null;
+  author_email: string | null;
+  anonymous_nickname?: string | null;
+  anonymous_password_hash?: string | null;
   
   /** 조인된 작성자 프로필 */
   profiles?: UserProfile | null;
@@ -155,8 +160,10 @@ export type PostReactionSummary = {
 export type Comment = {
   id: string;
   post_id: string;
-  author_id: string;
-  author_email: string;
+  author_id: string | null;
+  author_email: string | null;
+  anonymous_nickname?: string | null;
+  anonymous_password_hash?: string | null;
   
   /** 조인된 작성자 프로필 */
   profiles?: UserProfile | null;

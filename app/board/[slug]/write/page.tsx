@@ -23,6 +23,8 @@ function WritePostContent() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [message, setMessage] = useState("");
+  const [anonymousNickname, setAnonymousNickname] = useState("");
+  const [anonymousPassword, setAnonymousPassword] = useState("");
 
   const userId = authUser?.id ?? "";
   const userEmail = authUser?.email ?? "";
@@ -111,10 +113,19 @@ function WritePostContent() {
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!userId || !userEmail) {
+    
+    const isAnonymous = !userId;
+
+    if (isAnonymous && (!board?.allow_anonymous)) {
       setMessage("글쓰기는 로그인 후 가능합니다.");
       return;
     }
+
+    if (isAnonymous && (!anonymousNickname || !anonymousPassword)) {
+      setMessage("익명 닉네임과 비밀번호를 입력해 주세요.");
+      return;
+    }
+
     if (!board) {
       setMessage("게시판 정보를 불러오지 못했습니다.");
       return;
@@ -154,8 +165,10 @@ function WritePostContent() {
           content,
           board_id: board.id,
           source_type: "BOARD",
-          author_id: userId,
-          author_email: userEmail,
+          author_id: isAnonymous ? null : userId,
+          author_email: isAnonymous ? null : userEmail,
+          anonymous_nickname: isAnonymous ? anonymousNickname : null,
+          anonymous_password_hash: isAnonymous ? anonymousPassword : null, // hash it if needed
         })
         .select("id")
         .single();
@@ -189,9 +202,9 @@ function WritePostContent() {
         </h1>
       </header>
 
-      {!userId ? (
-        <div className="border border-dashed border-gray-500 bg-white/70 p-4 text-sm">
-          글쓰기를 위해 먼저 로그인해 주세요.{" "}
+      {!userId && !board?.allow_anonymous ? (
+        <div className="border border-dashed border-gray-500 bg-white/70 p-4 text-sm text-red-600">
+          이 게시판은 로그인한 사용자만 글을 쓸 수 있습니다.{" "}
           <Link href="/auth" className="underline">
             로그인 페이지로 이동
           </Link>
@@ -202,6 +215,32 @@ function WritePostContent() {
         onSubmit={onSubmit}
         className="flex flex-col gap-3 border border-dashed border-gray-500 bg-white/70 p-4"
       >
+        {!userId && board?.allow_anonymous && (
+          <div className="flex flex-wrap gap-4 border-b border-dashed border-gray-400 pb-3 mb-2">
+            <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
+              <span className="text-xs font-bold">익명 닉네임</span>
+              <input
+                type="text"
+                value={anonymousNickname}
+                onChange={(e) => setAnonymousNickname(e.target.value)}
+                className="border border-dashed border-gray-500 bg-white px-2 py-1.5 text-sm focus:outline-none"
+                placeholder="사용할 닉네임"
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
+              <span className="text-xs font-bold">삭제 비밀번호</span>
+              <input
+                type="password"
+                value={anonymousPassword}
+                onChange={(e) => setAnonymousPassword(e.target.value)}
+                className="border border-dashed border-gray-500 bg-white px-2 py-1.5 text-sm focus:outline-none"
+                placeholder="글 수정/삭제 시 필요"
+                required
+              />
+            </div>
+          </div>
+        )}
         <div className="flex flex-col gap-1">
           <span className="text-sm">제목</span>
           <div className="flex gap-2">
@@ -231,6 +270,7 @@ function WritePostContent() {
             content={content}
             onChange={setContent}
             userId={userId}
+            allowMedia={board?.allow_media ?? true}
             placeholder="내용을 작성해 주세요."
           />
         </div>
@@ -238,7 +278,7 @@ function WritePostContent() {
         <div className="flex gap-2">
           <button
             type="submit"
-            disabled={loading || !userId || !board}
+            disabled={loading || (!userId && !board?.allow_anonymous) || !board}
             className="border border-dashed border-gray-500 bg-gray-200 px-3 py-2 text-sm disabled:opacity-50"
           >
             {loading ? (editId ? "수정 중..." : "등록 중...") : (editId ? "수정 완료" : "등록")}
