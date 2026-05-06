@@ -28,6 +28,17 @@
 - [ ] `sticker_assets`: sticker_id, emotion, storage_key, width, height
 - [ ] `board_moderators`: board_id, user_id, role, created_at
 - [ ] `board_tabs`: board_id, key, label, sort_order
+- [ ] `works`: slug, media_type, status, representative_title, synopsis, poster_url, banner_url, official_url
+- [ ] `work_titles`: work_id, locale, title, title_type
+- [ ] `work_genres`: work_id, genre
+- [ ] `work_tags`: work_id, tag
+- [ ] `work_staff`: work_id, role, name
+- [ ] `work_releases`: work_id, release_type, release_date, season, platform, episode_count, volume_count
+- [ ] `work_links`: work_id, link_type, label, url, is_affiliate
+- [ ] `work_reviews`: work_id, author_id, review_type, score, spoiler_level, title, content
+- [ ] `work_ratings`: work_id, user_id, score, verdict_tag, taste_tags, spoiler_level
+- [ ] `work_news`: work_id, title, summary, source_url, source_type, published_at, verified_at
+- [ ] `work_relations`: source_work_id, target_work_id, relation_type
 
 ## 3. 기존 테이블 보강 후보
 
@@ -43,6 +54,8 @@
 - [x] `posts.downvote_count`
 - [ ] `posts.status`
 - [ ] `posts.board_tab`
+- [ ] `posts.work_id`
+- [ ] `posts.spoiler_level`
 - [ ] `comments.parent_comment_id`
 - [ ] `comments.author_display_name`
 - [ ] `comments.author_nickname_type`
