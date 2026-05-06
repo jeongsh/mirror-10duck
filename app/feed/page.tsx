@@ -28,7 +28,7 @@ import {
   postAggregateDefaults,
 } from "@/types/community";
 
-type TimelineTab = "for-you" | "following";
+type TimelineTab = "for-you" | "following" | "hot";
 type FollowUserRow = { following_id: string };
 type FollowBoardRow = { board_id: string };
 
@@ -184,6 +184,19 @@ export default function FeedPage() {
       return;
     }
 
+    if (activeTab === "hot") {
+      const { data } = await supabase
+        .from("posts")
+        .select("*, profiles(*)")
+        .eq("is_hot", true)
+        .order("hot_promoted_at", { ascending: false })
+        .limit(30);
+
+      setPosts(await enrichProfiles((data as CommunityPost[] | null) ?? []));
+      setLoading(false);
+      return;
+    }
+
 
     const { data, error } = await supabase.rpc("get_hybrid_feed", {
       viewer_id: userId,
@@ -307,7 +320,7 @@ export default function FeedPage() {
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col border-x border-dashed border-gray-500 bg-white/40">
       <header className="border-b border-dashed border-gray-500 bg-white/90">
-        <div className="grid grid-cols-2">
+        <div className="grid grid-cols-3">
           <button
             type="button"
             onClick={() => setActiveTab("for-you")}
@@ -330,6 +343,18 @@ export default function FeedPage() {
             팔로잉
             {activeTab === "following" ? (
               <span className="absolute bottom-0 left-1/2 h-1 w-14 -translate-x-1/2 bg-gray-800" />
+            ) : null}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("hot")}
+            className={`relative px-4 py-4 text-sm font-bold ${
+              activeTab === "hot" ? "text-red-600" : "text-gray-500"
+            }`}
+          >
+            개념글
+            {activeTab === "hot" ? (
+              <span className="absolute bottom-0 left-1/2 h-1 w-14 -translate-x-1/2 bg-red-600" />
             ) : null}
           </button>
         </div>

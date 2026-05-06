@@ -4,6 +4,7 @@ export type Board = {
   name: string;
   description: string | null;
   created_at: string;
+  hot_threshold: number;
 };
 
 export type NicknameType = "FIXED" | "TEMPORARY";
