@@ -21,7 +21,7 @@
 | DB 마이그레이션, Supabase 테이블, RLS, 집계 컬럼 | [data-model.md](./plans/data-model.md) | [DB_TABLES.md](./DB_TABLES.md), [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) |
 | 신고, 차단, 운영자 도구, 알림, 레이트 리밋 | [moderation-notifications.md](./plans/moderation-notifications.md) | [data-model.md](./plans/data-model.md), [community.md](./plans/community.md) |
 | 애니/만화/게임 작품 DB, 소개, 리뷰, 프리뷰, 평가, 뉴스 | [works-media.md](./plans/works-media.md) | [community.md](./plans/community.md), [data-model.md](./plans/data-model.md), [screen-acceptance.md](./plans/screen-acceptance.md) |
-| Live2D, 캐릭터 리액션, 스티커 팩, 대표 캐릭터, AI 캐릭터 채팅 | [character-community.md](./plans/character-community.md) | [LIVE2D_CHARACTER_GUIDE.md](./LIVE2D_CHARACTER_GUIDE.md), [ARCHITECTURE_OVERVIEW.md](./ARCHITECTURE_OVERVIEW.md) |
+| Live2D, 캐릭터 리액션, 스티커 팩, 대표 캐릭터, 덕질 비서, 후순위 롤플레잉 | [character-community.md](./plans/character-community.md) | [LIVE2D_CHARACTER_GUIDE.md](./LIVE2D_CHARACTER_GUIDE.md), [ARCHITECTURE_OVERVIEW.md](./ARCHITECTURE_OVERVIEW.md) |
 | 화면 완성도, 페이지별 완료 기준, UX 누락 점검 | [screen-acceptance.md](./plans/screen-acceptance.md) | 관련 도메인 문서 |
 
 ## 2. 프로젝트 개요
@@ -29,7 +29,7 @@
 - **프로젝트 명:** 씹덕 (가칭)
 - **제품 정체성:** 애니/만화/게임 작품을 소개, 프리뷰, 리뷰, 평가, 뉴스, 커뮤니티 글로 연결하는 서브컬처 작품 허브.
 - **핵심 가치:** 사용자가 "무엇을 볼지/읽을지/플레이할지" 빠르게 결정할 수 있도록 작품 정보, 편집 콘텐츠, 유저 평가, 게시판 반응을 한 화면에 모은다.
-- **Live2D의 역할:** 제품의 중심 기능이 아니라 커뮤니티 감정 표현, 리뷰/프리뷰 진행 보조, 알림/리액션 연출을 맡는 차별화 요소로 둔다. 일반 사용자에게 캐릭터 제작 부담을 전가하지 않는다.
+- **Live2D의 역할:** 제품의 중심 기능이 아니라 커뮤니티 감정 표현, 리뷰/프리뷰 진행 보조, 알림/리액션 연출, 작품 큐레이션을 맡는 차별화 요소로 둔다. 일반 사용자에게 캐릭터 제작 부담을 전가하지 않고, 자유 챗봇보다 목적형 덕질 비서 경험을 우선한다.
 - **최종 목표:** 애니/만화/게임 작품별 허브와 시즌/출시 프리뷰를 기반으로 검색 유입을 만들고, 리뷰/평가/뉴스/커뮤니티 활동을 통해 장기 체류와 수익화를 구축한다.
 - **플랫폼 전략:** 웹 Next.js 버전에서 작품 탐색, 검색, 리뷰, 평가, 커뮤니티를 먼저 안정화하고, 알림/기록/추천이 검증된 뒤 모바일 앱으로 확장한다.
 
@@ -63,7 +63,7 @@
 - **Phase 1. 프로젝트 기반 구축:** Next.js, TypeScript, Tailwind, Zustand, Supabase, 전역 Live2D 컨테이너, 기본 캐릭터 라이브러리 구축 완료.
 - **Phase 2. 커뮤니티 기본 루프:** 게시판, 글, 댓글, 감정 리액션, 팔로우 피드, 크로스포스트는 1차 구현됨. 남은 핵심은 신원 뱃지, 추천/비추천, 조회/댓글 집계, 검색, 대댓글, 신고/운영, 알림, 에디터 미디어 업로드다.
 - **Phase 3. 애니/만화/게임 작품 허브:** 작품 DB, 작품 페이지, 시즌 애니/신작 만화/게임 출시 프리뷰, 리뷰, 유저 평가, 뉴스 타임라인, 작품별 커뮤니티 연결.
-- **Phase 4. 캐릭터 커뮤니티 고도화:** 스티커 관리, 대표 캐릭터 공개 프로필, 글/댓글 캐릭터 스냅샷, 커뮤니티 리액션 연출. 캐릭터 제작/의상/표정 변경은 일반 사용자 핵심 루프가 아니라 운영자/크리에이터용 확장으로 둔다.
+- **Phase 4. 캐릭터 커뮤니티 고도화:** 스티커 관리, 대표 캐릭터 공개 프로필, 글/댓글 캐릭터 스냅샷, 커뮤니티 리액션 연출, 작품 알림/추천/리뷰 작성 보조. 캐릭터 제작/의상/표정 변경은 일반 사용자 핵심 루프가 아니라 운영자/크리에이터용 확장으로 둔다. 롤플레잉 채팅은 동료 니즈를 반영해 후순위 확장으로 남기되, 초기 제품 정체성으로 삼지 않는다.
 - **Phase 5. 수익화와 제휴:** 광고, OTT/전자책/게임 스토어/굿즈 제휴 링크, 스폰서드 프리뷰 명시, 프리미엄 추천/알림/기록, 커뮤니티 부스팅.
 - **Phase 6. 모바일 앱과 확장:** React Native Expo 검토, 모바일 커뮤니티 UX, 작품 알림/기록/추천, 푸시 알림, 이미지/카메라 업로드, WebRTC R&D.
 
