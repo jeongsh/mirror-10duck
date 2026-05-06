@@ -11,6 +11,9 @@ const NAV_ITEMS = [
   { href: "/", label: "홈" },
   { href: "/board", label: "채널" },
   { href: "/feed", label: "피드" },
+  { href: "/calendar", label: "캘린더" },
+  // NOTE: /calendar 는 Phase 3 에서 "시즌 애니 + 캐릭터 다마고치" 컨셉으로 재설계 예정.
+  //       지금은 GNB 노출만 빼두고 코드(app/calendar/page.tsx)는 보존.
 ];
 
 export default function GlobalNavigation() {
