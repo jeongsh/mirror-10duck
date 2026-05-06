@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { Application, Ticker } from "pixi.js";
 import { Live2DModel, MotionPriority } from "@naari3/pixi-live2d-display";
 import { LIVE2D_VIEWPORT } from "@/lib/live2d/viewport";
@@ -24,9 +25,41 @@ declare global {
 const CANVAS_W = LIVE2D_VIEWPORT.width;
 const CANVAS_H = LIVE2D_VIEWPORT.height;
 
+const DEFAULT_ACTION_LINES: Partial<Record<CharacterActionKey, string[]>> = {
+  attention: ["네, 확인해볼게요.", "무엇을 도와드릴까요?", "지금 화면에서 필요한 걸 골라볼까요?"],
+  tap_head: ["불렀나요?", "여기 있어요.", "무엇을 찾아볼까요?"],
+  tap_other: ["작품을 찾아볼까요?", "추천이 필요할까요?", "도움이 필요하면 말해줘요."],
+};
+
+const ASSISTANT_PROMPT = "\ubb34\uc5c7\uc744 \ub3c4\uc640\ub4dc\ub9b4\uae4c\uc694?";
+const ASSISTANT_LOADING_MESSAGE = "\ud655\uc778 \uc911\uc774\uc5d0\uc694.";
+const ASSISTANT_RESPONSE_DURATION_MS = 4500;
+
 interface MotionFileMeta {
   durationMs: number;
   loop: boolean;
+}
+
+interface SpeechAnchor {
+  x: number;
+  y: number;
+}
+
+type AssistantActionKey = "briefing" | "review";
+
+function normalizeCharacterAction(action: CharacterActionKey): CharacterActionKey {
+  if (action === "tap_body") return "attention";
+  return action;
+}
+
+function hasActualHitAreas(model: Live2DModel | null): boolean {
+  const hitAreas = (
+    model?.internalModel as unknown as {
+      hitAreas?: Record<string, unknown>;
+    } | undefined
+  )?.hitAreas;
+
+  return Object.keys(hitAreas ?? {}).length > 0;
 }
 
 /**
@@ -38,9 +71,8 @@ interface MotionFileMeta {
  *    연쇄되어 메인 스레드가 수 초 멈추는 freeze 가 일어난다.
  * 2) modelPath 변경 시에는 기존 모델만 stage 에서 떼고 destroy 한 뒤 새 모델을 로드한다.
  * 3) `preference: 'webgl'` 로 WebGPU 를 강제 차단 (Cubism SDK 호환).
- * 4) `autoHitTest: false`, `autoFocus: false` 로 Automator 의 globalpointermove 핸들러를
- *    비활성화한다. Live2D 모델은 drawable 수가 많아 매 pointer 이벤트마다 getBounds 가
- *    호출되면 성능이 급격히 떨어진다. (성능 검증 이후 다시 켤 수 있음)
+ * 4) `autoHitTest`, `autoFocus` 는 켜되, 모델별 히트 액션은 안전 액션으로 정규화한다.
+ *    기존 저장 데이터에 남아있을 수 있는 `tap_body` 는 런타임에서 `attention` 으로 처리한다.
  * 5) `window.app` 은 Pixi Application 수명과 1:1 로 동기화한다.
  * 6) Strict Mode 이중 마운트 대비: 두 단계 effect 모두에 `cancelled` 가드 + cleanup.
  * 7) 모델별 특수 ID (표정/모션/히트 영역) 는 store 의 `profile` 매핑에서 읽는다.
@@ -56,12 +88,18 @@ export default function Live2DWrapper() {
   const pendingIdleReturnRef = useRef(false);
   const actionIdleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const actionIdleTimeoutSeqRef = useRef(0);
+  const pointerFallbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const messageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastHitAtRef = useRef(0);
   const motionMetaCacheRef = useRef<Map<string, MotionFileMeta>>(new Map());
   const modelMotionsRef = useRef<{ modelPath: string | null; motions: Record<string, { File?: string }[]> }>({
     modelPath: null,
     motions: {},
   });
   const [appReady, setAppReady] = useState(false);
+  const [speechAnchor, setSpeechAnchor] = useState<SpeechAnchor | null>(null);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantBusy, setAssistantBusy] = useState<AssistantActionKey | null>(null);
 
   const modelPath = useCharacterStore((s) => s.modelPath);
   const authUser = useAuthUser();
@@ -70,6 +108,37 @@ export default function Live2DWrapper() {
   const setReady = useCharacterStore((s) => s.setReady);
   const setError = useCharacterStore((s) => s.setError);
   const setModelConfig = useCharacterStore((s) => s.setModelConfig);
+
+  function clearMessageTimeout() {
+    if (messageTimeoutRef.current) {
+      clearTimeout(messageTimeoutRef.current);
+      messageTimeoutRef.current = null;
+    }
+  }
+
+  function setTemporaryMessage(message: string, durationMs = 3000) {
+    clearMessageTimeout();
+    useCharacterStore.getState().setMessage(message);
+    messageTimeoutRef.current = setTimeout(() => {
+      messageTimeoutRef.current = null;
+      if (useCharacterStore.getState().message === message) {
+        useCharacterStore.getState().setMessage(null);
+      }
+    }, durationMs);
+  }
+
+  function openAssistantMenu() {
+    clearMessageTimeout();
+    useCharacterStore.getState().setMessage(ASSISTANT_PROMPT);
+    setAssistantOpen(true);
+  }
+
+  function closeAssistantMenu() {
+    clearMessageTimeout();
+    setAssistantOpen(false);
+    setAssistantBusy(null);
+    useCharacterStore.getState().setMessage(null);
+  }
 
   const getMotionMeta = async (
     currentModelPath: string,
@@ -183,6 +252,10 @@ export default function Live2DWrapper() {
       console.warn("[Live2DWrapper] neutral parameter restore warning:", e);
     }
   };
+
+  useEffect(() => {
+    return () => clearMessageTimeout();
+  }, []);
 
   // --------------------------------------------------------------------
   // Effect 1 · Pixi Application 생성 (1회)
@@ -313,6 +386,7 @@ export default function Live2DWrapper() {
 
       if (!modelPath) {
         setReady(false);
+        setSpeechAnchor(null);
         return;
       }
 
@@ -360,6 +434,12 @@ export default function Live2DWrapper() {
 
         // 히트 영역 → 액션 매핑 (profile 기반)
         localModel.on("hit", (hitAreas: string[]) => {
+          lastHitAtRef.current = Date.now();
+          if (pointerFallbackTimeoutRef.current) {
+            clearTimeout(pointerFallbackTimeoutRef.current);
+            pointerFallbackTimeoutRef.current = null;
+          }
+
           const profile = useCharacterStore.getState().profile;
           if (!profile) return;
 
@@ -371,7 +451,7 @@ export default function Live2DWrapper() {
             }
           }
 
-          playAction(firedAction);
+          playAction(normalizeCharacterAction(firedAction), firedAction);
         });
 
         // scale / position
@@ -403,6 +483,7 @@ export default function Live2DWrapper() {
 
         modelRef.current = localModel;
         originalFocusRef.current = localModel.focus.bind(localModel);
+        setSpeechAnchor(getModelSpeechAnchor(localModel));
         const originalOnRender = localModel.onRender?.bind(localModel);
         if (originalOnRender) {
           localModel.onRender = (ticker) => {
@@ -485,6 +566,13 @@ export default function Live2DWrapper() {
       supabase.removeChannel(notificationChannel);
     };
   }, [userId]);
+
+  useEffect(() => {
+    if (!assistantOpen) return;
+
+    window.addEventListener("keydown", closeAssistantMenu);
+    return () => window.removeEventListener("keydown", closeAssistantMenu);
+  }, [assistantOpen]);
 
   // --------------------------------------------------------------------
   // Effect 3 · 유휴 / 타이핑 핸들러
@@ -738,6 +826,10 @@ export default function Live2DWrapper() {
         clearTimeout(actionIdleTimeoutRef.current);
         actionIdleTimeoutRef.current = null;
       }
+      if (pointerFallbackTimeoutRef.current) {
+        clearTimeout(pointerFallbackTimeoutRef.current);
+        pointerFallbackTimeoutRef.current = null;
+      }
       actionIdleTimeoutSeqRef.current += 1;
     };
   }, [appReady, modelPath, isReady]);
@@ -745,18 +837,19 @@ export default function Live2DWrapper() {
   // --------------------------------------------------------------------
   // 공통 헬퍼
   // --------------------------------------------------------------------
-  function playAction(action: CharacterActionKey) {
+  function playAction(action: CharacterActionKey, originalAction: CharacterActionKey = action) {
+    const safeAction = normalizeCharacterAction(action);
     const model = modelRef.current;
     if (!model) return;
     const profile = useCharacterStore.getState().profile;
     if (!profile) return;
 
-    const motion = profile.motionMap[action];
+    const motion = profile.motionMap[safeAction] ?? profile.motionMap[originalAction];
     if (motion) {
       try {
         void model.motion(motion.group, motion.index, MotionPriority.FORCE);
 
-        if (action !== "idle") {
+        if (safeAction !== "idle") {
           // 액션 모션이 끝나면 idle 로 복귀해야 한다는 플래그.
           // 라이브러리의 motionFinish 이벤트는 Loop=true 모션에서 절대 발화하지
           // 않으므로, 모션 길이를 미리 읽어 setTimeout 으로 강제 복귀시킨다.
@@ -810,19 +903,122 @@ export default function Live2DWrapper() {
       }
     }
 
-    const lines = profile.dialogues.actions[action];
-    if (lines && lines.length > 0) {
+    const opensAssistant =
+      safeAction === "attention" || safeAction === "tap_head" || safeAction === "tap_other";
+    const lines = profile.dialogues.actions[safeAction] ?? DEFAULT_ACTION_LINES[safeAction];
+    if (!opensAssistant && lines && lines.length > 0) {
       const line = lines[Math.floor(Math.random() * lines.length)];
-      useCharacterStore.getState().setMessage(line);
-      setTimeout(() => {
-        if (useCharacterStore.getState().message === line) {
-          useCharacterStore.getState().setMessage(null);
-        }
-      }, 3000);
+      setTemporaryMessage(line);
     }
 
-    const sound = profile.sounds.actions[action];
+    const sound = profile.sounds.actions[safeAction];
     if (sound) void playSound(sound);
+
+    if (opensAssistant) {
+      openAssistantMenu();
+    }
+  }
+
+  async function runAssistantAction(action: AssistantActionKey) {
+    if (assistantBusy) return;
+    clearMessageTimeout();
+    setAssistantBusy(action);
+    useCharacterStore.getState().setMessage(ASSISTANT_LOADING_MESSAGE);
+    setAssistantOpen(false);
+
+    try {
+      if (action === "briefing") {
+        const unreadCount = await fetchUnreadCount();
+        setTemporaryMessage(
+          `\uc548 \uc77d\uc740 \uc54c\ub9bc ${unreadCount}\uac1c\uac00 \uc788\uc5b4\uc694.`,
+          ASSISTANT_RESPONSE_DURATION_MS
+        );
+        useCharacterStore.getState().setEmotion("happy");
+        return;
+      }
+
+      setTemporaryMessage(
+        "\ub9ac\ubdf0\ub97c \uc4f8 \ub54c\ub294 \uc88b\uc558\ub358 \uc810, \uc544\uc26c\uc6e0\ub358 \uc810, \ucd94\ucc9c \ub300\uc0c1\uc744 \ucc28\ub840\ub85c \uc801\uc73c\uba74 \ud3b8\ud574\uc694.",
+        ASSISTANT_RESPONSE_DURATION_MS
+      );
+      useCharacterStore.getState().setEmotion("idle");
+    } catch (e) {
+      console.warn("[Live2DWrapper] assistant action warning:", e);
+      setTemporaryMessage(
+        "\uc815\ubcf4\ub97c \ubd88\ub7ec\uc624\uc9c0 \ubabb\ud588\uc5b4\uc694. \uc7a0\uc2dc \ud6c4 \ub2e4\uc2dc \uc2dc\ub3c4\ud574\ubcfc\uac8c\uc694.",
+        ASSISTANT_RESPONSE_DURATION_MS
+      );
+    } finally {
+      setAssistantBusy(null);
+      setTimeout(() => {
+        const state = useCharacterStore.getState();
+        if (state.emotion === "happy") {
+          state.setEmotion("idle");
+        }
+      }, 3500);
+    }
+  }
+
+  async function fetchUnreadCount() {
+    if (!userId) return 0;
+    const { count, error } = await supabase
+      .from("notifications")
+      .select("*", { count: "exact", head: true })
+      .eq("receiver_id", userId)
+      .eq("is_read", false);
+
+    if (error) {
+      console.warn("[Live2DWrapper] unread count warning:", error.message);
+      return 0;
+    }
+    return count ?? 0;
+  }
+
+  function schedulePointerFallbackAction() {
+    const model = modelRef.current;
+    if (!model) return;
+    if (hasActualHitAreas(model)) return;
+    if (pointerFallbackTimeoutRef.current) {
+      clearTimeout(pointerFallbackTimeoutRef.current);
+    }
+    pointerFallbackTimeoutRef.current = setTimeout(() => {
+      pointerFallbackTimeoutRef.current = null;
+      if (Date.now() - lastHitAtRef.current < 250) return;
+      playAction("attention");
+    }, 120);
+  }
+
+  function getModelSpeechAnchor(model: Live2DModel): SpeechAnchor {
+    const fallback = {
+      x: CANVAS_W / 2,
+      y: Math.round(CANVAS_H * 0.18),
+    };
+
+    try {
+      const bounds = (
+        model as unknown as {
+          getBounds?: () => { x: number; y: number; width: number; height: number };
+        }
+      ).getBounds?.();
+      if (
+        !bounds ||
+        !Number.isFinite(bounds.x) ||
+        !Number.isFinite(bounds.y) ||
+        !Number.isFinite(bounds.width) ||
+        !Number.isFinite(bounds.height) ||
+        bounds.width <= 0 ||
+        bounds.height <= 0
+      ) {
+        return fallback;
+      }
+
+      return {
+        x: Math.min(Math.max(bounds.x + bounds.width / 2, 48), CANVAS_W - 48),
+        y: Math.min(Math.max(bounds.y + Math.min(bounds.height * 0.12, 72), 48), CANVAS_H - 80),
+      };
+    } catch {
+      return fallback;
+    }
   }
 
   return (
@@ -839,6 +1035,7 @@ export default function Live2DWrapper() {
           width={CANVAS_W}
           height={CANVAS_H}
           className="block bg-transparent touch-none"
+          onPointerDown={schedulePointerFallbackAction}
           style={{
             width: `min(${CANVAS_W}px, calc(100vw - 16px))`,
             height: "auto",
@@ -846,7 +1043,15 @@ export default function Live2DWrapper() {
           }}
         />
 
-        <SpeechBubble />
+        <SpeechBubble anchor={speechAnchor}>
+          {assistantOpen && (
+            <AssistantQuickActions
+              busyAction={assistantBusy}
+              onAction={runAssistantAction}
+              onClose={closeAssistantMenu}
+            />
+          )}
+        </SpeechBubble>
       </div>
     </aside>
   );
@@ -898,12 +1103,74 @@ function Live2DStatusBadge() {
   );
 }
 
-function SpeechBubble() {
+function SpeechBubble({
+  anchor,
+  children,
+}: {
+  anchor: SpeechAnchor | null;
+  children?: ReactNode;
+}) {
   const message = useCharacterStore((s) => s.message);
-  if (!message) return null;
+  if (!message && !children) return null;
+  const x = anchor?.x ?? CANVAS_W / 2;
+  const y = anchor?.y ?? Math.round(CANVAS_H * 0.18);
   return (
-    <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-white px-4 py-2 rounded-2xl shadow-lg border-2 border-pink-200 text-sm font-semibold text-gray-800 animate-bounce min-w-[120px] text-center pointer-events-none z-10 before:content-[''] before:absolute before:-bottom-2 before:left-1/2 before:-translate-x-1/2 before:w-4 before:h-4 before:bg-white before:rotate-45 before:border-b-2 before:border-r-2 before:border-pink-200">
-      {message}
+    <div
+      className="absolute -translate-x-1/2 -translate-y-full bg-white px-4 py-3 rounded-2xl shadow-lg border-2 border-pink-200 text-sm font-semibold text-gray-800 min-w-[160px] max-w-[min(280px,80vw)] text-center pointer-events-auto z-10 before:content-[''] before:absolute before:-bottom-2 before:left-1/2 before:-translate-x-1/2 before:w-4 before:h-4 before:bg-white before:rotate-45 before:border-b-2 before:border-r-2 before:border-pink-200"
+      style={{
+        left: `${(x / CANVAS_W) * 100}%`,
+        top: `${(y / CANVAS_H) * 100}%`,
+      }}
+    >
+      {message && <div>{message}</div>}
+      {children}
+    </div>
+  );
+}
+
+function AssistantQuickActions({
+  busyAction,
+  onAction,
+  onClose,
+}: {
+  busyAction: AssistantActionKey | null;
+  onAction: (action: AssistantActionKey) => void;
+  onClose: () => void;
+}) {
+  const buttonClass =
+    "rounded-full border border-pink-200 bg-pink-50 px-3 py-1 text-[11px] font-semibold text-pink-700 shadow-sm hover:bg-pink-100 disabled:opacity-50";
+
+  return (
+    <div
+      data-testid="assistant-quick-actions"
+      className="mt-2 flex flex-wrap items-center justify-center gap-1"
+    >
+      <button
+        type="button"
+        data-testid="assistant-action-briefing"
+        className={buttonClass}
+        disabled={busyAction !== null}
+        onClick={() => onAction("briefing")}
+      >
+        {busyAction === "briefing" ? "\ud655\uc778 \uc911" : "\ube0c\ub9ac\ud551"}
+      </button>
+      <button
+        type="button"
+        data-testid="assistant-action-review"
+        className={buttonClass}
+        disabled={busyAction !== null}
+        onClick={() => onAction("review")}
+      >
+        {"\ub9ac\ubdf0 \ub3c4\uc6c0"}
+      </button>
+      <button
+        type="button"
+        data-testid="assistant-action-close"
+        className="rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] text-gray-500 hover:bg-gray-100"
+        onClick={onClose}
+      >
+        {"\ub2eb\uae30"}
+      </button>
     </div>
   );
 }

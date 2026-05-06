@@ -25,16 +25,18 @@ export const MAO_PRO_PROFILE: CharacterProfile = {
   motionMap: {
     idle: { group: "Idle", index: 0 },
     tap_head: { group: "", index: 0 },
-    tap_body: { group: "", index: 1 },
+    attention: { group: "", index: 1 },
     tap_other: { group: "", index: 2 },
     greet: { group: "", index: 3 },
-    special: { group: "", index: 4 },
+    cheer: { group: "", index: 4 },
+    celebrate: { group: "", index: 4 },
     typing: { group: "", index: 5 },
+    special: { group: "", index: 5 },
   },
 
   hitAreaMap: [
     { hitAreaId: "HitAreaHead", action: "tap_head" },
-    { hitAreaId: "HitAreaBody", action: "tap_body" },
+    { hitAreaId: "HitAreaBody", action: "attention" },
   ],
 
   /**
@@ -135,21 +137,24 @@ export const MAO_PRO_PROFILE: CharacterProfile = {
 
   dialogues: {
     emotions: {
-      happy: ["에헤헷~", "좋아해!", "룰루랄라~"],
-      sad: ["흐앵...", "싫어...", "울어버릴거야..."],
-      angry: ["바보!", "칫!", "흥!"],
-      surprised: ["꺄앗!?", "헉!?", "이게뭐야?!"],
-      shy: ["보, 보지마...", "부끄러워...", "그렇게 쳐다보지 마아..."],
-      love: ["좋아해...", "두근두근...", "너만 있으면 돼"],
-      wink: ["후훗 ;)", "윙크윙크~", "이거 비밀이야"],
+      happy: ["좋은 소식이에요.", "기분 좋은 흐름이네요.", "좋아요, 계속 가볼까요?"],
+      sad: ["잠깐 쉬어가도 괜찮아요.", "천천히 다시 보면 돼요.", "아쉬운 부분이 있었네요."],
+      angry: ["잠깐 숨 고르고 정리해볼까요?", "이건 차분히 확인해봐요.", "조금 날카로운 이슈네요."],
+      surprised: ["오, 새로운 소식이에요.", "예상 밖인데요?", "확인해볼 만하겠어요."],
+      shy: ["조용히 지켜볼게요.", "살짝 떨리지만 괜찮아요.", "천천히 해도 돼요."],
+      love: ["관심 작품으로 저장해둘까요?", "취향에 꽤 맞을지도 몰라요.", "좋아하는 포인트가 보여요."],
+      wink: ["작은 힌트 하나 줄게요.", "이건 체크해두면 좋아요.", "놓치지 말고 봐요."],
     },
     actions: {
-      tap_head: ["헤헷!", "머리 쓰다듬지 마!", "간지러워~"],
-      tap_body: ["아앗, 거긴 안돼요!", "꺅!", "성희롱이야!"],
-      tap_other: ["응?", "뭐야뭐야", "간지럽다구요"],
-      greet: ["어서와!", "기다렸어~", "오늘도 만났네"],
-      typing: ["타자 빠르네~", "뭐 쓰는거야?", "집중 집중!"],
-      special: ["짜잔!", "특별 서비스야♡", "좋은 거 보여줄게"],
+      tap_head: ["불렀나요?", "여기 있어요.", "무엇을 찾아볼까요?"],
+      attention: ["네, 확인해볼게요.", "필요한 걸 골라볼까요?", "지금 보고 있는 내용부터 정리해볼게요."],
+      tap_other: ["도움이 필요하면 말해줘요.", "작품을 찾아볼까요?", "추천이 필요할까요?"],
+      greet: ["어서와요.", "오늘 볼 작품을 찾아볼까요?", "새 소식부터 볼까요?"],
+      typing: ["리뷰를 정리 중이군요.", "한 줄 평부터 써볼까요?", "생각을 천천히 적어봐요."],
+      cheer: ["좋아요, 계속 가봐요.", "괜찮은 흐름이에요.", "이 기세로 정리해봐요."],
+      thinking: ["잠깐 생각해볼게요.", "조건을 조금 더 좁혀볼까요?", "비슷한 작품을 찾아볼게요."],
+      celebrate: ["축하해요.", "좋은 반응이네요.", "이 글은 더 많은 사람이 볼 만해요."],
+      special: ["오늘의 추천을 열어볼까요?", "새로운 작품을 골라볼까요?", "취향에 맞는 후보를 찾아볼게요."],
     },
   },
 

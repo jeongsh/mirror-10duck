@@ -11,6 +11,11 @@ import {
   type MotionRef,
 } from "@/types/character";
 
+function normalizeEditableAction(action: CharacterActionKey): CharacterActionKey {
+  if (action === "tap_body") return "attention";
+  return action;
+}
+
 /**
  * 현재 프로필의 표정/모션/히트 매핑을 사용자가 직접 수정하는 패널.
  *
@@ -139,7 +144,7 @@ export default function MappingPanel() {
             </div>
             <span className="text-gray-400">→</span>
             <select
-              value={mapping.action}
+              value={normalizeEditableAction(mapping.action)}
               onChange={(e) => {
                 const next = [...profile.hitAreaMap];
                 next[idx] = { ...mapping, action: e.target.value as CharacterActionKey };

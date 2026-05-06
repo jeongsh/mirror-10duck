@@ -35,8 +35,13 @@ export const ALL_EMOTIONS: CharacterEmotion[] = [
  */
 export type CharacterActionKey =
   | "tap_head"
+  /** @deprecated 신규 제품 액션에서는 사용하지 않는다. 런타임에서 attention 으로 정규화한다. */
   | "tap_body"
   | "tap_other"
+  | "attention"
+  | "cheer"
+  | "thinking"
+  | "celebrate"
   | "idle"
   | "greet"
   | "typing"
@@ -44,8 +49,11 @@ export type CharacterActionKey =
 
 export const ALL_ACTIONS: CharacterActionKey[] = [
   "tap_head",
-  "tap_body",
   "tap_other",
+  "attention",
+  "cheer",
+  "thinking",
+  "celebrate",
   "idle",
   "greet",
   "typing",

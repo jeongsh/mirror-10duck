@@ -17,8 +17,8 @@ import type { ModelPackageAnalysis } from "./modelPackage";
  * 휴리스틱:
  *   - exp_XX, face_XX 등 이름에 수치가 있으면 인덱스 순으로 happy, sad, ...
  *   - 모션 그룹 "Idle" → action.idle
- *   - 그 외 첫 번째 그룹의 0/1/2/3 → tap_head, tap_body, tap_other, greet
- *   - hitArea 에 "Head" / "Body" 키워드가 있으면 자동 매핑
+ *   - 그 외 첫 번째 그룹의 0/1/2/3 → tap_head, attention, tap_other, greet
+ *   - hitArea 에 "Head" 키워드가 있으면 tap_head, Body/Chest/Torso 계열은 attention 으로 안전 매핑
  */
 const EMOTION_ORDER: CharacterEmotion[] = [
   "idle",
@@ -83,7 +83,7 @@ export function guessMotionMap(
   const tapHeadGroup = [...groups.keys()].find((g) => /taphead|head/i.test(g));
   if (tapHeadGroup) out.tap_head = { group: tapHeadGroup, index: 0 };
   const tapBodyGroup = [...groups.keys()].find((g) => /tapbody|body/i.test(g));
-  if (tapBodyGroup) out.tap_body = { group: tapBodyGroup, index: 0 };
+  if (tapBodyGroup) out.attention = { group: tapBodyGroup, index: 0 };
 
   // 메인(큰) 그룹에서 인덱스로 채우기
   const [mainGroup] =
@@ -98,10 +98,11 @@ export function guessMotionMap(
       if (idx < size) out[key] = { group: mainGroup, index: idx };
     };
     fill("tap_head", 0);
-    fill("tap_body", 1);
+    fill("attention", 1);
     fill("tap_other", 2);
     fill("greet", 3);
     fill("typing", 4);
+    fill("celebrate", 5);
     fill("special", 5);
   }
   return out;
@@ -113,7 +114,7 @@ export function guessHitAreaMap(analysis: ModelPackageAnalysis) {
     if (/head/i.test(h.id) || /head/i.test(h.name)) {
       result.push({ hitAreaId: h.id, action: "tap_head" });
     } else if (/body|chest|torso/i.test(h.id) || /body|chest|torso/i.test(h.name)) {
-      result.push({ hitAreaId: h.id, action: "tap_body" });
+      result.push({ hitAreaId: h.id, action: "attention" });
     } else {
       result.push({ hitAreaId: h.id, action: "tap_other" });
     }

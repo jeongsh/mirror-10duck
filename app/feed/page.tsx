@@ -270,8 +270,6 @@ export default function FeedPage() {
       setSearchLoading(false);
     }, 180);
 
-    }, 180);
-
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
