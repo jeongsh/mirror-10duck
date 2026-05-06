@@ -15,6 +15,7 @@ import { useCharacterStore } from "@/store/useCharacterStore";
 import {
   ALL_ACTIONS,
   ALL_EMOTIONS,
+  type CharacterActionKey,
   type CharacterEmotion,
   type DialogueMap,
   type CharacterProfile,
@@ -48,6 +49,137 @@ function cloneDialogues(dialogues: DialogueMap): DialogueMap {
     ),
   };
 }
+
+interface DialoguePreset {
+  id: string;
+  name: string;
+  description: string;
+  previewEmotion: CharacterEmotion;
+  dialogues: DialogueMap;
+}
+
+const DIALOGUE_PRESETS: DialoguePreset[] = [
+  {
+    id: "friendly",
+    name: "친근한",
+    description: "처음 만난 사람에게도 편하게 다가가는 밝은 안내 톤",
+    previewEmotion: "happy",
+    dialogues: {
+      emotions: {
+        idle: ["필요하면 언제든 불러주세요.", "오늘은 어떤 작품을 찾아볼까요?", "잠깐 쉬어가도 괜찮아요."],
+        happy: ["좋아요, 이 흐름 마음에 들어요.", "그거 괜찮은 선택이에요.", "같이 보니까 더 재밌네요."],
+        sad: ["괜찮아요. 천천히 다시 보면 돼요.", "조금 막혀도 제가 옆에서 볼게요.", "오늘은 쉬운 것부터 해볼까요?"],
+        angry: ["잠깐만요, 차분히 정리해볼게요.", "이건 한 번 더 확인해봐야겠어요.", "속상할 만해요. 같이 해결해봐요."],
+        surprised: ["오, 이건 예상 밖인데요?", "새로운 소식이 있나 봐요.", "잠깐 확인해볼게요."],
+        shy: ["조용히 도와드릴게요.", "조금 쑥스럽지만 열심히 해볼게요.", "필요한 만큼만 말할게요."],
+        love: ["취향에 꽤 잘 맞을지도 몰라요.", "이 작품은 저장해둘 만해요.", "좋아하는 포인트가 보이네요."],
+        wink: ["작은 힌트 하나 드릴게요.", "이건 체크해두면 좋아요.", "놓치지 않게 표시해둘게요."],
+      },
+      actions: {
+        tap_head: ["불렀어요?", "네, 여기 있어요.", "무엇부터 볼까요?"],
+        tap_other: ["필요한 게 있으면 말해주세요.", "작품을 같이 찾아볼까요?", "다음 행동을 골라볼게요."],
+        attention: ["중요한 것부터 정리해볼게요.", "지금 볼 만한 걸 추려볼게요.", "알림을 확인해볼까요?"],
+        cheer: ["좋아요, 계속 가봐요.", "지금 흐름 괜찮아요.", "조금만 더 하면 돼요."],
+        thinking: ["잠깐 생각해볼게요.", "조건을 조금 좁혀볼까요?", "취향에 맞는 쪽으로 골라볼게요."],
+        celebrate: ["축하해요!", "좋은 반응이네요.", "이건 기록해둘 만해요."],
+        idle: ["대기 중이에요.", "필요하면 바로 도와드릴게요.", "편하게 둘러보세요."],
+        greet: ["어서 오세요.", "오늘도 같이 찾아봐요.", "반가워요. 뭐부터 볼까요?"],
+        typing: ["정리하는 중이에요.", "생각을 천천히 적어봐요.", "문장을 다듬어볼게요."],
+        special: ["오늘의 추천을 골라볼까요?", "새로운 작품을 찾아볼게요.", "취향에 맞는 후보를 모아볼게요."],
+      },
+    },
+  },
+  {
+    id: "casual",
+    name: "반말",
+    description: "가깝고 편한 친구처럼 말하는 캐주얼 톤",
+    previewEmotion: "wink",
+    dialogues: {
+      emotions: {
+        idle: ["필요하면 불러.", "오늘 뭐 볼래?", "나 여기서 기다리고 있을게."],
+        happy: ["좋다, 이거 괜찮은데?", "오, 감 잡았네.", "이대로 가보자."],
+        sad: ["괜찮아, 다시 보면 돼.", "막히면 내가 같이 봐줄게.", "천천히 해도 돼."],
+        angry: ["잠깐 진정하고 다시 보자.", "이건 좀 이상한데? 확인해볼게.", "괜찮아, 하나씩 정리하자."],
+        surprised: ["어? 이건 좀 의외다.", "오, 새 소식인가 봐.", "잠깐만, 바로 볼게."],
+        shy: ["아, 알겠어. 조용히 도와줄게.", "조금 민망하지만 해볼게.", "필요한 만큼만 말할게."],
+        love: ["이거 네 취향일 것 같은데?", "저장해두면 좋겠다.", "좋아하는 포인트 딱 보인다."],
+        wink: ["힌트 하나 줄게.", "이건 체크해둬.", "놓치면 아까울걸?"],
+      },
+      actions: {
+        tap_head: ["불렀어?", "응, 여기 있어.", "뭐부터 볼까?"],
+        tap_other: ["필요한 거 말해줘.", "작품 같이 찾아볼까?", "다음엔 뭐 할래?"],
+        attention: ["중요한 것부터 보자.", "지금 볼 만한 거 추려줄게.", "알림 확인해볼래?"],
+        cheer: ["좋아, 계속 가자.", "지금 괜찮아.", "조금만 더 해보자."],
+        thinking: ["잠깐 생각해볼게.", "조건을 좀 좁혀볼까?", "취향 맞는 쪽으로 골라볼게."],
+        celebrate: ["축하해!", "반응 좋다.", "이건 기록해두자."],
+        idle: ["대기 중이야.", "필요하면 바로 불러.", "편하게 둘러봐."],
+        greet: ["왔어?", "오늘도 같이 찾아보자.", "반가워. 뭐부터 볼래?"],
+        typing: ["정리 중이야.", "천천히 적어도 돼.", "문장 좀 다듬어볼게."],
+        special: ["오늘 추천 골라볼까?", "새 작품 찾아볼게.", "취향 후보 모아볼게."],
+      },
+    },
+  },
+  {
+    id: "cute",
+    name: "귀여운",
+    description: "짧고 말랑한 리액션이 많은 밝은 톤",
+    previewEmotion: "happy",
+    dialogues: {
+      emotions: {
+        idle: ["부르면 바로 올게요.", "오늘도 같이 놀듯이 찾아봐요.", "살짝 기다리는 중이에요."],
+        happy: ["와아, 좋아요!", "이거 반짝반짝해요.", "기분 좋아지는 선택이에요."],
+        sad: ["괜찮아요, 토닥토닥.", "천천히 다시 하면 돼요.", "제가 옆에서 응원할게요."],
+        angry: ["으음, 이건 다시 봐야겠어요.", "잠깐만요. 차분히 살펴볼게요.", "속상한 건 제가 정리해볼게요."],
+        surprised: ["앗, 깜짝이야!", "오잉? 새로 뭔가 왔어요.", "이건 빨리 봐야겠어요."],
+        shy: ["헤헤, 조용히 도울게요.", "조금 부끄럽지만 해볼게요.", "살짝만 말해볼게요."],
+        love: ["이거 취향 저격일지도요.", "마음에 쏙 들 것 같아요.", "소중히 저장해둘까요?"],
+        wink: ["비밀 힌트 하나예요.", "여기 체크하면 좋아요.", "살짝 알려드릴게요."],
+      },
+      actions: {
+        tap_head: ["네에?", "불렀나요?", "제가 왔어요."],
+        tap_other: ["필요한 거 있나요?", "같이 찾아봐요.", "다음 버튼은 제가 봐둘게요."],
+        attention: ["중요한 것부터 콕 집어볼게요.", "볼 만한 것만 쏙쏙 고를게요.", "알림을 살짝 확인해볼까요?"],
+        cheer: ["할 수 있어요!", "좋아요, 반짝!", "조금만 더 가봐요."],
+        thinking: ["음음, 생각 중이에요.", "조건을 쪼끔만 좁혀볼까요?", "어울리는 걸 찾아볼게요."],
+        celebrate: ["축하해요, 짝짝!", "좋은 일이에요.", "기록해두면 뿌듯하겠어요."],
+        idle: ["얌전히 기다리는 중이에요.", "필요하면 콕 불러주세요.", "편하게 구경하세요."],
+        greet: ["어서 와요.", "오늘도 반가워요.", "뭐부터 볼까요?"],
+        typing: ["끄적끄적 정리 중이에요.", "천천히 적어봐요.", "예쁘게 다듬어볼게요."],
+        special: ["오늘의 추천을 뽑아볼게요.", "새 작품을 데려올게요.", "취향 후보를 모아둘게요."],
+      },
+    },
+  },
+  {
+    id: "tsundere",
+    name: "츤데레",
+    description: "무심한 척하지만 결국 챙겨주는 가벼운 츤데레 톤",
+    previewEmotion: "shy",
+    dialogues: {
+      emotions: {
+        idle: ["딱히 기다린 건 아니고요.", "필요하면 말하세요. 바쁘진 않으니까요.", "혼자 헤매면 오래 걸릴 텐데요."],
+        happy: ["뭐, 나쁘진 않네요.", "그 정도면 꽤 괜찮아요.", "이번 선택은 인정해드릴게요."],
+        sad: ["그렇게 풀이 죽을 일은 아니에요.", "다시 보면 되죠. 제가 봐드릴게요.", "실수해도 끝난 건 아니니까요."],
+        angry: ["잠깐, 감정적으로 넘기지 마세요.", "이건 제가 정리해볼게요.", "성급하게 판단하면 손해예요."],
+        surprised: ["어라, 이건 예상 못 했네요.", "흠, 새 소식인가 봐요.", "확인 정도는 해드릴게요."],
+        shy: ["고맙다는 말은 됐어요.", "그냥 도와드린 것뿐이에요.", "너무 기대하진 말고요."],
+        love: ["취향에 맞을 수도 있겠네요.", "저장해두든 말든 자유지만요.", "놓치면 조금 아까울지도요."],
+        wink: ["힌트예요. 특별히요.", "이건 체크해두세요.", "제가 말 안 했다고 하진 마세요."],
+      },
+      actions: {
+        tap_head: ["왜요?", "불렀으면 용건을 말하세요.", "뭐가 필요한데요?"],
+        tap_other: ["필요하면 말하세요.", "작품 정도는 찾아드릴게요.", "다음 행동은 빨리 고르세요."],
+        attention: ["중요한 것부터 보죠.", "쓸 만한 것만 골라드릴게요.", "알림 확인 정도는 해볼게요."],
+        cheer: ["이 정도는 할 수 있잖아요.", "조금만 더 해보세요.", "포기하기엔 이르죠."],
+        thinking: ["잠깐 생각 중이에요.", "조건이 너무 넓어요. 좁혀보죠.", "취향에 맞는 걸 골라보겠습니다."],
+        celebrate: ["축하해요. 뭐, 잘했네요.", "반응이 괜찮네요.", "기록해둘 가치는 있겠어요."],
+        idle: ["대기 중이에요. 딱히 심심한 건 아니고요.", "필요하면 부르세요.", "편하게 보세요."],
+        greet: ["왔네요.", "오늘도 찾아보긴 할 건가요?", "반가워요. 뭐부터 볼 거죠?"],
+        typing: ["문장 정리 중이에요.", "천천히 쓰세요. 제가 보고 있을게요.", "조금 다듬어드릴게요."],
+        special: ["추천 정도는 골라드릴게요.", "새 작품을 찾아보죠.", "취향 후보를 모아둘게요."],
+      },
+    },
+  },
+];
 
 function isSameJson(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -127,6 +259,18 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
     !!target && !isSameJson(draftDialogues, target.dialogues);
 
   const hasUnsavedChanges = hasBasicDraftChanges || hasDialogueDraftChanges;
+
+  const codeEmotionKeys = new Set(ALL_EMOTIONS);
+  const codeActionKeys = new Set(ALL_ACTIONS);
+  const isEmotionUnsupported = (emotionKey: CharacterEmotion) =>
+    !codeEmotionKeys.has(emotionKey);
+  const isActionUnsupported = (actionKey: CharacterActionKey) =>
+    !codeActionKeys.has(actionKey);
+  const dialogueTextareaClass = (unsupported: boolean) =>
+    [
+      "w-full border border-dashed bg-white/80 px-2 py-1",
+      unsupported ? "border-red-500 bg-red-50/70" : "border-gray-500",
+    ].join(" ");
 
   useEffect(() => {
     if (!hasUnsavedChanges) return;
@@ -260,6 +404,12 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
         useCharacterStore.getState().setMessage(null);
       }
     }, 3000);
+  };
+
+  const applyDialoguePreset = (preset: DialoguePreset) => {
+    setDraftDialogues(cloneDialogues(preset.dialogues));
+    showToast("success", `${preset.name} 대사 프리셋을 적용했습니다. 저장을 눌러 반영하세요.`);
+    notify(preset.dialogues.emotions[preset.previewEmotion]?.[0] ?? preset.name, preset.previewEmotion);
   };
 
   const handleRealNotify = async (type: "COMMENT" | "MESSAGE") => {
@@ -524,6 +674,30 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
       </Section>
 
       <Section title="상황별 대사">
+        <div className="space-y-2 border border-dashed border-gray-300 bg-white/40 p-3">
+          <div className="text-[11px] tracking-widest uppercase text-gray-500">
+            [기본 제공 대사 프리셋]
+          </div>
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+            {DIALOGUE_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => applyDialoguePreset(preset)}
+                className="min-h-20 border border-dashed border-gray-500 bg-white/80 px-3 py-2 text-left hover:border-blue-500 hover:bg-blue-50"
+                title={preset.description}
+              >
+                <span className="block text-xs font-bold text-gray-900">[{preset.name}]</span>
+                <span className="mt-1 block text-[11px] leading-4 text-gray-600">
+                  {preset.description}
+                </span>
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] leading-4 text-gray-500">
+            프리셋을 누르면 아래 감정/액션별 대사 초안이 교체됩니다. 저장 전까지는 캐릭터에 반영되지 않습니다.
+          </p>
+        </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div className="space-y-2">
             <div className="text-[11px] tracking-widest uppercase text-gray-500">
@@ -531,7 +705,12 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
             </div>
             {ALL_EMOTIONS.map((emotion) => (
               <label key={emotion} className="block text-xs">
-                <span className="mb-1 block font-mono">{emotion}</span>
+                <span className="mb-1 flex items-center justify-between gap-2 font-mono">
+                  <span>{emotion}</span>
+                  {isEmotionUnsupported(emotion) && (
+                    <span className="font-sans text-[10px] text-red-600">코드 키 없음</span>
+                  )}
+                </span>
                 <textarea
                   value={arrayToLines(draftDialogues.emotions[emotion])}
                   onChange={(e) =>
@@ -544,7 +723,7 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
                     })
                   }
                   rows={3}
-                  className="w-full border border-dashed border-gray-500 bg-white/80 px-2 py-1"
+                  className={dialogueTextareaClass(isEmotionUnsupported(emotion))}
                 />
               </label>
             ))}
@@ -555,7 +734,12 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
             </div>
             {ALL_ACTIONS.map((action) => (
               <label key={action} className="block text-xs">
-                <span className="mb-1 block font-mono">{action}</span>
+                <span className="mb-1 flex items-center justify-between gap-2 font-mono">
+                  <span>{action}</span>
+                  {isActionUnsupported(action) && (
+                    <span className="font-sans text-[10px] text-red-600">코드 키 없음</span>
+                  )}
+                </span>
                 <textarea
                   value={arrayToLines(draftDialogues.actions[action])}
                   onChange={(e) =>
@@ -568,7 +752,7 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
                     })
                   }
                   rows={3}
-                  className="w-full border border-dashed border-gray-500 bg-white/80 px-2 py-1"
+                  className={dialogueTextareaClass(isActionUnsupported(action))}
                 />
               </label>
             ))}

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
+import { usePathname } from "next/navigation";
 import { Application, Ticker } from "pixi.js";
 import { Live2DModel, MotionPriority } from "@naari3/pixi-live2d-display";
 import { LIVE2D_VIEWPORT } from "@/lib/live2d/viewport";
@@ -34,6 +35,45 @@ const DEFAULT_ACTION_LINES: Partial<Record<CharacterActionKey, string[]>> = {
 const ASSISTANT_PROMPT = "\ubb34\uc5c7\uc744 \ub3c4\uc640\ub4dc\ub9b4\uae4c\uc694?";
 const ASSISTANT_LOADING_MESSAGE = "\ud655\uc778 \uc911\uc774\uc5d0\uc694.";
 const ASSISTANT_RESPONSE_DURATION_MS = 4500;
+
+const PAGE_DIALOGUE_DURATION_MS = 3500;
+const PAGE_DIALOGUE_PRESETS: {
+  match: (pathname: string) => boolean;
+  lines: string[];
+}[] = [
+  {
+    match: (pathname) => pathname === "/",
+    lines: ["실시간 반응을 훑어볼까요?", "오늘 올라온 글을 같이 볼까요?"],
+  },
+  {
+    match: (pathname) => pathname === "/feed",
+    lines: ["팔로우한 채널 새 글을 모아봤어요.", "피드에서 놓친 글을 확인해볼까요?"],
+  },
+  {
+    match: (pathname) => pathname.startsWith("/board/") && pathname.includes("/write"),
+    lines: ["글을 쓰기 전에 스포일러 여부를 확인해볼까요?", "제목과 말머리를 먼저 정해볼까요?"],
+  },
+  {
+    match: (pathname) => pathname.startsWith("/board/"),
+    lines: ["이 채널의 최신 흐름을 볼까요?", "궁금한 글을 골라볼까요?"],
+  },
+  {
+    match: (pathname) => pathname.startsWith("/profile"),
+    lines: ["프로필과 대표 캐릭터를 정리해볼까요?", "내 활동 기록을 확인해볼까요?"],
+  },
+  {
+    match: (pathname) => pathname.startsWith("/works"),
+    lines: ["작품 정보를 같이 살펴볼까요?", "리뷰와 소식을 확인해볼까요?"],
+  },
+  {
+    match: (pathname) => pathname.startsWith("/news"),
+    lines: ["새 소식부터 확인해볼까요?", "공식 발표와 루머를 구분해서 볼게요."],
+  },
+  {
+    match: (pathname) => pathname.startsWith("/reviews"),
+    lines: ["리뷰를 볼 때 스포일러 표시를 확인해요.", "평가 포인트를 같이 살펴볼까요?"],
+  },
+];
 
 interface MotionFileMeta {
   durationMs: number;
@@ -80,6 +120,7 @@ function hasActualHitAreas(model: Live2DModel | null): boolean {
  */
 export default function Live2DWrapper() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const speechBubbleRef = useRef<HTMLDivElement | null>(null);
   const appRef = useRef<Application | null>(null);
   const modelRef = useRef<Live2DModel | null>(null);
   const originalFocusRef = useRef<((x: number, y: number) => void) | null>(null);
@@ -90,6 +131,8 @@ export default function Live2DWrapper() {
   const actionIdleTimeoutSeqRef = useRef(0);
   const pointerFallbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suppressCharacterClickUntilRef = useRef(0);
+  const suppressEmotionDialogueUntilRef = useRef(0);
   const lastHitAtRef = useRef(0);
   const motionMetaCacheRef = useRef<Map<string, MotionFileMeta>>(new Map());
   const modelMotionsRef = useRef<{ modelPath: string | null; motions: Record<string, { File?: string }[]> }>({
@@ -101,6 +144,7 @@ export default function Live2DWrapper() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantBusy, setAssistantBusy] = useState<AssistantActionKey | null>(null);
 
+  const pathname = usePathname();
   const modelPath = useCharacterStore((s) => s.modelPath);
   const authUser = useAuthUser();
   const userId = authUser?.id ?? null;
@@ -118,6 +162,7 @@ export default function Live2DWrapper() {
 
   function setTemporaryMessage(message: string, durationMs = 3000) {
     clearMessageTimeout();
+    suppressEmotionDialogueUntilRef.current = Date.now() + durationMs;
     useCharacterStore.getState().setMessage(message);
     messageTimeoutRef.current = setTimeout(() => {
       messageTimeoutRef.current = null;
@@ -129,12 +174,22 @@ export default function Live2DWrapper() {
 
   function openAssistantMenu() {
     clearMessageTimeout();
+    suppressEmotionDialogueUntilRef.current = Number.POSITIVE_INFINITY;
     useCharacterStore.getState().setMessage(ASSISTANT_PROMPT);
     setAssistantOpen(true);
   }
 
   function closeAssistantMenu() {
     clearMessageTimeout();
+    suppressEmotionDialogueUntilRef.current = 0;
+    setAssistantOpen(false);
+    setAssistantBusy(null);
+    useCharacterStore.getState().setMessage(null);
+  }
+
+  function closeSpeechBubble() {
+    clearMessageTimeout();
+    suppressEmotionDialogueUntilRef.current = 0;
     setAssistantOpen(false);
     setAssistantBusy(null);
     useCharacterStore.getState().setMessage(null);
@@ -256,6 +311,17 @@ export default function Live2DWrapper() {
   useEffect(() => {
     return () => clearMessageTimeout();
   }, []);
+
+  useEffect(() => {
+    if (!pathname) return;
+    if (assistantOpen || assistantBusy) return;
+
+    const preset = PAGE_DIALOGUE_PRESETS.find((item) => item.match(pathname));
+    if (!preset) return;
+
+    const line = preset.lines[Math.floor(Math.random() * preset.lines.length)];
+    setTemporaryMessage(line, PAGE_DIALOGUE_DURATION_MS);
+  }, [pathname]);
 
   // --------------------------------------------------------------------
   // Effect 1 · Pixi Application 생성 (1회)
@@ -434,6 +500,8 @@ export default function Live2DWrapper() {
 
         // 히트 영역 → 액션 매핑 (profile 기반)
         localModel.on("hit", (hitAreas: string[]) => {
+          if (Date.now() < suppressCharacterClickUntilRef.current) return;
+
           lastHitAtRef.current = Date.now();
           if (pointerFallbackTimeoutRef.current) {
             clearTimeout(pointerFallbackTimeoutRef.current);
@@ -574,6 +642,23 @@ export default function Live2DWrapper() {
     return () => window.removeEventListener("keydown", closeAssistantMenu);
   }, [assistantOpen]);
 
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (speechBubbleRef.current?.contains(target)) return;
+      if (canvasRef.current?.contains(target)) return;
+
+      const state = useCharacterStore.getState();
+      if (assistantOpen || state.message) {
+        closeSpeechBubble();
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [assistantOpen]);
+
   // --------------------------------------------------------------------
   // Effect 3 · 유휴 / 타이핑 핸들러
   //
@@ -688,6 +773,12 @@ export default function Live2DWrapper() {
 
     // 대사
     const lines = profile.dialogues.emotions[emotion];
+    if (Date.now() < suppressEmotionDialogueUntilRef.current) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
     if (lines && lines.length > 0) {
       const line = lines[Math.floor(Math.random() * lines.length)];
       useCharacterStore.getState().setMessage(line);
@@ -975,6 +1066,12 @@ export default function Live2DWrapper() {
   }
 
   function schedulePointerFallbackAction() {
+    if (assistantOpen || useCharacterStore.getState().message) {
+      suppressCharacterClickUntilRef.current = Date.now() + 250;
+      closeSpeechBubble();
+      return;
+    }
+
     const model = modelRef.current;
     if (!model) return;
     if (hasActualHitAreas(model)) return;
@@ -1043,7 +1140,7 @@ export default function Live2DWrapper() {
           }}
         />
 
-        <SpeechBubble anchor={speechAnchor}>
+        <SpeechBubble anchor={speechAnchor} bubbleRef={speechBubbleRef}>
           {assistantOpen && (
             <AssistantQuickActions
               busyAction={assistantBusy}
@@ -1105,9 +1202,11 @@ function Live2DStatusBadge() {
 
 function SpeechBubble({
   anchor,
+  bubbleRef,
   children,
 }: {
   anchor: SpeechAnchor | null;
+  bubbleRef: RefObject<HTMLDivElement | null>;
   children?: ReactNode;
 }) {
   const message = useCharacterStore((s) => s.message);
@@ -1116,6 +1215,7 @@ function SpeechBubble({
   const y = anchor?.y ?? Math.round(CANVAS_H * 0.18);
   return (
     <div
+      ref={bubbleRef}
       className="absolute -translate-x-1/2 -translate-y-full bg-white px-4 py-3 rounded-2xl shadow-lg border-2 border-pink-200 text-sm font-semibold text-gray-800 min-w-[160px] max-w-[min(280px,80vw)] text-center pointer-events-auto z-10 before:content-[''] before:absolute before:-bottom-2 before:left-1/2 before:-translate-x-1/2 before:w-4 before:h-4 before:bg-white before:rotate-45 before:border-b-2 before:border-r-2 before:border-pink-200"
       style={{
         left: `${(x / CANVAS_W) * 100}%`,
