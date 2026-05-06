@@ -12,6 +12,7 @@ import PostVoteBar from "@/components/community/PostVoteBar";
 import CommentSection from "@/components/community/CommentSection";
 import IdentityBadge from "@/components/community/IdentityBadge";
 import { createNotification } from "@/lib/community/notifications";
+import { formatIp } from "@/lib/community/actions";
 
 export default function BoardPostDetailPage() {
   const router = useRouter();
@@ -276,6 +277,8 @@ export default function BoardPostDetailPage() {
             <IdentityBadge 
               profile={post?.profiles} 
               fallback={{ nickname: post?.anonymous_nickname || post?.author_email?.split('@')[0] || "익명" }}
+              isAnonymous={post?.is_anonymous || !post?.author_id}
+              ip={formatIp(post?.author_ip)}
               size="md"
             />
           </div>

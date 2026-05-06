@@ -40,6 +40,8 @@ export type CommunityPost = {
   author_email: string | null;
   anonymous_nickname?: string | null;
   anonymous_password_hash?: string | null;
+  is_anonymous?: boolean;
+  author_ip?: string | null;
   
   /** 조인된 작성자 프로필 */
   profiles?: UserProfile | null;
@@ -164,6 +166,8 @@ export type Comment = {
   author_email: string | null;
   anonymous_nickname?: string | null;
   anonymous_password_hash?: string | null;
+  is_anonymous?: boolean;
+  author_ip?: string | null;
   
   /** 조인된 작성자 프로필 */
   profiles?: UserProfile | null;

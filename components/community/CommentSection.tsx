@@ -10,6 +10,7 @@ import CharacterSticker from "@/components/stickers/CharacterSticker";
 import { insertAtTextarea } from "@/lib/stickers/insertAtCursor";
 import IdentityBadge from "@/components/community/IdentityBadge";
 import { createNotification } from "@/lib/community/notifications";
+import { getClientIp, formatIp } from "@/lib/community/actions";
 
 /**
  * 게시글 한 개의 댓글 섹션.
@@ -82,6 +83,8 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
       alert("내용을 입력해 주세요.");
       return;
     }
+    const ip = await getClientIp();
+
     setSubmitting(true);
     const { data: insertedComment, error } = await supabase
       .from("comments")
@@ -92,8 +95,10 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
         content: text,
         sticker_token: null,
         parent_comment_id: replyTo,
+        is_anonymous: isAnonymous,
         anonymous_nickname: isAnonymous ? anonymousNickname : null,
         anonymous_password_hash: isAnonymous ? anonymousPassword : null,
+        author_ip: ip,
       })
       .select("id")
       .single();
@@ -143,6 +148,8 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
       alert("익명 닉네임과 비밀번호를 입력해 주세요.");
       return;
     }
+    const ip = await getClientIp();
+
     setSubmitting(true);
     const { data: insertedComment, error } = await supabase
       .from("comments")
@@ -153,8 +160,10 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
         content: null,
         sticker_token: token,
         parent_comment_id: replyTo,
+        is_anonymous: isAnonymous,
         anonymous_nickname: isAnonymous ? anonymousNickname : null,
         anonymous_password_hash: isAnonymous ? anonymousPassword : null,
+        author_ip: ip,
       })
       .select("id")
       .single();
@@ -282,6 +291,8 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
                         fallback={{ 
                           nickname: c.anonymous_nickname || c.author_email?.split('@')[0] || "익명" 
                         }}
+                        isAnonymous={c.is_anonymous || !c.author_id}
+                        ip={formatIp(c.author_ip)}
                         size="sm"
                       />
                       <span className="text-[10px] text-gray-400">
@@ -383,6 +394,8 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
                                 fallback={{ 
                                   nickname: r.anonymous_nickname || r.author_email?.split('@')[0] || "익명" 
                                 }}
+                                isAnonymous={r.is_anonymous || !r.author_id}
+                                ip={formatIp(r.author_ip)}
                                 size="sm"
                               />
                               <span className="text-[10px] text-gray-400">

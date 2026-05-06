@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase/client";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { Board } from "@/types/community";
 import CommunityEditor from "@/components/community/editor/CommunityEditor";
+import { getClientIp } from "@/lib/community/actions";
 
 function WritePostContent() {
   const router = useRouter();
@@ -158,6 +159,8 @@ function WritePostContent() {
       router.push(`/board/${slug}/${editId}`);
     } else {
       // 생성 모드
+      const ip = await getClientIp();
+
       const { data, error } = await supabase
         .from("posts")
         .insert({
@@ -167,8 +170,10 @@ function WritePostContent() {
           source_type: "BOARD",
           author_id: isAnonymous ? null : userId,
           author_email: isAnonymous ? null : userEmail,
+          is_anonymous: isAnonymous,
           anonymous_nickname: isAnonymous ? anonymousNickname : null,
           anonymous_password_hash: isAnonymous ? anonymousPassword : null, // hash it if needed
+          author_ip: ip,
         })
         .select("id")
         .single();

@@ -12,6 +12,8 @@ interface IdentityBadgeProps {
   size?: "sm" | "md" | "lg";
   showAvatar?: boolean;
   showName?: boolean;
+  ip?: string | null;
+  isAnonymous?: boolean;
 }
 
 export default function IdentityBadge({ 
@@ -19,7 +21,9 @@ export default function IdentityBadge({
   fallback, 
   size = "md",
   showAvatar = true,
-  showName = true
+  showName = true,
+  ip,
+  isAnonymous = false
 }: IdentityBadgeProps) {
   const displayName = profile?.display_name || profile?.nickname || fallback?.nickname || "Anonymous";
   const avatarUrl = profile?.avatar_url || fallback?.avatar_url;
@@ -54,6 +58,11 @@ export default function IdentityBadge({
         <div className="flex items-center gap-1.5">
           <span className={`font-bold tracking-tight ${isFixed ? "text-gray-900" : "text-gray-500 italic"}`}>
             {displayName}
+            {isAnonymous && ip && (
+              <span className="ml-1 text-[10px] font-normal text-gray-400 not-italic">
+                ({ip})
+              </span>
+            )}
           </span>
           {isFixed ? (
             <span className="bg-gray-800 text-white px-1 text-[8px] font-black border border-gray-800 uppercase tracking-tighter leading-tight">
