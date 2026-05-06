@@ -165,9 +165,25 @@ export default function BoardPage() {
 
       const { data } = await query.limit(50);
       if (cancelled) return;
-      setPosts((data as CommunityPost[] | null) ?? []);
+      
+      let finalPosts = (data as CommunityPost[] | null) ?? [];
+
+      // 차단 유저 필터링 (로그인한 경우)
+      if (userId) {
+        const { data: blockedRows } = await supabase
+          .from("blocked_users")
+          .select("blocked_id")
+          .eq("blocker_id", userId);
+        const blockedIds = new Set(blockedRows?.map((b: any) => b.blocked_id) || []);
+        if (blockedIds.size > 0) {
+          finalPosts = finalPosts.filter(post => !blockedIds.has(post.author_id));
+        }
+      }
+
+      setPosts(finalPosts);
       setPostsLoading(false);
     };
+
 
     void fetchData();
 

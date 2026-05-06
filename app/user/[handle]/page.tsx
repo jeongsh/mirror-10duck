@@ -16,6 +16,7 @@ import { splitContentSegments } from "@/lib/stickers/token";
 import { formatCommunityDate } from "@/lib/utils/formatDate";
 import { CommunityPost, UserProfile, postAggregateDefaults } from "@/types/community";
 import { createNotification } from "@/lib/community/notifications";
+import { blockUser, unblockUser, checkIsBlocked } from "@/lib/supabase/profiles";
 
 function splitFeedBody(content: string) {
   const trimmed = content.trim();
@@ -56,6 +57,7 @@ export default function UserFeedPage() {
   
   const [loading, setLoading] = useState(true);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
   
   const fetchUserData = useCallback(async () => {
     setLoading(true);
@@ -113,6 +115,10 @@ export default function UserFeedPage() {
         .single();
       
       setIsFollowing(!!followData);
+
+      // 4. 차단 여부 확인
+      const blocked = await checkIsBlocked(authUser.id, profile.user_id);
+      setIsBlocked(blocked);
     }
     
     setLoading(false);
@@ -151,6 +157,36 @@ export default function UserFeedPage() {
         content: "회원님을 새로 팔로우했습니다.",
         linkUrl: "/profile",
       });
+    }
+  };
+
+  const handleBlock = async () => {
+    if (!currentUser || !targetProfile) return;
+    
+    if (isBlocked) {
+      try {
+        await unblockUser(currentUser.id, targetProfile.user_id);
+        setIsBlocked(false);
+      } catch (err: any) {
+        alert("차단 해제 실패: " + err.message);
+      }
+    } else {
+      if (!confirm("이 사용자를 차단하시겠습니까? 차단하면 이 사용자의 글과 댓글이 보이지 않게 됩니다.")) return;
+      try {
+        await blockUser(currentUser.id, targetProfile.user_id);
+        setIsBlocked(true);
+        // 차단 시 팔로우도 해제하는 것이 일반적
+        if (isFollowing) {
+          await supabase
+            .from("follows_user")
+            .delete()
+            .eq("follower_id", currentUser.id)
+            .eq("following_id", targetProfile.user_id);
+          setIsFollowing(false);
+        }
+      } catch (err: any) {
+        alert("차단 실패: " + err.message);
+      }
     }
   };
 
@@ -220,6 +256,18 @@ export default function UserFeedPage() {
                 }`}
               >
                 {isFollowing ? "팔로잉" : "팔로우"}
+              </button>
+            )}
+            {!isSelf && (
+              <button
+                onClick={handleBlock}
+                className={`border border-dashed px-3 py-1.5 text-xs font-bold transition-colors ${
+                  isBlocked
+                    ? "border-red-500 bg-red-500 text-white hover:bg-red-600"
+                    : "border-gray-400 bg-white text-gray-500 hover:bg-gray-100 hover:text-red-500 hover:border-red-300"
+                }`}
+              >
+                {isBlocked ? "차단됨" : "차단"}
               </button>
             )}
           </div>

@@ -47,3 +47,32 @@ export async function checkHandleAvailability(handle: string, excludeUserId?: st
   
   return data.length === 0;
 }
+
+export async function blockUser(blockerId: string, blockedId: string) {
+  const { error } = await supabase
+    .from("blocked_users")
+    .insert({ blocker_id: blockerId, blocked_id: blockedId });
+  if (error) throw error;
+}
+
+export async function unblockUser(blockerId: string, blockedId: string) {
+  const { error } = await supabase
+    .from("blocked_users")
+    .delete()
+    .eq("blocker_id", blockerId)
+    .eq("blocked_id", blockedId);
+  if (error) throw error;
+}
+
+export async function checkIsBlocked(blockerId: string, blockedId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("blocked_users")
+    .select("id")
+    .eq("blocker_id", blockerId)
+    .eq("blocked_id", blockedId)
+    .limit(1);
+  
+  if (error) return false;
+  return data.length > 0;
+}
+

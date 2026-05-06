@@ -166,12 +166,24 @@ export default function FeedPage() {
       });
 
       const nextPosts = Array.from(merged.values())
-        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
-        .slice(0, 30);
-      setPosts(await enrichProfiles(nextPosts));
+        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+      
+      let finalPosts = nextPosts;
+      // 차단 유저 필터링
+      const { data: blockedRows } = await supabase
+        .from("blocked_users")
+        .select("blocked_id")
+        .eq("blocker_id", userId);
+      const blockedIds = new Set(blockedRows?.map(b => b.blocked_id) || []);
+      if (blockedIds.size > 0) {
+        finalPosts = finalPosts.filter(post => !blockedIds.has(post.author_id));
+      }
+
+      setPosts(await enrichProfiles(finalPosts.slice(0, 30)));
       setLoading(false);
       return;
     }
+
 
     const { data, error } = await supabase.rpc("get_hybrid_feed", {
       viewer_id: userId,
@@ -193,7 +205,18 @@ export default function FeedPage() {
       if (followedUserIds.size > 0) {
         feedPosts = feedPosts.filter(post => !followedUserIds.has(post.author_id));
       }
+
+      // 차단 유저 필터링
+      const { data: blockedRows } = await supabase
+        .from("blocked_users")
+        .select("blocked_id")
+        .eq("blocker_id", userId);
+      const blockedIds = new Set(blockedRows?.map(b => b.blocked_id) || []);
+      if (blockedIds.size > 0) {
+        feedPosts = feedPosts.filter(post => !blockedIds.has(post.author_id));
+      }
     }
+
 
     setPosts(await enrichProfiles(feedPosts.slice(0, 30)));
     setLoading(false);
@@ -232,6 +255,8 @@ export default function FeedPage() {
       if (cancelled) return;
       setSearchResults((data as UserProfile[] | null) ?? []);
       setSearchLoading(false);
+    }, 180);
+
     }, 180);
 
     return () => {

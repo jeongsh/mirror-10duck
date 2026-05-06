@@ -29,6 +29,22 @@ function WritePostContent() {
 
   const PREFIXES = ["잡담", "정보", "질문", "창작", "공지"];
 
+  // 이탈 방지 (Exit Guard)
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // 내용이나 제목이 있는 경우에만 경고
+      if ((title.trim() || content.trim()) && !loading) {
+        e.preventDefault();
+        e.returnValue = ""; // 브라우저 표준에 따라 빈 문자열 설정
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [title, content, loading]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -104,10 +120,11 @@ function WritePostContent() {
       return;
     }
 
+    const finalTitle = prefix ? `[${prefix}] ${title}` : title;
+    
+    // 등록/수정 성공 시 이탈 방지 해제를 위해 상태 변경
     setLoading(true);
     setMessage("");
-
-    const finalTitle = prefix ? `[${prefix}] ${title}` : title;
 
     if (editId) {
       // 수정 모드

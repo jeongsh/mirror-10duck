@@ -6,9 +6,17 @@ import { supabase } from "@/lib/supabase/client";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { Report } from "@/types/community";
 
+interface TargetContent {
+  title?: string;
+  content?: string;
+  board_slug?: string;
+  post_id?: string;
+}
+
 export default function AdminReportsPage() {
   const authUser = useAuthUser();
   const [reports, setReports] = useState<Report[]>([]);
+  const [targetContents, setTargetContents] = useState<Record<string, TargetContent>>({});
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -19,7 +27,49 @@ export default function AdminReportsPage() {
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (!error && data) setReports(data as Report[]);
+    if (!error && data) {
+      const reportsData = data as Report[];
+      setReports(reportsData);
+      
+      // 대상 콘텐츠들 가져오기
+      const contents: Record<string, TargetContent> = {};
+      
+      const postIds = reportsData.filter(r => r.target_type === "POST").map(r => r.target_id);
+      const commentIds = reportsData.filter(r => r.target_type === "COMMENT").map(r => r.target_id);
+
+      if (postIds.length > 0) {
+        const { data: posts } = await supabase
+          .from("posts")
+          .select("id, title, content, boards(slug)")
+          .in("id", postIds);
+        
+        posts?.forEach((p: any) => {
+          contents[p.id] = {
+            title: p.title,
+            content: p.content,
+            board_slug: p.boards?.slug,
+            post_id: p.id
+          };
+        });
+      }
+
+      if (commentIds.length > 0) {
+        const { data: comments } = await supabase
+          .from("comments")
+          .select("id, content, post_id, posts(board_id, boards(slug))")
+          .in("id", commentIds);
+        
+        comments?.forEach((c: any) => {
+          contents[c.id] = {
+            content: c.content,
+            board_slug: c.posts?.boards?.slug,
+            post_id: c.post_id
+          };
+        });
+      }
+
+      setTargetContents(contents);
+    }
     setLoading(false);
   }, []);
 
@@ -75,6 +125,10 @@ export default function AdminReportsPage() {
 
   const hideTarget = async (report: Report) => {
     const table = report.target_type === "POST" ? "posts" : "comments";
+    
+    const isConfirmed = window.confirm("해당 게시물/댓글을 '숨김' 처리할까요? 사용자에겐 보이지 않게 됩니다.");
+    if (!isConfirmed) return;
+
     const { error } = await supabase
       .from(table)
       .update({ status: "HIDDEN" })
@@ -123,83 +177,115 @@ export default function AdminReportsPage() {
         <table className="w-full min-w-[1000px] border-collapse text-left text-sm">
           <thead className="bg-gray-100 text-[11px] font-bold uppercase tracking-widest text-gray-500">
             <tr>
-              <th className="px-4 py-3">날짜</th>
-              <th className="px-4 py-3">유형</th>
-              <th className="px-4 py-3">대상 ID</th>
-              <th className="px-4 py-3">사유</th>
-              <th className="px-4 py-3">상태</th>
-              <th className="px-4 py-3">관리</th>
+              <th className="px-4 py-3 w-32">날짜</th>
+              <th className="px-4 py-3 w-20">유형</th>
+              <th className="px-4 py-3">신고 대상 및 내용</th>
+              <th className="px-4 py-3 w-40">사유</th>
+              <th className="px-4 py-3 w-24">상태</th>
+              <th className="px-4 py-3 w-48">관리</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-dashed divide-gray-300">
-            {reports.map((report) => (
-              <tr key={report.id} className="transition-colors hover:bg-white">
-                <td className="px-4 py-3 text-[11px] text-gray-500 tabular-nums">
-                  {new Date(report.created_at).toLocaleString("ko-KR")}
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                      report.target_type === "POST"
-                        ? "bg-blue-100 text-blue-700"
-                        : "bg-orange-100 text-orange-700"
-                    }`}
-                  >
-                    {report.target_type}
-                  </span>
-                </td>
-                <td className="px-4 py-3 font-mono text-[11px] text-gray-400">
-                  {report.target_id.slice(0, 8)}...
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-col">
-                    <span className="font-bold text-gray-700">{report.reason_category}</span>
-                    <span className="text-xs text-gray-500">{report.reason_detail}</span>
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`text-xs font-bold ${
-                      report.status === "PENDING"
-                        ? "text-red-500"
-                        : report.status === "REVIEWING"
-                          ? "text-orange-500"
-                          : "text-green-600"
-                    }`}
-                  >
-                    {report.status}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    {report.status === "PENDING" && (
-                      <button
-                        onClick={() => updateReportStatus(report.id, "REVIEWING")}
-                        className="text-[10px] font-bold uppercase tracking-widest text-orange-500 hover:underline"
-                      >
-                        [검토 중]
-                      </button>
-                    )}
-                    {report.status !== "RESOLVED" && (
-                      <button
-                        onClick={() => hideTarget(report)}
-                        className="text-[10px] font-bold uppercase tracking-widest text-red-600 hover:underline"
-                      >
-                        [숨김 처리]
-                      </button>
-                    )}
-                    {report.status !== "REJECTED" && report.status !== "RESOLVED" && (
-                      <button
-                        onClick={() => updateReportStatus(report.id, "REJECTED")}
-                        className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:underline"
-                      >
-                        [기각]
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {reports.map((report) => {
+              const target = targetContents[report.target_id];
+              const linkUrl = target?.board_slug && target?.post_id 
+                ? `/board/${target.board_slug}/${target.post_id}${report.target_type === "COMMENT" ? `#comment-${report.target_id}` : ""}`
+                : null;
+
+              return (
+                <tr key={report.id} className="transition-colors hover:bg-white">
+                  <td className="px-4 py-3 text-[11px] text-gray-500 tabular-nums">
+                    {new Date(report.created_at).toLocaleString("ko-KR")}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        report.target_type === "POST"
+                          ? "bg-blue-100 text-blue-700"
+                          : "bg-orange-100 text-orange-700"
+                      }`}
+                    >
+                      {report.target_type}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col gap-1 max-w-md">
+                      {target ? (
+                        <>
+                          {target.title && <p className="font-bold text-gray-900 truncate">{target.title}</p>}
+                          <p className="text-xs text-gray-600 line-clamp-2 bg-gray-50 p-1.5 border border-dashed border-gray-200">
+                            {target.content || "(내용 없음)"}
+                          </p>
+                          {linkUrl && (
+                            <Link 
+                              href={linkUrl} 
+                              target="_blank"
+                              className="text-[10px] text-blue-500 hover:underline"
+                            >
+                              [원본 게시물 보기 ↗]
+                            </Link>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-[10px] text-gray-400 italic">삭제되었거나 찾을 수 없는 대상 ({report.target_id.slice(0, 8)})</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col">
+                      <span className="font-bold text-gray-700">{report.reason_category}</span>
+                      <span className="text-xs text-gray-500 line-clamp-2">{report.reason_detail}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`text-xs font-bold ${
+                        report.status === "PENDING"
+                          ? "text-red-500"
+                          : report.status === "REVIEWING"
+                            ? "text-orange-500"
+                            : report.status === "REJECTED"
+                              ? "text-gray-400"
+                              : "text-green-600"
+                      }`}
+                    >
+                      {report.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {report.status === "PENDING" && (
+                        <button
+                          onClick={() => updateReportStatus(report.id, "REVIEWING")}
+                          className="text-[10px] font-bold uppercase tracking-widest text-orange-500 hover:underline"
+                        >
+                          [검토 중]
+                        </button>
+                      )}
+                      {report.status !== "RESOLVED" && target && (
+                        <button
+                          onClick={() => hideTarget(report)}
+                          className="text-[10px] font-bold uppercase tracking-widest text-red-600 hover:underline"
+                        >
+                          [숨김 처리]
+                        </button>
+                      )}
+                      {(report.status === "PENDING" || report.status === "REVIEWING") && (
+                        <button
+                          onClick={() => updateReportStatus(report.id, "REJECTED")}
+                          className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:underline"
+                        >
+                          [기각]
+                        </button>
+                      )}
+                      {report.status === "RESOLVED" && (
+                        <span className="text-[10px] text-gray-400">처리 완료</span>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
             {reports.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
