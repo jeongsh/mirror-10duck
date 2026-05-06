@@ -8,7 +8,7 @@ import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { Board, CommunityPost, postAggregateDefaults } from "@/types/community";
 import IdentityBadge from "@/components/community/IdentityBadge";
 import { formatCommunityDate } from "@/lib/utils/formatDate";
-import { formatIp } from "@/lib/community/actions";
+import { formatIp } from "@/lib/utils/formatIp";
 
 function useDebouncedValue(value: string, delayMs: number) {
   const [debounced, setDebounced] = useState(value);

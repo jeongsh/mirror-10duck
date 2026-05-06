@@ -10,7 +10,8 @@ import CharacterSticker from "@/components/stickers/CharacterSticker";
 import { insertAtTextarea } from "@/lib/stickers/insertAtCursor";
 import IdentityBadge from "@/components/community/IdentityBadge";
 import { createNotification } from "@/lib/community/notifications";
-import { getClientIp, formatIp } from "@/lib/community/actions";
+import { getClientIp } from "@/lib/community/actions";
+import { formatIp } from "@/lib/utils/formatIp";
 
 /**
  * 게시글 한 개의 댓글 섹션.

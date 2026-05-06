@@ -12,7 +12,7 @@ import PostVoteBar from "@/components/community/PostVoteBar";
 import CommentSection from "@/components/community/CommentSection";
 import IdentityBadge from "@/components/community/IdentityBadge";
 import { createNotification } from "@/lib/community/notifications";
-import { formatIp } from "@/lib/community/actions";
+import { formatIp } from "@/lib/utils/formatIp";
 
 export default function BoardPostDetailPage() {
   const router = useRouter();
