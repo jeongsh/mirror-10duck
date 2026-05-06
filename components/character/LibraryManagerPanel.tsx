@@ -250,15 +250,51 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
     }
   };
 
-  const notify = (msg: string) => {
+  const notify = (msg: string, emotion: CharacterEmotion = "happy") => {
     setPreviewMessage(msg);
     useCharacterStore.getState().setMessage(msg);
+    useCharacterStore.getState().setEmotion(emotion);
     setTimeout(() => {
       setPreviewMessage((current) => (current === msg ? null : current));
       if (useCharacterStore.getState().message === msg) {
         useCharacterStore.getState().setMessage(null);
       }
     }, 3000);
+  };
+
+  const handleRealNotify = async (type: "COMMENT" | "MESSAGE") => {
+    if (!authUser?.id) {
+      notify("로그인이 필요합니다.", "sad");
+      return;
+    }
+
+    const { fetchNotifications } = await import("@/lib/community/notifications");
+    const notifs = await fetchNotifications(authUser.id, 50);
+
+    const NOTIFICATION_EMOTIONS: Record<string, CharacterEmotion> = {
+      COMMENT: "happy",
+      REPLY: "happy",
+      REACTION: "wink",
+      FOLLOW: "love",
+      HOT_PROMOTED: "surprised",
+      SYSTEM: "idle",
+    };
+
+    let target: any;
+    if (type === "COMMENT") {
+      target = notifs.find((n) => n.type === "COMMENT" || n.type === "REPLY");
+    } else {
+      target = notifs.find((n) => n.type === "SYSTEM");
+    }
+
+    if (target) {
+      notify(target.content, NOTIFICATION_EMOTIONS[target.type] || "happy");
+    } else {
+      notify(
+        type === "COMMENT" ? "최근 댓글 알림이 없습니다." : "최근 쪽지 알림이 없습니다.",
+        "idle"
+      );
+    }
   };
 
   const targetTracking = target
@@ -282,24 +318,6 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
           {toast.text}
         </div>
       )}
-      {/* <div className="border border-dashed border-gray-400 bg-white/60 p-3">
-        <div className="mb-2 text-[11px] tracking-widest uppercase text-gray-500">
-          [통합 캐릭터 관리]
-        </div>
-        <select
-          value={targetId}
-          onChange={(e) => {
-            void selectAndLoadCharacter(e.target.value);
-          }}
-          className="w-full border border-dashed border-gray-500 bg-white/80 px-2 py-1 text-xs"
-        >
-          {profiles.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name} ({p.id})
-            </option>
-          ))}
-        </select>
-      </div> */}
 
       <Section title="미리보기 위치">
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-[340px_minmax(0,1fr)]">
@@ -435,28 +453,28 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
               </button>
               <button
                 type="button"
-                onClick={() => notify("새로운 댓글이 달렸어요!")}
+                onClick={() => handleRealNotify("COMMENT")}
                 className="border border-dashed border-gray-600 bg-blue-100/70 px-3 py-1 text-xs tracking-widest uppercase"
               >
                 [댓글 알림]
               </button>
               <button
                 type="button"
-                onClick={() => notify("쪽지가 도착했어요!")}
+                onClick={() => handleRealNotify("MESSAGE")}
                 className="border border-dashed border-gray-600 bg-blue-100/70 px-3 py-1 text-xs tracking-widest uppercase"
               >
                 [쪽지 알림]
               </button>
               <button
                 type="button"
-                onClick={() => notify("다녀오셨어요? 환영해요!")}
+                onClick={() => notify("다녀오셨어요? 환영해요!", "happy")}
                 className="border border-dashed border-gray-600 bg-green-100/70 px-3 py-1 text-xs tracking-widest uppercase"
               >
                 [로그인 (접속)]
               </button>
               <button
                 type="button"
-                onClick={() => notify("안녕히가세요! 또 봐요!")}
+                onClick={() => notify("안녕히가세요! 또 봐요!", "sad")}
                 className="border border-dashed border-gray-600 bg-red-100/70 px-3 py-1 text-xs tracking-widest uppercase"
               >
                 [로그아웃]

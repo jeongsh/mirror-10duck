@@ -139,9 +139,48 @@ function BasicPanel() {
   const setEmotion = useCharacterStore((s) => s.setEmotion);
   const setTracking = useCharacterStore((s) => s.setTracking);
 
-  const notify = (msg: string) => {
+  const notify = (msg: string, emotion: CharacterEmotion = "happy") => {
     useCharacterStore.getState().setMessage(msg);
-    setTimeout(() => useCharacterStore.getState().setMessage(null), 3000);
+    useCharacterStore.getState().setEmotion(emotion);
+    setTimeout(() => {
+      useCharacterStore.getState().setMessage(null);
+    }, 3000);
+  };
+
+  const handleRealNotify = async (type: "COMMENT" | "MESSAGE") => {
+    const userId = useAuthUser.getState().user?.id;
+    if (!userId) {
+      notify("로그인이 필요합니다.", "sad");
+      return;
+    }
+
+    const { fetchNotifications } = await import("@/lib/community/notifications");
+    const notifs = await fetchNotifications(userId, 50);
+
+    const NOTIFICATION_EMOTIONS: Record<string, CharacterEmotion> = {
+      COMMENT: "happy",
+      REPLY: "happy",
+      REACTION: "wink",
+      FOLLOW: "love",
+      HOT_PROMOTED: "surprised",
+      SYSTEM: "idle",
+    };
+
+    let target: any;
+    if (type === "COMMENT") {
+      target = notifs.find((n) => n.type === "COMMENT" || n.type === "REPLY");
+    } else {
+      target = notifs.find((n) => n.type === "SYSTEM");
+    }
+
+    if (target) {
+      notify(target.content, NOTIFICATION_EMOTIONS[target.type] || "happy");
+    } else {
+      notify(
+        type === "COMMENT" ? "최근 댓글 알림이 없습니다." : "최근 쪽지 알림이 없습니다.",
+        "idle"
+      );
+    }
   };
 
   return (
@@ -188,14 +227,14 @@ function BasicPanel() {
           </button>
           <button
             type="button"
-            onClick={() => notify("새로운 댓글이 달렸어요!")}
+            onClick={() => handleRealNotify("COMMENT")}
             className="border border-dashed border-gray-600 bg-blue-100/70 px-3 py-1 text-xs tracking-widest uppercase"
           >
             [댓글 알림]
           </button>
           <button
             type="button"
-            onClick={() => notify("쪽지가 도착했어요!")}
+            onClick={() => handleRealNotify("MESSAGE")}
             className="border border-dashed border-gray-600 bg-blue-100/70 px-3 py-1 text-xs tracking-widest uppercase"
           >
             [쪽지 알림]

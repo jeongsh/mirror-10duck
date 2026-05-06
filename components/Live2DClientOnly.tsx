@@ -87,8 +87,6 @@ export default function Live2DClientOnly() {
 
   const isCharacterManagePage = pathname.startsWith("/library/");
 
-  if (!authUser || isCharacterManagePage) return null;
-
   return (
     <>
       <Script
@@ -97,7 +95,7 @@ export default function Live2DClientOnly() {
         onLoad={() => setCoreReady(true)}
         onReady={() => setCoreReady(true)}
       />
-      {coreReady ? <Live2DWrapper /> : null}
+      {authUser && !isCharacterManagePage && coreReady ? <Live2DWrapper /> : null}
     </>
   );
 }
