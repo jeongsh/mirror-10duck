@@ -1,27 +1,33 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, useEffect, useState, Suspense } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { Board } from "@/types/community";
 import CommunityEditor from "@/components/community/editor/CommunityEditor";
 
-export default function WritePostPage() {
+function WritePostContent() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const slug = params.slug as string;
+  const editId = searchParams.get("edit");
   const authUser = useAuthUser();
 
   const [board, setBoard] = useState<Board | null>(null);
   const [title, setTitle] = useState("");
+  const [prefix, setPrefix] = useState("");
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(false);
   const [message, setMessage] = useState("");
 
   const userId = authUser?.id ?? "";
   const userEmail = authUser?.email ?? "";
+
+  const PREFIXES = ["잡담", "정보", "질문", "창작", "공지"];
 
   useEffect(() => {
     let cancelled = false;
@@ -43,6 +49,50 @@ export default function WritePostPage() {
     };
   }, [slug]);
 
+  // 수정 모드인 경우 데이터 불러오기
+  useEffect(() => {
+    if (!editId) return;
+
+    const fetchPost = async () => {
+      setFetching(true);
+      const { data, error } = await supabase
+        .from("posts")
+        .select("*")
+        .eq("id", editId)
+        .single();
+      
+      setFetching(false);
+
+      if (error) {
+        setMessage("게시글을 불러오지 못했습니다: " + error.message);
+        return;
+      }
+
+      if (data) {
+        if (data.author_id !== authUser?.id) {
+          alert("수정 권한이 없습니다.");
+          router.replace(`/board/${slug}/${editId}`);
+          return;
+        }
+        
+        // 제목에서 말머리 추출 ([말머리] 제목 형식 가정)
+        const titleMatch = data.title?.match(/^\[([^\]]+)\]\s*(.*)$/);
+        if (titleMatch) {
+          setPrefix(titleMatch[1]);
+          setTitle(titleMatch[2]);
+        } else {
+          setTitle(data.title || "");
+        }
+        
+        setContent(data.content || "");
+      }
+    };
+
+    if (authUser) {
+      void fetchPost();
+    }
+  }, [editId, authUser, router, slug]);
+
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!userId || !userEmail) {
@@ -57,36 +107,69 @@ export default function WritePostPage() {
     setLoading(true);
     setMessage("");
 
-    const { data, error } = await supabase
-      .from("posts")
-      .insert({
-        title,
-        content,
-        board_id: board.id,
-        source_type: "BOARD",
-        author_id: userId,
-        author_email: userEmail,
-      })
-      .select("id")
-      .single();
+    const finalTitle = prefix ? `[${prefix}] ${title}` : title;
 
-    setLoading(false);
+    if (editId) {
+      // 수정 모드
+      const { error } = await supabase
+        .from("posts")
+        .update({
+          title: finalTitle,
+          content,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", editId);
 
-    if (error) {
-      setMessage(error.message);
-      return;
+      setLoading(false);
+
+      if (error) {
+        setMessage(error.message);
+        return;
+      }
+
+      router.push(`/board/${slug}/${editId}`);
+    } else {
+      // 생성 모드
+      const { data, error } = await supabase
+        .from("posts")
+        .insert({
+          title: finalTitle,
+          content,
+          board_id: board.id,
+          source_type: "BOARD",
+          author_id: userId,
+          author_email: userEmail,
+        })
+        .select("id")
+        .single();
+
+      setLoading(false);
+
+      if (error) {
+        setMessage(error.message);
+        return;
+      }
+
+      router.push(`/board/${slug}/${data.id}`);
     }
-
-    router.push(`/board/${slug}/${data.id}`);
   };
+
+  if (fetching) {
+    return (
+      <div className="flex flex-col gap-4">
+        <header className="border border-dashed border-gray-500 bg-white/70 p-4">
+          <h1 className="text-lg font-bold">데이터 불러오는 중...</h1>
+        </header>
+      </div>
+    );
+  }
 
   return (
     <main className="flex w-full flex-col gap-4">
       <header className="border border-dashed border-gray-500 bg-white/70 p-4">
         <h1 className="text-lg font-bold">
-          {board ? `${board.name} - 글쓰기` : "게시글 작성"}
+          {editId ? "게시글 수정" : (board ? `${board.name} - 글쓰기` : "게시글 작성")}
         </h1>
-
       </header>
 
       {!userId ? (
@@ -102,16 +185,28 @@ export default function WritePostPage() {
         onSubmit={onSubmit}
         className="flex flex-col gap-3 border border-dashed border-gray-500 bg-white/70 p-4"
       >
-        <label className="text-sm">
-          제목
-          <input
-            required
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            className="mt-1 w-full border border-dashed border-gray-500 bg-white px-3 py-2"
-            placeholder="제목을 입력해 주세요"
-          />
-        </label>
+        <div className="flex flex-col gap-1">
+          <span className="text-sm">제목</span>
+          <div className="flex gap-2">
+            <select
+              value={prefix}
+              onChange={(e) => setPrefix(e.target.value)}
+              className="border border-dashed border-gray-500 bg-white px-2 py-2 text-sm focus:outline-none"
+            >
+              <option value="">말머리 선택</option>
+              {PREFIXES.map(p => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+            <input
+              required
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              className="flex-1 border border-dashed border-gray-500 bg-white px-3 py-2 text-sm focus:outline-none"
+              placeholder="제목을 입력해 주세요"
+            />
+          </div>
+        </div>
 
         <div className="flex flex-col gap-1">
           <span className="text-sm">내용</span>
@@ -129,10 +224,10 @@ export default function WritePostPage() {
             disabled={loading || !userId || !board}
             className="border border-dashed border-gray-500 bg-gray-200 px-3 py-2 text-sm disabled:opacity-50"
           >
-            {loading ? "등록 중..." : "등록"}
+            {loading ? (editId ? "수정 중..." : "등록 중...") : (editId ? "수정 완료" : "등록")}
           </button>
           <Link
-            href={`/board/${slug}`}
+            href={editId ? `/board/${slug}/${editId}` : `/board/${slug}`}
             className="border border-dashed border-gray-500 bg-white px-3 py-2 text-sm"
           >
             취소
@@ -141,10 +236,19 @@ export default function WritePostPage() {
       </form>
 
       {message ? (
-        <p className="border border-dashed border-gray-500 bg-white/70 p-3 text-sm">
+        <p className="border border-dashed border-gray-500 bg-white/70 p-3 text-sm text-red-600">
           {message}
         </p>
       ) : null}
     </main>
   );
 }
+
+export default function WritePostPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <WritePostContent />
+    </Suspense>
+  );
+}
+

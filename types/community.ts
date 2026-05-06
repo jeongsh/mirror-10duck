@@ -29,6 +29,7 @@ export type PostSourceType = "FEED" | "BOARD";
 export type CommunityPost = {
   id: string;
   created_at: string;
+  updated_at?: string | null;
   title: string | null; // 피드 글은 제목이 없을 수 있음
   content: string;
   author_id: string;

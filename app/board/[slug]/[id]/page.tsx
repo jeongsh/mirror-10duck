@@ -254,9 +254,22 @@ export default function BoardPostDetailPage() {
           <Link href="/board" className="hover:underline">게시판</Link> &gt;{" "}
           <Link href={`/board/${slug}`} className="hover:underline">{board?.name ?? slug}</Link>
         </div>
-        <h1 className="text-xl font-bold">
-          {post?.is_hot && <span className="mr-2 text-red-500">🔥</span>}
-          {post?.title ?? "게시글 없음"}
+        <h1 className="flex items-center gap-2 text-xl font-bold">
+          {post?.is_hot && <span className="text-red-500">🔥</span>}
+          {(() => {
+            const titleMatch = post?.title?.match(/^\[([^\]]+)\]\s*(.*)$/);
+            if (titleMatch) {
+              return (
+                <>
+                  <span className="flex-shrink-0 text-sm font-bold text-gray-500">
+                    [{titleMatch[1]}]
+                  </span>
+                  <span>{titleMatch[2]}</span>
+                </>
+              );
+            }
+            return <span>{post?.title ?? "게시글 없음"}</span>;
+          })()}
         </h1>
         <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-gray-600">
           <div className="flex items-center gap-1.5 min-w-0 text-sm text-gray-500 flex-wrap">
@@ -278,6 +291,12 @@ export default function BoardPostDetailPage() {
           )}
           <span>|</span>
           <span>{post ? new Date(post.created_at).toLocaleString("ko-KR") : "-"}</span>
+          {post?.updated_at && 
+           new Date(post.updated_at).getTime() - new Date(post.created_at).getTime() > 60000 && (
+            <span className="text-xs text-gray-400">
+              (수정됨: {new Date(post.updated_at).toLocaleString("ko-KR")})
+            </span>
+          )}
         </div>
         {post ? (
           <p className="mt-2 text-xs text-gray-500">
@@ -323,13 +342,12 @@ export default function BoardPostDetailPage() {
         </Link>
         {canEdit && post ? (
           <>
-            <button
-              type="button"
-              onClick={() => alert('수정 기능은 추후 지원 예정입니다.')}
+            <Link
+              href={`/board/${slug}/write?edit=${post.id}`}
               className="border border-dashed border-gray-500 bg-white px-3 py-2 text-sm"
             >
               수정
-            </button>
+            </Link>
             <button
               type="button"
               onClick={onDelete}
