@@ -104,17 +104,31 @@ function TiptapJsonRenderer({ json }: { json: any }) {
         }
         return text;
 
-      case 'youtube':
+      case 'youtube': {
+        let src = node.attrs.src;
+        if (src) {
+          // http가 없는 경우 상대 경로로 인식되는 것 방지
+          if (src.startsWith('www.')) src = `https://${src}`;
+          
+          // 일반 영상 주소(watch?v=)를 embed로 변환
+          const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+          const match = src.match(regex);
+          if (match && match[1]) {
+            src = `https://www.youtube.com/embed/${match[1]}`;
+          }
+        }
+
         return (
           <div key={index} className="my-4 aspect-video w-full max-w-[640px] overflow-hidden rounded border border-dashed border-gray-400">
             <iframe
-              src={node.attrs.src}
+              src={src}
               className="h-full w-full"
               allowFullScreen
               title="YouTube Video"
             />
           </div>
         );
+      }
 
       case 'embed':
         const { url, type } = node.attrs;
@@ -155,18 +169,31 @@ function TiptapJsonRenderer({ json }: { json: any }) {
         );
 
       case 'image':
-      case 'resizableImage':
+      case 'imageResize':
+        let imgWidth = node.attrs.width || 'auto';
+        if (typeof imgWidth === 'string' && /^\d+$/.test(imgWidth)) imgWidth = `${imgWidth}px`;
+        
+        let imgHeight = node.attrs.height || 'auto';
+        if (typeof imgHeight === 'string' && /^\d+$/.test(imgHeight)) imgHeight = `${imgHeight}px`;
+
+        // float 스타일 지원 (옵션)
+        let floatStyle: any = 'none';
+        if (node.attrs.wrapperStyle?.includes('float: left')) floatStyle = 'left';
+        if (node.attrs.wrapperStyle?.includes('float: right')) floatStyle = 'right';
+
         return (
           <img 
             key={index} 
             src={node.attrs.src} 
             alt={node.attrs.alt || '이미지'} 
             style={{ 
-              width: node.attrs.width || 'auto',
-              display: 'inline-block',
+              width: imgWidth,
+              height: imgHeight,
+              display: floatStyle !== 'none' ? 'block' : 'inline-block',
+              float: floatStyle !== 'none' ? floatStyle : undefined,
               verticalAlign: 'middle'
             }}
-            className="mx-1 my-2 rounded border border-dashed border-gray-400"
+            className="mx-1 my-2 rounded border border-dashed border-gray-400 max-w-full"
           />
         );
 

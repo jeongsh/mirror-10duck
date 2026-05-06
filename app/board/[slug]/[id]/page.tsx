@@ -265,7 +265,6 @@ export default function BoardPostDetailPage() {
               fallback={{ nickname: post?.author_email?.split('@')[0] || "Anonymous" }}
               size="md"
             />
-            {post && <span className="truncate">@{post.profiles?.handle || post.profiles?.nickname || post.author_email?.split('@')[0]}</span>}
           </div>
           {post && userId && post.author_id !== userId && (
             <button

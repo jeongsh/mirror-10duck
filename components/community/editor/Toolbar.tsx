@@ -59,7 +59,23 @@ export default function Toolbar({ editor, userId }: Props) {
   const insertYoutube = () => {
     const url = window.prompt("유튜브 URL을 입력해 주세요.");
     if (url) {
-      editor.chain().focus().setYoutubeVideo({ src: url }).run();
+      // URL에서 비디오 ID 추출 로직 강화
+      let videoId = "";
+      const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+      const match = url.match(regex);
+      
+      if (match && match[1]) {
+        videoId = match[1];
+      } else if (url.length === 11 && !url.includes('/')) {
+        // 비디오 ID만 직접 입력한 경우
+        videoId = url;
+      }
+
+      if (videoId) {
+        editor.chain().focus().setYoutubeVideo({ src: `https://www.youtube.com/embed/${videoId}` }).run();
+      } else {
+        alert("유효한 유튜브 URL을 입력해 주세요.");
+      }
     }
   };
 

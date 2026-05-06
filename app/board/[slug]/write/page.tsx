@@ -86,9 +86,7 @@ export default function WritePostPage() {
         <h1 className="text-lg font-bold">
           {board ? `${board.name} - 글쓰기` : "게시글 작성"}
         </h1>
-        <p className="mt-1 text-sm text-gray-600">
-          로그인 계정: {userEmail || "미로그인"}
-        </p>
+
       </header>
 
       {!userId ? (

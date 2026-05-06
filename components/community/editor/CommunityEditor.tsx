@@ -54,7 +54,7 @@ export default function CommunityEditor({ content, onChange, userId, placeholder
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-sm max-w-none focus:outline-none min-h-[300px] p-4 text-sm leading-relaxed',
+        class: 'prose prose-sm max-w-none focus:outline-none min-h-[300px] p-4 text-sm leading-7 text-gray-800',
       },
     },
   });
@@ -90,6 +90,11 @@ export default function CommunityEditor({ content, onChange, userId, placeholder
         }
         .tiptap-container .ProseMirror {
           outline: none !important;
+        }
+        .tiptap-container .ProseMirror p {
+          margin-top: 0.25rem !important;
+          margin-bottom: 0.25rem !important;
+          min-height: 1.2em;
         }
         .tiptap-container .ProseMirror img {
             display: block;
