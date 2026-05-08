@@ -35,14 +35,11 @@ export default function AuthorProfileCard({
 
   const displayBadges = (() => {
     const pinnedIds = profile?.card_badge_ids;
-    if (pinnedIds?.includes("__none__")) return [];
-    if (pinnedIds && pinnedIds.length > 0) {
-      return pinnedIds
-        .map((id) => earnedBadges.find((ub) => ub.badge_id === id))
-        .filter((x): x is UserBadge & { badge: Badge } => !!x)
-        .slice(0, 4);
-    }
-    return earnedBadges.slice(0, 4);
+    if (!pinnedIds || pinnedIds.includes("__none__") || pinnedIds.length === 0) return [];
+    return pinnedIds
+      .map((id) => earnedBadges.find((ub) => ub.badge_id === id))
+      .filter((x): x is UserBadge & { badge: Badge } => !!x)
+      .slice(0, 4);
   })();
 
   useEffect(() => {
@@ -78,6 +75,7 @@ export default function AuthorProfileCard({
   const displayName = profile.display_name || profile.nickname || "알 수 없음";
   const isSelf = viewerId === authorId;
   const hasCardImage = Boolean(profile.card_image_url);
+  const avatarSrc = (profile as any).card_avatar_url || profile.avatar_url;
 
   return (
     <div className={`relative overflow-hidden ${theme.card}`}>
@@ -99,8 +97,8 @@ export default function AuthorProfileCard({
 
         {/* 아바타 */}
         <div className={`shrink-0 w-20 h-20 overflow-hidden border-2 ${theme.border} bg-gray-100`}>
-          {profile.avatar_url ? (
-            <img src={profile.avatar_url} alt={displayName} className="w-full h-full object-cover" />
+          {avatarSrc ? (
+            <img src={avatarSrc} alt={displayName} className="w-full h-full object-cover" />
           ) : (
             <div className={`flex h-full items-center justify-center text-[10px] font-bold uppercase italic ${theme.subtext}`}>
               No Img

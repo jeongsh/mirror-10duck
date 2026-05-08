@@ -34,6 +34,7 @@ export type UserProfile = {
   card_image_url: string | null;
   card_nickname_color: string | null;
   card_nickname_font: string | null;
+  card_avatar_url: string | null;
   created_at: string;
   updated_at: string;
 };

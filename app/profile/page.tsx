@@ -111,6 +111,7 @@ export default function ProfilePage() {
   const [cardNicknameColor, setCardNicknameColor] = useState("");
   const [cardNicknameFont, setCardNicknameFont] = useState<"sans" | "serif" | "mono">("sans");
   const [cardImageUrl, setCardImageUrl] = useState<string>("");
+  const [cardAvatarUrl, setCardAvatarUrl] = useState<string>("");
   const [cardSaving, setCardSaving] = useState(false);
   const [cardMessage, setCardMessage] = useState("");
   const [cropSrc, setCropSrc] = useState<string | null>(null);
@@ -197,6 +198,7 @@ export default function ProfilePage() {
           setCardBadgeIds(rawBadgeIds);
         }
         setCardImageUrl(dbProfile.card_image_url || "");
+        setCardAvatarUrl((dbProfile as any).card_avatar_url || "");
         setCardNicknameColor((dbProfile as any).card_nickname_color || "");
         setCardNicknameFont(((dbProfile as any).card_nickname_font as "sans" | "serif" | "mono") || "sans");
       } else {
@@ -484,14 +486,15 @@ export default function ProfilePage() {
     setCardMessage("");
     try {
       await updateProfile(user.id, {
-        avatar_url: avatarUrl || null,
         card_theme: cardTheme,
         card_accent: cardAccent || null,
         card_show_oshi: cardShowOshi,
         card_badge_ids: cardHideBadges ? ["__none__"] : cardBadgeIds,
         card_image_url: cardImageUrl || null,
+        card_avatar_url: cardAvatarUrl || null,
         card_nickname_color: cardNicknameColor || null,
         card_nickname_font: cardNicknameFont,
+        bio: bio.trim() || null,
       } as any);
       setCardMessage("저장됐습니다.");
     } catch (err: any) {
@@ -543,7 +546,7 @@ export default function ProfilePage() {
     } else {
       setCardAvatarUploading(true);
       try {
-        const filePath = `${user.id}/avatars/avatar-${Date.now()}.jpg`;
+        const filePath = `${user.id}/card/avatar-${Date.now()}.jpg`;
         const { error: uploadError } = await supabase.storage
           .from("character-assets")
           .upload(filePath, blob, { upsert: true, contentType: "image/jpeg" });
@@ -551,7 +554,7 @@ export default function ProfilePage() {
         const { data: { publicUrl } } = supabase.storage
           .from("character-assets")
           .getPublicUrl(filePath);
-        setAvatarUrl(publicUrl);
+        setCardAvatarUrl(publicUrl);
       } catch (err: any) {
         alert(`업로드 오류: ${err.message}`);
       } finally {
@@ -752,21 +755,6 @@ export default function ProfilePage() {
                   <p>• 아이디는 고유하며 중복될 수 없습니다.</p>
                   <p>• 변경 후 30일간 변경이 불가능합니다.</p>
                 </div>
-              </div>
-            </div>
-
-            {/* 한줄소개 행 */}
-            <div className="flex flex-col md:flex-row gap-6 md:gap-20">
-              <label className="w-40 text-sm font-bold shrink-0 pt-2 uppercase tracking-tight">한줄소개</label>
-              <div className="flex-1 max-w-2xl">
-                <input
-                  type="text"
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  maxLength={80}
-                  placeholder="카드에 표시될 한줄소개 (80자 이내)"
-                  className="w-full border border-dashed border-gray-500 bg-white px-4 py-2 text-sm outline-none focus:border-gray-700"
-                />
               </div>
             </div>
 
@@ -1106,6 +1094,19 @@ export default function ProfilePage() {
                   </div>
                 </section>
 
+                {/* 한줄소개 */}
+                <section>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 border-b border-dashed border-gray-300 pb-2 mb-4">한줄소개</h3>
+                  <input
+                    type="text"
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
+                    maxLength={20}
+                    placeholder="카드에 표시될 한줄소개 (20자 이내)"
+                    className="w-full border border-dashed border-gray-400 px-3 py-2 text-xs outline-none focus:border-gray-700 bg-white"
+                  />
+                </section>
+
                 {/* 오시 표시 여부 */}
                 <section>
                   <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 border-b border-dashed border-gray-300 pb-2 mb-4">오시 표시</h3>
@@ -1139,7 +1140,7 @@ export default function ProfilePage() {
                   </label>
 
                   {!cardHideBadges && (
-                    <p className="text-[10px] text-gray-400 mb-3">최대 4개 · 미선택 시 최근 획득 순으로 자동 표시</p>
+                    <p className="text-[10px] text-gray-400 mb-3">최대 4개 · 선택한 배지만 카드에 표시됩니다</p>
                   )}
 
                   {!cardHideBadges && (
@@ -1205,6 +1206,7 @@ export default function ProfilePage() {
                       card_show_oshi: cardShowOshi,
                       card_badge_ids: cardHideBadges ? ["__none__"] : cardBadgeIds,
                       card_image_url: cardImageUrl || null,
+                      card_avatar_url: cardAvatarUrl || null,
                       card_nickname_color: cardNicknameColor || null,
                       card_nickname_font: cardNicknameFont,
                       created_at: "",
