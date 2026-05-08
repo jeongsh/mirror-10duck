@@ -10,7 +10,7 @@ import { useCharacterStore } from "@/store/useCharacterStore";
 import type { CharacterActionKey } from "@/types/character";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
-import { formatDateTime, getCalendarEvents, getNewsItems } from "@/lib/otaku/hub";
+import { formatDateTime, getCalendarEvents } from "@/lib/otaku/hub";
 
 declare global {
   interface Window {
@@ -94,7 +94,7 @@ interface SpeechAnchor {
   y: number;
 }
 
-type AssistantActionKey = "today" | "week" | "following" | "news" | "review";
+type AssistantActionKey = "today" | "week" | "news";
 
 function normalizeCharacterAction(action: CharacterActionKey): CharacterActionKey {
   if (action === "tap_body") return "attention";
@@ -1029,12 +1029,12 @@ export default function Live2DWrapper() {
     try {
       if (action === "today") {
         const todayEvents = getCalendarEvents().filter(
-          (event) => ymdKey(event.startsAt) === ymdKey(new Date()),
+          (event) => event.isFollowing && ymdKey(event.startsAt) === ymdKey(new Date()),
         );
         const message =
           todayEvents.length > 0
             ? `오늘은 ${todayEvents.slice(0, 3).map((event) => event.title).join(", ")} 일정이 있어요.`
-            : "오늘 등록된 방영/연재/출시 일정은 없어요.";
+            : "오늘 관심 일정은 아직 없어요.";
         setTemporaryMessage(message, ASSISTANT_RESPONSE_DURATION_MS);
         useCharacterStore.getState().setEmotion("happy");
         return;
@@ -1043,7 +1043,7 @@ export default function Live2DWrapper() {
       if (action === "week") {
         const now = new Date();
         const weekEvents = getCalendarEvents()
-          .filter((event) => isWithinDays(new Date(event.startsAt), now, 7))
+          .filter((event) => event.isFollowing && isWithinDays(new Date(event.startsAt), now, 7))
           .slice(0, 3);
         const message =
           weekEvents.length > 0
@@ -1054,36 +1054,17 @@ export default function Live2DWrapper() {
         return;
       }
 
-      if (action === "following") {
-        const followed = getCalendarEvents().filter((event) => event.isFollowing).slice(0, 3);
-        const unreadCount = await fetchUnreadCount();
-        const eventText =
-          followed.length > 0
-            ? followed.map((event) => event.title).join(", ")
-            : "관심작 일정 없음";
-        setTemporaryMessage(
-          `내 관심작: ${eventText}. 안 읽은 알림은 ${unreadCount}개예요.`,
-          ASSISTANT_RESPONSE_DURATION_MS
-        );
-        useCharacterStore.getState().setEmotion("happy");
-        return;
-      }
-
       if (action === "news") {
-        const latestNews = getNewsItems().slice(0, 3);
-        setTemporaryMessage(
-          `새 소식: ${latestNews.map((item) => item.title).join(", ")}`,
-          ASSISTANT_RESPONSE_DURATION_MS
-        );
+        const unreadCount = await fetchUnreadCount();
+        const message =
+          unreadCount > 0
+            ? `새 알림이 ${unreadCount}개 있어요.`
+            : "확인할 새 알림은 없어요.";
+        setTemporaryMessage(message, ASSISTANT_RESPONSE_DURATION_MS);
         useCharacterStore.getState().setEmotion("happy");
         return;
       }
 
-      setTemporaryMessage(
-        "\ub9ac\ubdf0\ub97c \uc4f8 \ub54c\ub294 \uc88b\uc558\ub358 \uc810, \uc544\uc26c\uc6e0\ub358 \uc810, \ucd94\ucc9c \ub300\uc0c1\uc744 \ucc28\ub840\ub85c \uc801\uc73c\uba74 \ud3b8\ud574\uc694.",
-        ASSISTANT_RESPONSE_DURATION_MS
-      );
-      useCharacterStore.getState().setEmotion("idle");
     } catch (e) {
       console.warn("[Live2DWrapper] assistant action warning:", e);
       setTemporaryMessage(
@@ -1303,7 +1284,7 @@ function AssistantQuickActions({
         disabled={busyAction !== null}
         onClick={() => onAction("today")}
       >
-        {busyAction === "today" ? "\ud655\uc778 \uc911" : "\uc624\ub298 \ubc29\uc601"}
+        {busyAction === "today" ? "\ud655\uc778 \uc911" : "\uc624\ub298 \uc77c\uc815"}
       </button>
       <button
         type="button"
@@ -1316,30 +1297,12 @@ function AssistantQuickActions({
       </button>
       <button
         type="button"
-        data-testid="assistant-action-following"
-        className={buttonClass}
-        disabled={busyAction !== null}
-        onClick={() => onAction("following")}
-      >
-        {busyAction === "following" ? "\ud655\uc778 \uc911" : "\ub0b4 \uad00\uc2ec\uc791"}
-      </button>
-      <button
-        type="button"
         data-testid="assistant-action-news"
         className={buttonClass}
         disabled={busyAction !== null}
         onClick={() => onAction("news")}
       >
         {busyAction === "news" ? "\ud655\uc778 \uc911" : "\uc0c8 \uc18c\uc2dd"}
-      </button>
-      <button
-        type="button"
-        data-testid="assistant-action-review"
-        className={buttonClass}
-        disabled={busyAction !== null}
-        onClick={() => onAction("review")}
-      >
-        {"\ub9ac\ubdf0 \ub3c4\uc6c0"}
       </button>
       <button
         type="button"
