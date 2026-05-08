@@ -1,6 +1,6 @@
 # 에디터, 미디어, 스티커 설계
 
-이 문서는 글쓰기, 본문 에디터, 이미지/영상 업로드, 스티커 삽입 작업을 할 때 참고한다. 게시판 정책은 [community.md](./community.md), DB 확장은 [data-model.md](./data-model.md)를 함께 본다.
+이 문서는 글쓰기, 본문 에디터, 이미지/영상 업로드, 스티커 삽입 작업을 할 때 참고한다. NSFW/아청법 위험 대응은 [nsfw-csam-moderation.md](./nsfw-csam-moderation.md), 게시판 정책은 [community.md](./community.md), DB 확장은 [data-model.md](./data-model.md)를 함께 본다.
 
 ## 1. 현재 상태와 목표
 
@@ -48,6 +48,9 @@
 - 지원 포맷은 `jpeg`, `png`, `webp`, 선택적으로 `gif`를 허용한다.
 - SVG 업로드는 금지하거나 서버에서 안전한 래스터 이미지로 변환한다.
 - 게시판별 파일 수, 총 용량, 개별 용량, 해상도 제한을 설정한다.
+- 업로드 직후 원본은 공개 저장소가 아니라 비공개 검역 영역에 저장하고, NSFW/아청법 위험 검수 결과가 `approved`가 된 뒤에만 본문에 노출한다.
+- 일반 게시판은 NSFW 이미지가 감지되면 차단 또는 관리자 검수로 보내고, 성인 게시판도 미성년자/연령 불명 성적 콘텐츠 위험이 있으면 전체 차단한다.
+- 이미지 검수 결과는 `post_media.moderation_status`와 `moderation_results`에 연결해 작성 API가 승인되지 않은 미디어를 게시하지 못하게 한다.
 - 읽기 화면에서는 lazy loading, 반응형 크기, alt 텍스트를 고려한다.
 - 삭제된 글의 미디어는 즉시 삭제 또는 보존 기간 후 삭제 정책을 둔다.
 

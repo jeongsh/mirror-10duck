@@ -20,6 +20,7 @@
 | 글쓰기, 본문 에디터, 이미지/영상 업로드, 스티커 삽입 | [editor-media-stickers.md](./plans/editor-media-stickers.md) | [data-model.md](./plans/data-model.md), [character-community.md](./plans/character-community.md) |
 | DB 마이그레이션, Supabase 테이블, RLS, 집계 컬럼 | [data-model.md](./plans/data-model.md) | [DB_TABLES.md](./DB_TABLES.md), [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) |
 | 신고, 차단, 운영자 도구, 알림, 레이트 리밋 | [moderation-notifications.md](./plans/moderation-notifications.md) | [data-model.md](./plans/data-model.md), [community.md](./plans/community.md) |
+| NSFW 이미지, 성인 게시판, 아청법 위험 대응, AI 검수, 자동 블라인드 | [nsfw-csam-moderation.md](./plans/nsfw-csam-moderation.md) | [moderation-notifications.md](./plans/moderation-notifications.md), [editor-media-stickers.md](./plans/editor-media-stickers.md), [data-model.md](./plans/data-model.md) |
 | 애니·만화·게임 뉴스, 신작 알림, 방영/연재/출시 일정, 덕질 캘린더 | [news-release-calendar.md](./plans/news-release-calendar.md) | [moderation-notifications.md](./plans/moderation-notifications.md), [data-model.md](./plans/data-model.md), [character-community.md](./plans/character-community.md) |
 | Live2D, 캐릭터 리액션, 스티커 팩, 대표 캐릭터, 덕질 비서, 후순위 롤플레잉 | [character-community.md](./plans/character-community.md) | [LIVE2D_CHARACTER_GUIDE.md](./LIVE2D_CHARACTER_GUIDE.md), [ARCHITECTURE_OVERVIEW.md](./ARCHITECTURE_OVERVIEW.md) |
 | 화면 완성도, 페이지별 완료 기준, UX 누락 점검 | [screen-acceptance.md](./plans/screen-acceptance.md) | 관련 도메인 문서 |
@@ -40,7 +41,7 @@
 
 - 사용자는 게시판과 피드를 탐색하고, 글을 쓰고, 댓글을 달고, 추천/리액션을 남길 수 있으며, 글 목록에서 작성자 신원, 조회/댓글/추천 지표, 개념글 여부, 게시판 맥락을 한눈에 파악할 수 있다.
 - 사용자는 닉네임/프로필/캐릭터를 통해 자신을 구분할 수 있다.
-- 운영자는 신고, 삭제, 숨김, 제재를 수행할 수 있어야 한다.
+- 운영자는 신고, 삭제, 숨김, 제재를 수행할 수 있어야 하며, 이미지 업로드와 성인 게시판에는 NSFW/아청법 위험 대응을 위한 자동 검수와 관리자 검수 체계를 둔다.
 - 캐릭터는 우측 하단 장식에 머물지 않고 스티커, 리액션, 알림, 프로필과 연결되어야 한다.
 - 사용자는 관심 신작과 애니·만화·게임 일정을 등록하고, 오늘 방영/연재/출시·주요 뉴스 알림을 받을 수 있어야 한다.
 
@@ -58,7 +59,7 @@
 ## 5. 단계별 마일스톤 요약
 
 - **Phase 1. 프로젝트 기반 구축:** Next.js, TypeScript, Tailwind, Zustand, Supabase, 전역 Live2D 컨테이너, 기본 캐릭터 라이브러리 구축 완료.
-- **Phase 2. 커뮤니티 기본 루프:** 게시판, 글, 댓글, 감정 리액션, 팔로우 피드, 크로스포스트는 1차 구현됨. 남은 핵심은 신원 뱃지, 추천/비추천, 조회/댓글 집계, 검색, 대댓글, 신고/운영, 알림, 에디터 미디어 업로드다.
+- **Phase 2. 커뮤니티 기본 루프:** 게시판, 글, 댓글, 감정 리액션, 팔로우 피드, 크로스포스트, 추천/비추천, 집계, 신고 큐, 미디어 업로드는 1차 구현됨. 남은 핵심은 운영자 권한/로그, 레이트 리밋, NSFW/아청법 위험 대응 자동 검수, 성인 게시판 정책, 신고 기반 자동 블라인드 고도화다.
 - **Phase 3. 덕질 허브와 캐릭터 커뮤니티 고도화:** 애니·만화·게임 뉴스, 신작 관심 등록, 방영/연재/출시 알림, 덕질 캘린더, Live2D 오늘의 브리핑, 스티커 관리, 대표 캐릭터 공개 프로필, 글/댓글 캐릭터 스냅샷, 커뮤니티 리액션 연출, 알림·추천·글쓰기 보조. 캐릭터 제작/의상/표정 변경은 일반 사용자 핵심 루프가 아니라 운영자/크리에이터용 확장으로 둔다. 롤플레잉 채팅은 동료 니즈를 반영해 후순위 확장으로 남기되, 초기 제품 정체성으로 삼지 않는다.
 - **Phase 4. 수익화와 제휴:** 광고, 제휴 링크, 스폰서드 콘텐츠 구분, 프리미엄 알림·추천, 커뮤니티 부스팅.
 - **Phase 5. 모바일 앱과 확장:** React Native Expo 검토, 모바일 커뮤니티 UX, 푸시 알림, 이미지/카메라 업로드, WebRTC R&D.
@@ -72,7 +73,7 @@
 3. 게시판 목록과 글 목록의 정보 밀도를 커뮤니티답게 올린다.
 4. 댓글 신고/삭제/대댓글을 구현한다.
 5. 운영 최소 기능인 신고 큐와 숨김 처리를 만든다.
-6. 에디터의 블록 콘텐츠 모델을 확정하고 이미지 업로드부터 붙인다.
+6. 에디터 이미지 업로드에 NSFW/아청법 위험 대응 검수 파이프라인을 붙인다.
 7. 알림 테이블과 GNB 알림 카운트를 붙인 뒤 Live2D 말풍선과 연결한다.
 8. `/calendar`를 커뮤니티 일정 더미에서 신작/방영/연재/출시 일정과 관심작 알림 설정 화면으로 재설계한다.
 9. 뉴스와 신작은 작품 DB가 아니라 출처 기반 뉴스 카드, 얇은 일정 카드, 관심 등록, 알림 중심으로 설계한다.

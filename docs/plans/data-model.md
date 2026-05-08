@@ -24,6 +24,9 @@
 - [ ] `notifications`: user_id, actor_id, type, target_type, target_id, read_at
 - [ ] `moderation_logs`: moderator_id, action, target_type, target_id, reason, created_at
 - [ ] `post_media`: post_id, storage_key, media_type, width, height, duration, status
+- [ ] `moderation_results`: target_type, target_id, image_sha256, image_phash, status, nsfw_score, minor_signal_score, risk_score, tags, matched_rules, model_version, policy_version, reviewed_by
+- [ ] `moderation_queue`: target_type, target_id, moderation_result_id, priority, reason, status, assigned_to, due_at
+- [ ] `blocked_image_hashes`: image_sha256, image_phash, reason, source_moderation_result_id, policy_version
 - [ ] `stickers`: owner_user_id, character_id, name, visibility, created_at
 - [ ] `sticker_assets`: sticker_id, emotion, storage_key, width, height
 - [ ] `board_moderators`: board_id, user_id, role, created_at
@@ -51,6 +54,10 @@
 - [ ] `posts.status`
 - [ ] `posts.board_tab`
 - [ ] `posts.spoiler_level`
+- [ ] `post_media.moderation_status`
+- [ ] `post_media.moderation_result_id`
+- [ ] `post_media.image_sha256`
+- [ ] `post_media.image_phash`
 - [ ] `comments.parent_comment_id`
 - [ ] `comments.author_display_name`
 - [ ] `comments.author_nickname_type`
@@ -62,6 +69,7 @@
 - [ ] `boards.icon_url`
 - [ ] `boards.banner_url`
 - [ ] `boards.is_nsfw`
+- [ ] `boards.requires_age_verification`
 
 ## 4. 집계와 정합성 원칙
 
