@@ -11,19 +11,48 @@ import CharacterUploader, {
   CharacterUploadPreview,
   INITIAL_UPLOAD_VIEW,
 } from "@/components/character/CharacterUploader";
-import { Board } from "@/types/community";
+import { Board, OshiRegistration, OshiType, Badge, UserBadge, CardTheme, UserProfile } from "@/types/community";
 import { listCharacterProfiles } from "@/lib/supabase/characters";
 import { BASE_PROFILES, mergeProfiles } from "@/lib/live2d/profileSync";
 import { getProfile, updateProfile, checkHandleAvailability } from "@/lib/supabase/profiles";
+import { getOshiList, upsertOshi, deleteOshi } from "@/lib/supabase/oshi";
+import { getAllBadges, getUserBadges, checkAndGrantOshiBadges } from "@/lib/supabase/badges";
+import AuthorProfileCard from "@/components/community/AuthorProfileCard";
+import { CARD_THEMES, THEME_ORDER } from "@/lib/cardThemes";
+import CardImageCropModal from "@/components/profile/CardImageCropModal";
 
-type TabId = "profile" | "library" | "subscription" | "account";
+type TabId = "profile" | "library" | "subscription" | "oshi" | "card" | "account";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "profile", label: "프로필" },
   { id: "library", label: "캐릭터 관리" },
   { id: "subscription", label: "구독 채널" },
+  { id: "oshi", label: "오시 & 배지" },
+  { id: "card", label: "카드 꾸미기" },
   { id: "account", label: "계정 설정" },
 ];
+
+const OSHI_TYPE_LABELS: Record<OshiType, string> = {
+  anime: "애니",
+  manga: "만화",
+  game: "게임",
+  character: "캐릭터",
+  other: "기타",
+};
+
+const RARITY_COLORS: Record<string, string> = {
+  common: "border-gray-300 bg-gray-50 text-gray-600",
+  rare: "border-blue-300 bg-blue-50 text-blue-700",
+  epic: "border-purple-300 bg-purple-50 text-purple-700",
+  legendary: "border-yellow-400 bg-yellow-50 text-yellow-700",
+};
+
+const RARITY_LABELS: Record<string, string> = {
+  common: "COMMON",
+  rare: "RARE",
+  epic: "EPIC",
+  legendary: "LEGENDARY",
+};
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -31,12 +60,19 @@ export default function ProfilePage() {
   const profiles = useCharacterLibraryStore((s) => s.profiles);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const thumbnailCaptureRef = useRef<(() => Promise<Blob | null>) | null>(null);
+  const oshiImageInputRef = useRef<HTMLInputElement>(null);
+  const cardImageInputRef = useRef<HTMLInputElement>(null);
+  const cardAvatarInputRef = useRef<HTMLInputElement>(null);
+  const [oshiImageUploading, setOshiImageUploading] = useState(false);
+  const [cardImageUploading, setCardImageUploading] = useState(false);
+  const [cardAvatarUploading, setCardAvatarUploading] = useState(false);
   
   const [activeTab, setActiveTab] = useState<TabId>("profile");
   
   // 프로필 상태
   const [nickname, setNickname] = useState("");
   const [handle, setHandle] = useState("");
+  const [bio, setBio] = useState("");
   const [handleUpdatedAt, setHandleUpdatedAt] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState("");
   const [tempAvatarUrl, setTempAvatarUrl] = useState("");
@@ -65,6 +101,36 @@ export default function ProfilePage() {
   // 팔로우 상태
   const [followedBoards, setFollowedBoards] = useState<Board[]>([]);
   const [boardsLoading, setBoardsLoading] = useState(true);
+
+  // 카드 커스터마이징 상태
+  const [cardTheme, setCardTheme] = useState<CardTheme>("default");
+  const [cardAccent, setCardAccent] = useState<string>("");
+  const [cardShowOshi, setCardShowOshi] = useState<boolean>(true);
+  const [cardBadgeIds, setCardBadgeIds] = useState<string[]>([]);
+  const [cardHideBadges, setCardHideBadges] = useState(false);
+  const [cardNicknameColor, setCardNicknameColor] = useState("");
+  const [cardNicknameFont, setCardNicknameFont] = useState<"sans" | "serif" | "mono">("sans");
+  const [cardImageUrl, setCardImageUrl] = useState<string>("");
+  const [cardSaving, setCardSaving] = useState(false);
+  const [cardMessage, setCardMessage] = useState("");
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [cropType, setCropType] = useState<"banner" | "avatar">("banner");
+
+  // 오시 & 배지 상태
+  const [oshiList, setOshiList] = useState<OshiRegistration[]>([]);
+  const [allBadges, setAllBadges] = useState<Badge[]>([]);
+  const [userBadges, setUserBadges] = useState<UserBadge[]>([]);
+  const [oshiLoading, setOshiLoading] = useState(true);
+  const [showOshiForm, setShowOshiForm] = useState(false);
+  const [editingOshi, setEditingOshi] = useState<OshiRegistration | null>(null);
+  const [oshiForm, setOshiForm] = useState({
+    title: "",
+    oshi_type: "anime" as OshiType,
+    image_url: "",
+    description: "",
+    is_public: true,
+  });
+  const [newBadgeIds, setNewBadgeIds] = useState<string[]>([]);
 
   // 캐릭터 라이브러리 동기화 및 관리
   const setProfiles = useCharacterLibraryStore((s) => s.setProfiles);
@@ -113,11 +179,26 @@ export default function ProfilePage() {
       if (dbProfile) {
         setNickname(dbProfile.nickname || "");
         setHandle(dbProfile.handle || "");
+        setBio((dbProfile as any).bio || "");
         setHandleUpdatedAt(dbProfile.handle_updated_at);
         const savedAvatar = dbProfile.avatar_url || "";
         setAvatarUrl(savedAvatar);
         setTempAvatarUrl(savedAvatar);
         setIsFixedNickname(dbProfile.nickname_type === "FIXED");
+        setCardTheme((dbProfile.card_theme as CardTheme) || "default");
+        setCardAccent(dbProfile.card_accent || "");
+        setCardShowOshi(dbProfile.card_show_oshi !== false);
+        const rawBadgeIds = dbProfile.card_badge_ids || [];
+        if (rawBadgeIds.includes("__none__")) {
+          setCardHideBadges(true);
+          setCardBadgeIds([]);
+        } else {
+          setCardHideBadges(false);
+          setCardBadgeIds(rawBadgeIds);
+        }
+        setCardImageUrl(dbProfile.card_image_url || "");
+        setCardNicknameColor((dbProfile as any).card_nickname_color || "");
+        setCardNicknameFont(((dbProfile as any).card_nickname_font as "sans" | "serif" | "mono") || "sans");
       } else {
         // 하위 호환성: 메타데이터 사용
         setNickname(user.user_metadata?.nickname || "");
@@ -130,6 +211,17 @@ export default function ProfilePage() {
       const savedProfiles = await listCharacterProfiles();
       const allProfiles = mergeProfiles(BASE_PROFILES, savedProfiles);
       setProfiles(allProfiles);
+
+      // 오시 & 배지 동기화
+      const [oshiData, badgesData, userBadgesData] = await Promise.all([
+        getOshiList(user.id),
+        getAllBadges(),
+        getUserBadges(user.id),
+      ]);
+      setOshiList(oshiData);
+      setAllBadges(badgesData);
+      setUserBadges(userBadgesData);
+      setOshiLoading(false);
     };
 
     void syncData();
@@ -212,7 +304,8 @@ export default function ProfilePage() {
         handle,
         handle_updated_at: newHandleUpdatedAt,
         avatar_url: tempAvatarUrl,
-        nickname_type: isFixedNickname ? "FIXED" : "TEMPORARY"
+        nickname_type: isFixedNickname ? "FIXED" : "TEMPORARY",
+        ...({ bio: bio.trim() || null } as any),
       });
 
       // 2. Auth 메타데이터 업데이트 (편의상 유지)
@@ -325,6 +418,29 @@ export default function ProfilePage() {
     }
   };
 
+  const handleOshiImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setOshiImageUploading(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const filePath = `${user.id}/oshi/${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("character-assets")
+        .upload(filePath, file, { upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: { publicUrl } } = supabase.storage
+        .from("character-assets")
+        .getPublicUrl(filePath);
+      setOshiForm((f) => ({ ...f, image_url: publicUrl }));
+    } catch (err: any) {
+      alert(`업로드 오류: ${err.message}`);
+    } finally {
+      setOshiImageUploading(false);
+      e.target.value = "";
+    }
+  };
+
   const openAvatarModal = () => {
     setModalAvatarDraft(tempAvatarUrl);
     setShowAvatarModal(true);
@@ -362,6 +478,174 @@ export default function ProfilePage() {
     router.push("/");
   };
 
+  const handleSaveCard = async () => {
+    if (!user) return;
+    setCardSaving(true);
+    setCardMessage("");
+    try {
+      await updateProfile(user.id, {
+        avatar_url: avatarUrl || null,
+        card_theme: cardTheme,
+        card_accent: cardAccent || null,
+        card_show_oshi: cardShowOshi,
+        card_badge_ids: cardHideBadges ? ["__none__"] : cardBadgeIds,
+        card_image_url: cardImageUrl || null,
+        card_nickname_color: cardNicknameColor || null,
+        card_nickname_font: cardNicknameFont,
+      } as any);
+      setCardMessage("저장됐습니다.");
+    } catch (err: any) {
+      setCardMessage(`오류: ${err.message}`);
+    } finally {
+      setCardSaving(false);
+    }
+  };
+
+  const handleCardImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCropType("banner");
+    setCropSrc(URL.createObjectURL(file));
+    e.target.value = "";
+  };
+
+  const handleCardAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCropType("avatar");
+    setCropSrc(URL.createObjectURL(file));
+    e.target.value = "";
+  };
+
+  const handleCropConfirm = async (blob: Blob) => {
+    if (!user) return;
+    const type = cropType;
+    if (cropSrc) URL.revokeObjectURL(cropSrc);
+    setCropSrc(null);
+
+    if (type === "banner") {
+      setCardImageUploading(true);
+      try {
+        const filePath = `${user.id}/card/${Date.now()}.jpg`;
+        const { error: uploadError } = await supabase.storage
+          .from("character-assets")
+          .upload(filePath, blob, { upsert: true, contentType: "image/jpeg" });
+        if (uploadError) throw uploadError;
+        const { data: { publicUrl } } = supabase.storage
+          .from("character-assets")
+          .getPublicUrl(filePath);
+        setCardImageUrl(publicUrl);
+      } catch (err: any) {
+        alert(`업로드 오류: ${err.message}`);
+      } finally {
+        setCardImageUploading(false);
+      }
+    } else {
+      setCardAvatarUploading(true);
+      try {
+        const filePath = `${user.id}/avatars/avatar-${Date.now()}.jpg`;
+        const { error: uploadError } = await supabase.storage
+          .from("character-assets")
+          .upload(filePath, blob, { upsert: true, contentType: "image/jpeg" });
+        if (uploadError) throw uploadError;
+        const { data: { publicUrl } } = supabase.storage
+          .from("character-assets")
+          .getPublicUrl(filePath);
+        setAvatarUrl(publicUrl);
+      } catch (err: any) {
+        alert(`업로드 오류: ${err.message}`);
+      } finally {
+        setCardAvatarUploading(false);
+      }
+    }
+  };
+
+  const toggleCardBadge = (badgeId: string) => {
+    setCardBadgeIds((prev) => {
+      if (prev.includes(badgeId)) return prev.filter((id) => id !== badgeId);
+      if (prev.length >= 4) return prev; // 최대 4개
+      return [...prev, badgeId];
+    });
+  };
+
+  const openOshiForm = (existing?: OshiRegistration) => {
+    if (existing) {
+      setEditingOshi(existing);
+      setOshiForm({
+        title: existing.title,
+        oshi_type: existing.oshi_type,
+        image_url: existing.image_url ?? "",
+        description: existing.description ?? "",
+        is_public: existing.is_public,
+      });
+    } else {
+      setEditingOshi(null);
+      setOshiForm({ title: "", oshi_type: "anime", image_url: "", description: "", is_public: true });
+    }
+    setShowOshiForm(true);
+  };
+
+  const handleOshiSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    if (!oshiForm.title.trim()) return;
+
+    setLoading(true);
+    try {
+      const rank = editingOshi ? editingOshi.rank : (oshiList.length + 1);
+      const saved = await upsertOshi(user.id, rank, {
+        title: oshiForm.title.trim(),
+        oshi_type: oshiForm.oshi_type,
+        image_url: oshiForm.image_url.trim() || undefined,
+        description: oshiForm.description.trim() || undefined,
+        is_public: oshiForm.is_public,
+      });
+
+      setOshiList((prev) => {
+        const without = prev.filter((o) => o.rank !== rank);
+        return [...without, saved].sort((a, b) => a.rank - b.rank);
+      });
+
+      // 배지 자동 체크
+      const newIds = await checkAndGrantOshiBadges(user.id);
+      if (newIds.length > 0) {
+        setNewBadgeIds(newIds);
+        const fresh = await getUserBadges(user.id);
+        setUserBadges(fresh);
+        setTimeout(() => setNewBadgeIds([]), 4000);
+      }
+
+      setShowOshiForm(false);
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOshiDelete = async (oshi: OshiRegistration) => {
+    if (!user) return;
+    if (!confirm(`"${oshi.title}" 오시 등록을 삭제하시겠습니까?`)) return;
+    setLoading(true);
+    try {
+      await deleteOshi(user.id, oshi.id);
+      const remaining = oshiList.filter((o) => o.id !== oshi.id);
+      // rank 재정렬
+      const reranked = remaining.map((o, idx) => ({ ...o, rank: idx + 1 }));
+      setOshiList(reranked);
+
+      const newIds = await checkAndGrantOshiBadges(user.id);
+      if (newIds.length > 0) {
+        const fresh = await getUserBadges(user.id);
+        setUserBadges(fresh);
+      }
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSelectCharacter = async (profileId: string) => {
     const selected = profiles.find((p) => p.id === profileId);
     if (selected) {
@@ -389,6 +673,14 @@ export default function ProfilePage() {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 p-6 font-sans text-gray-800">
+      {cropSrc && (
+        <CardImageCropModal
+          imageSrc={cropSrc}
+          aspect={cropType === "avatar" ? 1 : 4}
+          onConfirm={handleCropConfirm}
+          onCancel={() => { URL.revokeObjectURL(cropSrc); setCropSrc(null); }}
+        />
+      )}
       {/* GNB 연동 탭 네비게이션 */}
       <div className="flex flex-wrap gap-x-6 border-b border-dashed border-gray-400 pb-2 mb-6">
         {TABS.map((tab) => (
@@ -463,6 +755,21 @@ export default function ProfilePage() {
               </div>
             </div>
 
+            {/* 한줄소개 행 */}
+            <div className="flex flex-col md:flex-row gap-6 md:gap-20">
+              <label className="w-40 text-sm font-bold shrink-0 pt-2 uppercase tracking-tight">한줄소개</label>
+              <div className="flex-1 max-w-2xl">
+                <input
+                  type="text"
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  maxLength={80}
+                  placeholder="카드에 표시될 한줄소개 (80자 이내)"
+                  className="w-full border border-dashed border-gray-500 bg-white px-4 py-2 text-sm outline-none focus:border-gray-700"
+                />
+              </div>
+            </div>
+
             {/* 닉네임 행 */}
             <div className="flex flex-col md:flex-row gap-6 md:gap-20">
               <label className="w-40 text-sm font-bold shrink-0 pt-2 uppercase tracking-tight">닉네임</label>
@@ -508,6 +815,460 @@ export default function ProfilePage() {
               </div>
             </div>
           </form>
+        )}
+
+        {activeTab === "oshi" && (
+          <div className="space-y-10">
+            {/* 획득한 새 배지 토스트 */}
+            {newBadgeIds.length > 0 && (
+              <div className="border border-dashed border-yellow-400 bg-yellow-50 px-5 py-3 text-xs font-bold text-yellow-700 flex items-center gap-3">
+                <span className="text-lg">🎉</span>
+                새 배지 획득! {newBadgeIds.map((id) => allBadges.find((b) => b.id === id)?.name).filter(Boolean).join(", ")}
+              </div>
+            )}
+
+            {/* 오시 섹션 */}
+            <section>
+              <div className="flex items-end justify-between border-b border-dashed border-gray-300 pb-2 mb-6">
+                <div>
+                  <h2 className="text-sm font-bold uppercase tracking-widest text-gray-500">내 오시 (推し)</h2>
+                  <p className="text-[11px] text-gray-400 mt-0.5">최대 5개 · 1번이 메인 오시</p>
+                </div>
+                {oshiList.length < 5 && (
+                  <button
+                    type="button"
+                    onClick={() => openOshiForm()}
+                    className="border border-dashed border-gray-800 bg-white px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-800 hover:bg-gray-800 hover:text-white transition-colors"
+                  >
+                    [+ 오시 추가]
+                  </button>
+                )}
+              </div>
+
+              {oshiLoading ? (
+                <p className="text-center py-8 text-xs text-gray-400 animate-pulse italic font-bold">LOADING...</p>
+              ) : oshiList.length === 0 ? (
+                <div className="border border-dashed border-gray-300 bg-gray-50/50 p-12 text-center text-xs text-gray-400 italic space-y-2">
+                  <div className="text-3xl">💘</div>
+                  <p>아직 등록된 오시가 없습니다.</p>
+                  <button
+                    type="button"
+                    onClick={() => openOshiForm()}
+                    className="mt-2 border border-dashed border-gray-400 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-600 hover:bg-gray-100 transition-colors"
+                  >
+                    [첫 오시 등록하기]
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {/* 메인 오시 (rank 1) */}
+                  {oshiList.filter((o) => o.rank === 1).map((oshi) => (
+                    <div key={oshi.id} className="flex gap-4 border border-gray-700 bg-gray-50 p-4">
+                      <div className="shrink-0 w-16 h-16 border border-dashed border-gray-400 bg-gray-100 overflow-hidden">
+                        {oshi.image_url ? (
+                          <img src={oshi.image_url} alt={oshi.title} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-lg">💘</div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[9px] font-bold bg-gray-800 text-white px-1.5 py-0.5">#1 메인 오시</span>
+                          <span className="text-[9px] border border-dashed border-gray-400 text-gray-500 px-1 font-bold uppercase">{OSHI_TYPE_LABELS[oshi.oshi_type]}</span>
+                          {!oshi.is_public && <span className="text-[9px] border border-dashed border-gray-300 text-gray-400 px-1">비공개</span>}
+                        </div>
+                        <p className="mt-1 text-sm font-bold text-gray-900 truncate">{oshi.title}</p>
+                        {oshi.description && <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-1 italic">{oshi.description}</p>}
+                      </div>
+                      <div className="flex flex-col gap-1 shrink-0">
+                        <button onClick={() => openOshiForm(oshi)} className="border border-dashed border-gray-400 px-3 py-1 text-[10px] font-bold text-gray-500 hover:bg-gray-100 transition-colors">[편집]</button>
+                        <button onClick={() => handleOshiDelete(oshi)} className="border border-dashed border-red-300 px-3 py-1 text-[10px] font-bold text-red-400 hover:bg-red-50 transition-colors">[삭제]</button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* 서브 오시 (rank 2~5) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {oshiList.filter((o) => o.rank > 1).map((oshi) => (
+                      <div key={oshi.id} className="flex gap-3 border border-dashed border-gray-400 bg-white p-3 group hover:border-gray-700 transition-colors">
+                        <div className="shrink-0 w-10 h-10 border border-dashed border-gray-300 bg-gray-50 overflow-hidden">
+                          {oshi.image_url ? (
+                            <img src={oshi.image_url} alt={oshi.title} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-sm">🎌</div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[9px] font-bold text-gray-400">#{oshi.rank}</span>
+                            <span className="text-[9px] border border-dashed border-gray-300 text-gray-400 px-1 uppercase">{OSHI_TYPE_LABELS[oshi.oshi_type]}</span>
+                          </div>
+                          <p className="text-xs font-bold text-gray-800 truncate mt-0.5">{oshi.title}</p>
+                          {oshi.description && <p className="text-[10px] text-gray-400 truncate italic">{oshi.description}</p>}
+                        </div>
+                        <div className="flex flex-col gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => openOshiForm(oshi)} className="text-[9px] font-bold text-gray-400 hover:text-gray-700 px-1">[편집]</button>
+                          <button onClick={() => handleOshiDelete(oshi)} className="text-[9px] font-bold text-red-300 hover:text-red-500 px-1">[삭제]</button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* 빈 슬롯 */}
+                    {Array.from({ length: Math.max(0, 4 - oshiList.filter((o) => o.rank > 1).length) }).map((_, i) => (
+                      <button
+                        key={`empty-${i}`}
+                        type="button"
+                        onClick={() => openOshiForm()}
+                        disabled={oshiList.length >= 5}
+                        className="flex items-center justify-center gap-2 border border-dashed border-gray-200 bg-gray-50/50 p-3 text-[10px] text-gray-300 hover:border-gray-400 hover:text-gray-400 transition-colors disabled:cursor-default h-16"
+                      >
+                        + 추가
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* 배지 섹션 */}
+            <section>
+              <div className="flex items-end justify-between border-b border-dashed border-gray-300 pb-2 mb-6">
+                <h2 className="text-sm font-bold uppercase tracking-widest text-gray-500">내 배지</h2>
+                <span className="text-[10px] text-gray-400">
+                  획득 {userBadges.length} / 전체 {allBadges.length}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {allBadges.map((badge) => {
+                  const earned = userBadges.find((ub) => ub.badge_id === badge.id);
+                  const isNew = newBadgeIds.includes(badge.id);
+                  return (
+                    <div
+                      key={badge.id}
+                      className={`relative border border-dashed p-3 flex flex-col gap-1.5 transition-all ${
+                        earned
+                          ? `${RARITY_COLORS[badge.rarity]} ${isNew ? "ring-2 ring-yellow-400 ring-offset-1" : ""}`
+                          : "border-gray-200 bg-gray-50/30 opacity-40 grayscale"
+                      }`}
+                    >
+                      {isNew && (
+                        <span className="absolute -top-1.5 -right-1.5 text-[9px] font-bold bg-yellow-400 text-white px-1">NEW</span>
+                      )}
+                      <div className="text-2xl">{badge.icon}</div>
+                      <div>
+                        <p className="text-[11px] font-bold text-gray-800 leading-tight">{badge.name}</p>
+                        <p className="text-[10px] text-gray-500 leading-tight mt-0.5">{badge.description}</p>
+                      </div>
+                      <span className={`self-start text-[9px] font-bold px-1 border border-dashed ${RARITY_COLORS[badge.rarity]}`}>
+                        {RARITY_LABELS[badge.rarity]}
+                      </span>
+                      {earned && (
+                        <p className="text-[9px] text-gray-400">
+                          {new Date(earned.earned_at).toLocaleDateString("ko-KR")} 획득
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {activeTab === "card" && (
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+                {/* 카드 이미지 */}
+                <section>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 border-b border-dashed border-gray-300 pb-2 mb-4">카드 이미지</h3>
+                  <p className="text-[10px] text-gray-400 mb-3">카드 상단 배너로 표시됩니다. 권장 비율 16:4 (예: 800×200)</p>
+                  {cardImageUrl ? (
+                    <div className="space-y-2">
+                      <div className="relative h-24 w-full overflow-hidden border border-dashed border-gray-400">
+                        <img src={cardImageUrl} alt="card" className="h-full w-full object-cover" />
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={cardImageUploading}
+                          onClick={() => cardImageInputRef.current?.click()}
+                          className="border border-dashed border-gray-400 px-3 py-1.5 text-[11px] font-bold text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                        >
+                          {cardImageUploading ? "업로드 중..." : "이미지 변경"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCardImageUrl("")}
+                          className="border border-dashed border-red-300 px-3 py-1.5 text-[11px] font-bold text-red-400 hover:bg-red-50"
+                        >
+                          이미지 제거
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={cardImageUploading}
+                      onClick={() => cardImageInputRef.current?.click()}
+                      className="w-full border border-dashed border-gray-400 bg-gray-50/50 py-8 text-[11px] font-bold text-gray-400 hover:border-gray-600 hover:text-gray-600 disabled:opacity-50 transition-colors flex flex-col items-center gap-2"
+                    >
+                      <span className="text-2xl">🖼️</span>
+                      {cardImageUploading ? "업로드 중..." : "파일 선택"}
+                    </button>
+                  )}
+                  <input
+                    ref={cardImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleCardImageUpload}
+                  />
+                </section>
+
+                {/* 테마 선택 */}
+                <section>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 border-b border-dashed border-gray-300 pb-2 mb-4">테마</h3>
+                  <div className="grid grid-cols-4 gap-2">
+                    {THEME_ORDER.map((themeKey) => {
+                      const t = CARD_THEMES[themeKey];
+                      const isActive = cardTheme === themeKey;
+                      return (
+                        <button
+                          key={themeKey}
+                          type="button"
+                          onClick={() => {
+                            setCardTheme(themeKey);
+                            setCardNicknameColor(t.nicknameColor);
+                            setCardNicknameFont(t.nicknameFont);
+                          }}
+                          className={`flex flex-col items-center gap-1.5 border p-2 transition-all ${
+                            isActive
+                              ? "border-gray-900 ring-2 ring-gray-900 ring-offset-1"
+                              : "border-dashed border-gray-300 hover:border-gray-500"
+                          }`}
+                        >
+                          <span className="text-xl">{t.emoji}</span>
+                          <span className="text-[10px] font-bold text-gray-700">{t.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                {/* 닉네임 스타일 */}
+                <section>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 border-b border-dashed border-gray-300 pb-2 mb-4">닉네임 스타일</h3>
+
+                  {/* 폰트 선택 */}
+                  <div className="flex gap-2 mb-3">
+                    {(["sans", "serif", "mono"] as const).map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setCardNicknameFont(f)}
+                        className={`flex-1 border py-1.5 text-[11px] font-bold transition-all ${
+                          cardNicknameFont === f
+                            ? "border-gray-900 bg-gray-900 text-white"
+                            : "border-dashed border-gray-300 text-gray-600 hover:border-gray-500"
+                        } ${f === "serif" ? "font-serif" : f === "mono" ? "font-mono" : "font-sans"}`}
+                      >
+                        {{ sans: "고딕", serif: "명조", mono: "모노" }[f]}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* 색상 선택 */}
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={cardNicknameColor || "#111111"}
+                      onChange={(e) => setCardNicknameColor(e.target.value)}
+                      className="w-9 h-9 border border-dashed border-gray-400 cursor-pointer bg-transparent shrink-0"
+                    />
+                    <input
+                      type="text"
+                      value={cardNicknameColor}
+                      onChange={(e) => setCardNicknameColor(e.target.value)}
+                      placeholder="#hex (비우면 기본 색상)"
+                      className="flex-1 border border-dashed border-gray-400 px-3 py-2 text-xs outline-none focus:border-gray-700 bg-white"
+                    />
+                    {cardNicknameColor && (
+                      <button
+                        type="button"
+                        onClick={() => setCardNicknameColor("")}
+                        className="text-[10px] font-bold text-gray-400 hover:text-red-500 border border-dashed border-gray-300 px-2 py-2 shrink-0"
+                      >
+                        초기화
+                      </button>
+                    )}
+                  </div>
+                </section>
+
+                {/* 오시 표시 여부 */}
+                <section>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 border-b border-dashed border-gray-300 pb-2 mb-4">오시 표시</h3>
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={cardShowOshi}
+                      onChange={(e) => setCardShowOshi(e.target.checked)}
+                      className="accent-gray-800 w-4 h-4"
+                    />
+                    <span className="text-xs font-bold text-gray-700">카드에 메인 오시 표시</span>
+                  </label>
+                </section>
+
+                {/* 배지 고정 선택 */}
+                <section>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 border-b border-dashed border-gray-300 pb-2 mb-3">카드에 고정할 배지</h3>
+
+                  {/* 표시 여부 토글 */}
+                  <label className="flex items-center gap-2 cursor-pointer select-none mb-3">
+                    <input
+                      type="checkbox"
+                      checked={!cardHideBadges}
+                      onChange={(e) => {
+                        setCardHideBadges(!e.target.checked);
+                        if (!e.target.checked) setCardBadgeIds([]);
+                      }}
+                      className="accent-gray-800 w-4 h-4"
+                    />
+                    <span className="text-xs font-bold text-gray-700">카드에 배지 표시</span>
+                  </label>
+
+                  {!cardHideBadges && (
+                    <p className="text-[10px] text-gray-400 mb-3">최대 4개 · 미선택 시 최근 획득 순으로 자동 표시</p>
+                  )}
+
+                  {!cardHideBadges && (
+                    userBadges.length === 0 ? (
+                      <p className="text-[11px] text-gray-400 italic">획득한 배지가 없습니다.</p>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2">
+                        {userBadges.map((ub) => {
+                          if (!ub.badge) return null;
+                          const isPinned = cardBadgeIds.includes(ub.badge_id);
+                          const order = cardBadgeIds.indexOf(ub.badge_id);
+                          return (
+                            <button
+                              key={ub.badge_id}
+                              type="button"
+                              onClick={() => toggleCardBadge(ub.badge_id)}
+                              disabled={!isPinned && cardBadgeIds.length >= 4}
+                              className={`flex items-center gap-2 border p-2 text-left transition-all disabled:opacity-40 ${
+                                isPinned
+                                  ? "border-gray-800 bg-gray-50 ring-1 ring-gray-700"
+                                  : "border-dashed border-gray-300 hover:border-gray-500"
+                              }`}
+                            >
+                              <span className="text-lg">{ub.badge.icon}</span>
+                              <span className="text-[10px] font-bold text-gray-700 flex-1 leading-tight">{ub.badge.name}</span>
+                              {isPinned && (
+                                <span className="text-[9px] font-black bg-gray-800 text-white px-1">
+                                  {order + 1}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )
+                  )}
+                </section>
+
+            </div>
+
+            {/* 미리보기 — 풀너비 */}
+            <section className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 border-b border-dashed border-gray-300 pb-2">미리보기</h3>
+              <p className="text-[10px] text-gray-400">카드 위에서 직접 클릭해 편집할 수 있습니다.</p>
+
+              <div className="relative group">
+                <AuthorProfileCard
+                  profile={{
+                    ...(({
+                      id: user?.id ?? "",
+                      user_id: user?.id ?? "",
+                      nickname,
+                      display_name: null,
+                      handle,
+                      handle_updated_at: null,
+                      avatar_url: avatarUrl,
+                      bio: bio || null,
+                      representative_character_id: null,
+                      nickname_type: isFixedNickname ? "FIXED" : "TEMPORARY",
+                      role: "USER",
+                      card_theme: cardTheme,
+                      card_accent: null,
+                      card_show_oshi: cardShowOshi,
+                      card_badge_ids: cardHideBadges ? ["__none__"] : cardBadgeIds,
+                      card_image_url: cardImageUrl || null,
+                      card_nickname_color: cardNicknameColor || null,
+                      card_nickname_font: cardNicknameFont,
+                      created_at: "",
+                      updated_at: "",
+                    }) as UserProfile),
+                  }}
+                  authorId={user?.id ?? null}
+                  viewerId={null}
+                  isFollowing={false}
+                  onToggleFollow={() => {}}
+                />
+
+                {/* 배경 편집 오버레이 */}
+                <button
+                  type="button"
+                  disabled={cardImageUploading}
+                  onClick={() => cardImageInputRef.current?.click()}
+                  className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/10 hover:bg-black/25 disabled:cursor-not-allowed"
+                >
+                  <span className="bg-black/70 text-white text-[10px] font-bold px-2.5 py-1">
+                    {cardImageUploading ? "업로드 중..." : cardImageUrl ? "배경 변경" : "+ 배경 추가"}
+                  </span>
+                </button>
+
+                {/* 아바타 편집 오버레이 */}
+                <button
+                  type="button"
+                  disabled={cardAvatarUploading}
+                  onClick={(e) => { e.stopPropagation(); cardAvatarInputRef.current?.click(); }}
+                  className="absolute opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 hover:bg-black/70 flex items-center justify-center disabled:cursor-not-allowed z-10"
+                  style={{ top: 40, left: 20, width: 80, height: 80 }}
+                >
+                  <span className="text-white text-[10px] font-bold leading-tight text-center">
+                    {cardAvatarUploading ? "..." : "사진\n변경"}
+                  </span>
+                </button>
+              </div>
+
+              <input
+                ref={cardAvatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleCardAvatarUpload}
+              />
+            </section>
+
+            {/* 저장 버튼 — 최하단 */}
+            <div className="flex items-center justify-end gap-4 pt-2 border-t border-dashed border-gray-200">
+              {cardMessage && (
+                <span className={`text-[11px] font-bold ${cardMessage.startsWith("오류") ? "text-red-500" : "text-green-600"}`}>
+                  {cardMessage}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleSaveCard}
+                disabled={cardSaving}
+                className="border border-dashed border-gray-800 bg-gray-800 text-white px-8 py-2.5 text-xs font-bold hover:bg-gray-700 disabled:opacity-50 uppercase tracking-widest"
+              >
+                {cardSaving ? "SAVING..." : "[카드 저장]"}
+              </button>
+            </div>
+          </div>
         )}
 
         {activeTab === "account" && !isAccountVerified && (
@@ -891,6 +1652,136 @@ export default function ProfilePage() {
                 {loading ? "처리중..." : "[영구 탈퇴]"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showOshiForm && (
+        <div
+          className="fixed inset-0 z-[58] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+          onClick={() => setShowOshiForm(false)}
+          role="presentation"
+        >
+          <div
+            className="w-full max-w-md border border-dashed border-gray-500 bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-dashed border-gray-300 px-5 py-4">
+              <h3 className="text-sm font-bold uppercase tracking-widest text-gray-800">
+                {editingOshi ? "오시 편집" : "오시 등록"}
+              </h3>
+              {!editingOshi && (
+                <p className="mt-1 text-[11px] text-gray-400">
+                  #{oshiList.length + 1} 슬롯에 등록됩니다.
+                </p>
+              )}
+            </div>
+            <form onSubmit={handleOshiSubmit} className="p-5 space-y-4">
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold uppercase tracking-widest text-gray-500">작품/캐릭터 이름 *</label>
+                <input
+                  type="text"
+                  required
+                  maxLength={50}
+                  value={oshiForm.title}
+                  onChange={(e) => setOshiForm((f) => ({ ...f, title: e.target.value }))}
+                  placeholder="최대 50자"
+                  className="w-full border border-dashed border-gray-400 px-3 py-2 text-sm outline-none focus:border-gray-700 bg-white"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold uppercase tracking-widest text-gray-500">타입 *</label>
+                <select
+                  value={oshiForm.oshi_type}
+                  onChange={(e) => setOshiForm((f) => ({ ...f, oshi_type: e.target.value as OshiType }))}
+                  className="w-full border border-dashed border-gray-400 px-3 py-2 text-sm outline-none bg-white"
+                >
+                  {(Object.keys(OSHI_TYPE_LABELS) as OshiType[]).map((t) => (
+                    <option key={t} value={t}>{OSHI_TYPE_LABELS[t]}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold uppercase tracking-widest text-gray-500">이미지</label>
+                <div className="flex items-center gap-3">
+                  <div className="w-16 h-16 shrink-0 border border-dashed border-gray-300 bg-gray-50 overflow-hidden">
+                    {oshiForm.image_url ? (
+                      <img src={oshiForm.image_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-lg">🎌</div>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1.5 flex-1">
+                    <button
+                      type="button"
+                      disabled={oshiImageUploading}
+                      onClick={() => oshiImageInputRef.current?.click()}
+                      className="border border-dashed border-gray-400 px-3 py-2 text-[11px] font-bold text-gray-600 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+                    >
+                      {oshiImageUploading ? "업로드 중..." : "파일 선택"}
+                    </button>
+                    {oshiForm.image_url && (
+                      <button
+                        type="button"
+                        onClick={() => setOshiForm((f) => ({ ...f, image_url: "" }))}
+                        className="text-[10px] font-bold text-red-400 hover:text-red-600 text-left"
+                      >
+                        이미지 제거
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <input
+                  ref={oshiImageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleOshiImageUpload}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold uppercase tracking-widest text-gray-500">한 줄 설명</label>
+                <textarea
+                  maxLength={100}
+                  rows={2}
+                  value={oshiForm.description}
+                  onChange={(e) => setOshiForm((f) => ({ ...f, description: e.target.value }))}
+                  placeholder="최대 100자"
+                  className="w-full border border-dashed border-gray-400 px-3 py-2 text-sm outline-none focus:border-gray-700 bg-white resize-none"
+                />
+                <p className="text-[10px] text-gray-400 text-right">{oshiForm.description.length}/100</p>
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={oshiForm.is_public}
+                  onChange={(e) => setOshiForm((f) => ({ ...f, is_public: e.target.checked }))}
+                  className="accent-gray-800"
+                />
+                <span className="text-xs font-bold text-gray-600">프로필에 공개</span>
+              </label>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-dashed border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setShowOshiForm(false)}
+                  className="border border-dashed border-gray-400 px-5 py-2 text-xs font-bold text-gray-500 hover:bg-gray-100"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="border border-dashed border-gray-800 bg-gray-800 text-white px-6 py-2 text-xs font-bold hover:bg-gray-700 disabled:opacity-50 uppercase tracking-widest"
+                >
+                  {loading ? "저장 중..." : "[저장]"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

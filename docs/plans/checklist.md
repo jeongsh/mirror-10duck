@@ -107,7 +107,20 @@
 - [ ] Live2D 말풍선 버튼: 오늘 방영, 이번 주, 내 관심작, 새 소식
 - [ ] 오늘 방영 애니 목록에서 감상글 보기, 글쓰기, 관련 채널 이동 연결
 
-### 3.2 캐릭터 커뮤니티 고도화
+### 3.2 오시 등록 & 배지
+
+- [x] `oshi_registrations`, `badges`, `user_badges` 테이블 생성 및 RLS 적용
+- [x] 초기 배지 9종 seed 데이터 삽입
+- [x] `lib/supabase/oshi.ts`: CRUD 함수
+- [x] `lib/supabase/badges.ts`: 조회 + `checkAndGrantBadges` 함수
+- [x] `types/community.ts` Oshi/Badge 타입 추가
+- [x] `/profile` → "오시 & 배지" 탭 UI 구현
+- [x] 오시 등록/삭제 후 배지 자동 체크 연동
+- [ ] 공개 프로필 페이지에서 오시 목록 및 배지 표시 (Phase 3)
+- [ ] 오시 기반 팔로워 추천 (Phase 3)
+- [ ] 시즌 한정 배지 (캘린더 연동, Phase 3)
+
+### 3.3 캐릭터 커뮤니티 고도화
 
 - [ ] 캐릭터 안전 정책 확정: 미성년자/어린이 캐릭터 부적절 상호작용 금지
 - [x] `tap_body` 신규 제품 액션 제거 또는 안전 액션으로 마이그레이션

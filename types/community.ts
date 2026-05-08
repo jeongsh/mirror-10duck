@@ -12,6 +12,8 @@ export type Board = {
 
 export type NicknameType = "FIXED" | "TEMPORARY";
 
+export type CardTheme = "default" | "dark" | "neon" | "pastel" | "sakura" | "ocean" | "galaxy";
+
 export type UserProfile = {
   id: string;
   user_id: string;
@@ -24,6 +26,14 @@ export type UserProfile = {
   representative_character_id: string | null;
   nickname_type: NicknameType;
   role: "USER" | "ADMIN";
+  // 프로필 카드 커스터마이징
+  card_theme: CardTheme | null;
+  card_accent: string | null;
+  card_show_oshi: boolean | null;
+  card_badge_ids: string[] | null;
+  card_image_url: string | null;
+  card_nickname_color: string | null;
+  card_nickname_font: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -176,6 +186,46 @@ export type Comment = {
   content: string | null;
   sticker_token: string | null;
   created_at: string;
+};
+
+// =============================================
+// 오시(推し) 등록 & 배지
+// =============================================
+
+export type OshiType = "anime" | "manga" | "game" | "character" | "other";
+
+export type OshiRegistration = {
+  id: string;
+  user_id: string;
+  rank: number;
+  title: string;
+  oshi_type: OshiType;
+  image_url: string | null;
+  description: string | null;
+  is_public: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BadgeRarity = "common" | "rare" | "epic" | "legendary";
+
+export type Badge = {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  rarity: BadgeRarity;
+  condition_type: string;
+  condition_value: number;
+  created_at: string;
+};
+
+export type UserBadge = {
+  id: string;
+  user_id: string;
+  badge_id: string;
+  earned_at: string;
+  badge?: Badge;
 };
 
 export type Report = {

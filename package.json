@@ -28,6 +28,7 @@
     "pixi.js": "^8.18.1",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
+    "react-image-crop": "^11.0.10",
     "tiptap-extension-resize-image": "^1.4.0",
     "zustand": "^5.0.12"
   },

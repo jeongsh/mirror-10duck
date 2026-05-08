@@ -13,6 +13,7 @@ import CommentSection from "@/components/community/CommentSection";
 import IdentityBadge from "@/components/community/IdentityBadge";
 import { createNotification } from "@/lib/community/notifications";
 import { formatIp } from "@/lib/utils/formatIp";
+import AuthorProfileCard from "@/components/community/AuthorProfileCard";
 
 export default function BoardPostDetailPage() {
   const router = useRouter();
@@ -282,16 +283,6 @@ export default function BoardPostDetailPage() {
               size="md"
             />
           </div>
-          {post && userId && post.author_id !== userId && (
-            <button
-              onClick={toggleFollowUser}
-              className={`rounded-full border border-dashed border-gray-500 px-3 py-0.5 text-xs transition-colors ${
-                isFollowingAuthor ? "bg-gray-200" : "bg-white hover:bg-gray-100"
-              }`}
-            >
-              {isFollowingAuthor ? "팔로잉 취소" : "팔로우"}
-            </button>
-          )}
           <span>|</span>
           <span>{post ? new Date(post.created_at).toLocaleString("ko-KR") : "-"}</span>
           {post?.updated_at && 
@@ -320,6 +311,14 @@ export default function BoardPostDetailPage() {
           <p className="text-gray-500">게시글을 찾을 수 없습니다.</p>
         )}
       </article>
+
+      <AuthorProfileCard
+        profile={post?.profiles}
+        authorId={post?.author_id ?? null}
+        viewerId={userId || null}
+        isFollowing={isFollowingAuthor}
+        onToggleFollow={toggleFollowUser}
+      />
 
       {post ? (
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start">

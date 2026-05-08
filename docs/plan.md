@@ -23,6 +23,7 @@
 | NSFW 이미지, 성인 게시판, 아청법 위험 대응, AI 검수, 자동 블라인드 | [nsfw-csam-moderation.md](./plans/nsfw-csam-moderation.md) | [moderation-notifications.md](./plans/moderation-notifications.md), [editor-media-stickers.md](./plans/editor-media-stickers.md), [data-model.md](./plans/data-model.md) |
 | 애니·만화·게임 뉴스, 신작 알림, 방영/연재/출시 일정, 덕질 캘린더 | [news-release-calendar.md](./plans/news-release-calendar.md) | [moderation-notifications.md](./plans/moderation-notifications.md), [data-model.md](./plans/data-model.md), [character-community.md](./plans/character-community.md) |
 | Live2D, 캐릭터 리액션, 스티커 팩, 대표 캐릭터, 덕질 비서, 후순위 롤플레잉 | [character-community.md](./plans/character-community.md) | [LIVE2D_CHARACTER_GUIDE.md](./LIVE2D_CHARACTER_GUIDE.md), [ARCHITECTURE_OVERVIEW.md](./ARCHITECTURE_OVERVIEW.md) |
+| 오시(推し) 등록, 최애 작품/캐릭터 프로필 표시, 활동 배지 시스템 | [oshi-badges.md](./plans/oshi-badges.md) | [character-community.md](./plans/character-community.md), [data-model.md](./plans/data-model.md) |
 | 화면 완성도, 페이지별 완료 기준, UX 누락 점검 | [screen-acceptance.md](./plans/screen-acceptance.md) | 관련 도메인 문서 |
 
 ## 2. 프로젝트 개요
@@ -95,3 +96,4 @@
 
 - 작품 DB 직접 운영 방향을 폐기하고, 뉴스·신작 알림·덕질 캘린더 중심의 커뮤니티 허브 방향을 추가했다.
 - 애니, 만화, 게임은 상위 입구에서는 함께 제공하되 내부 데이터와 UX는 분리하는 원칙을 세웠다.
+- 오시(推し) 등록과 활동 배지 시스템 기획 추가 ([oshi-badges.md](./plans/oshi-badges.md)). 프로필에 "내 최애" 공개와 커뮤니티 활동 기반 배지 9종을 Phase 3 초기 작업으로 확정.
