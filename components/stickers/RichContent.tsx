@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { splitContentSegments } from "@/lib/stickers/token";
 import CharacterSticker from "./CharacterSticker";
 
@@ -14,6 +14,114 @@ import CharacterSticker from "./CharacterSticker";
 interface Props {
   content: string;
   className?: string;
+}
+
+function loadExternalScript(src: string) {
+  return new Promise<void>((resolve, reject) => {
+    if (typeof window === "undefined") {
+      resolve();
+      return;
+    }
+
+    const existingScript = document.querySelector<HTMLScriptElement>(`script[src="${src}"]`);
+    if (existingScript) {
+      if (existingScript.dataset.loaded === "true") {
+        resolve();
+        return;
+      }
+      existingScript.addEventListener("load", () => resolve(), { once: true });
+      existingScript.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.onload = () => {
+      script.dataset.loaded = "true";
+      resolve();
+    };
+    script.onerror = () => reject(new Error(`Failed to load ${src}`));
+    document.body.appendChild(script);
+  });
+}
+
+function normalizeInstagramPermalink(url: string) {
+  const trimmed = url.trim();
+  if (!trimmed) return trimmed;
+  return trimmed.endsWith("/") ? trimmed : `${trimmed}/`;
+}
+
+function SnsEmbed({ url, type }: { url: string; type: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const hydrateEmbed = async () => {
+      try {
+        if (type === "twitter") {
+          await loadExternalScript("https://platform.twitter.com/widgets.js");
+          if (cancelled) return;
+          const twitterApi = (window as any).twttr;
+          twitterApi?.widgets?.load(containerRef.current);
+          return;
+        }
+
+        if (type === "instagram") {
+          await loadExternalScript("https://www.instagram.com/embed.js");
+          if (cancelled) return;
+          const instagramApi = (window as any).instgrm;
+          instagramApi?.Embeds?.process();
+        }
+      } catch {
+        // 스크립트 로드 실패 시 하단 링크 fallback 이 노출된다.
+      }
+    };
+
+    hydrateEmbed();
+    return () => {
+      cancelled = true;
+    };
+  }, [type, url]);
+
+  if (type === "twitter") {
+    return (
+      <div ref={containerRef} className="my-4 overflow-x-auto">
+        <blockquote className="twitter-tweet">
+          <a href={url}>X post</a>
+        </blockquote>
+      </div>
+    );
+  }
+
+  if (type === "instagram") {
+    return (
+      <div ref={containerRef} className="my-4 overflow-x-auto">
+        <blockquote
+          className="instagram-media"
+          data-instgrm-permalink={normalizeInstagramPermalink(url)}
+          data-instgrm-version="14"
+        >
+          <a href={url}>Instagram post</a>
+        </blockquote>
+      </div>
+    );
+  }
+
+  return (
+    <div className="my-4 border border-dashed border-gray-400 bg-gray-50 p-4 text-center">
+      <p className="mb-2 text-xs font-bold uppercase tracking-widest text-gray-400">SNS Embed (generic)</p>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-sm text-blue-600 underline"
+      >
+        {url}
+      </a>
+    </div>
+  );
 }
 
 export default function RichContent({ content, className }: Props) {
@@ -132,20 +240,7 @@ function TiptapJsonRenderer({ json }: { json: any }) {
 
       case 'embed':
         const { url, type } = node.attrs;
-        return (
-          <div key={index} className="my-4 border border-dashed border-gray-400 bg-gray-50 p-4 text-center">
-            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-gray-400">SNS Embed ({type})</p>
-            <a 
-              href={url} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-sm text-blue-600 underline"
-            >
-              {url}
-            </a>
-            {/* 실제 인스타그램/트위터 위젯 스크립트 로드는 복잡하므로 링크로 우선 대체하거나 iframe 시도 가능 */}
-          </div>
-        );
+        return <SnsEmbed key={index} url={url} type={type} />;
 
       case 'bulletList':
         return (
@@ -180,6 +275,9 @@ function TiptapJsonRenderer({ json }: { json: any }) {
         let floatStyle: any = 'none';
         if (node.attrs.wrapperStyle?.includes('float: left')) floatStyle = 'left';
         if (node.attrs.wrapperStyle?.includes('float: right')) floatStyle = 'right';
+        const isCentered =
+          node.attrs.containerStyle?.includes('auto') &&
+          !node.attrs.wrapperStyle?.includes('float:');
 
         return (
           <img 
@@ -189,8 +287,10 @@ function TiptapJsonRenderer({ json }: { json: any }) {
             style={{ 
               width: imgWidth,
               height: imgHeight,
-              display: floatStyle !== 'none' ? 'block' : 'inline-block',
+              display: floatStyle !== 'none' || isCentered ? 'block' : 'inline-block',
               float: floatStyle !== 'none' ? floatStyle : undefined,
+              marginLeft: isCentered ? 'auto' : undefined,
+              marginRight: isCentered ? 'auto' : undefined,
               verticalAlign: 'middle'
             }}
             className="mx-1 my-2 rounded border border-dashed border-gray-400 max-w-full"

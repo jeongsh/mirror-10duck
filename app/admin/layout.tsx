@@ -19,6 +19,18 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           >
             신고 관리
           </Link>
+          <Link
+            href="/admin/releases"
+            className="rounded border border-transparent p-2 transition-colors hover:border-gray-300 hover:bg-gray-100"
+          >
+            신작 관리
+          </Link>
+          <Link
+            href="/admin/news"
+            className="rounded border border-transparent p-2 transition-colors hover:border-gray-300 hover:bg-gray-100"
+          >
+            뉴스 관리
+          </Link>
         </nav>
       </aside>
       <main className="flex-1 p-6">{children}</main>

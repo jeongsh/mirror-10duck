@@ -32,6 +32,53 @@ export const EmbedExtension = Node.create({
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ['div', mergeAttributes(HTMLAttributes, { 'data-embed-url': HTMLAttributes.url, 'data-embed-type': HTMLAttributes.type }), 'Embed Content'];
+    const baseAttrs = {
+      'data-embed-url': HTMLAttributes.url,
+      'data-embed-type': HTMLAttributes.type,
+    };
+
+    if (HTMLAttributes.type === 'twitter') {
+      const attrs = mergeAttributes(HTMLAttributes, {
+        ...baseAttrs,
+        class: 'embed-block my-4',
+      });
+
+      return [
+        'div',
+        attrs,
+        ['blockquote', { class: 'twitter-tweet' }, ['a', { href: HTMLAttributes.url }, HTMLAttributes.url || 'X post']],
+      ];
+    }
+
+    if (HTMLAttributes.type === 'instagram') {
+      const attrs = mergeAttributes(HTMLAttributes, {
+        ...baseAttrs,
+        class: 'embed-block my-4',
+      });
+      return [
+        'div',
+        attrs,
+        [
+          'blockquote',
+          {
+            class: 'instagram-media',
+            'data-instgrm-permalink': HTMLAttributes.url,
+            'data-instgrm-version': '14',
+          },
+          ['a', { href: HTMLAttributes.url }, HTMLAttributes.url || 'Instagram post'],
+        ],
+      ];
+    }
+
+    const attrs = mergeAttributes(HTMLAttributes, {
+      ...baseAttrs,
+      class: 'embed-block my-4 rounded border border-dashed border-gray-400 bg-gray-50 p-3',
+    });
+
+    return [
+      'div',
+      attrs,
+      ['a', { href: HTMLAttributes.url, target: '_blank', rel: 'noopener noreferrer' }, HTMLAttributes.url || 'Embedded link'],
+    ];
   },
 });

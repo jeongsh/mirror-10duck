@@ -4,6 +4,7 @@ import { Editor } from "@tiptap/react";
 import { 
   Bold, 
   Italic, 
+  AlignCenter,
   List, 
   ListOrdered, 
   Image as ImageIcon, 
@@ -16,10 +17,9 @@ import {
   Share2,
   Undo,
   Redo,
-  ChevronDown
 } from "lucide-react";
 import StickerPicker from "@/components/stickers/StickerPicker";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 
 interface Props {
@@ -30,31 +30,118 @@ interface Props {
 
 export default function Toolbar({ editor, userId, allowMedia = true }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [selectedImageType, setSelectedImageType] = useState<"imageResize" | "image" | null>(null);
 
-  if (!editor) return null;
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !userId) return;
-
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${userId}-${Math.random()}.${fileExt}`;
-    const filePath = `uploads/${fileName}`;
-
-    const { error } = await supabase.storage
-      .from('post-assets')
-      .upload(filePath, file);
-
-    if (error) {
-      alert("이미지 업로드 실패: " + error.message);
+  useEffect(() => {
+    if (!editor) {
+      setSelectedImageType(null);
       return;
     }
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('post-assets')
-      .getPublicUrl(filePath);
+    const syncSelectedImage = () => {
+      if (editor.isActive("imageResize")) {
+        setSelectedImageType("imageResize");
+      } else if (editor.isActive("image")) {
+        setSelectedImageType("image");
+      } else {
+        setSelectedImageType(null);
+      }
+    };
 
-    editor.chain().focus().setImage({ src: publicUrl }).run();
+    syncSelectedImage();
+    editor.on("selectionUpdate", syncSelectedImage);
+    editor.on("transaction", syncSelectedImage);
+
+    return () => {
+      editor.off("selectionUpdate", syncSelectedImage);
+      editor.off("transaction", syncSelectedImage);
+    };
+  }, [editor]);
+
+  if (!editor) return null;
+
+  const getImageSize = (file: File) =>
+    new Promise<{ width: number; height: number }>((resolve) => {
+      const image = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      image.onload = () => {
+        resolve({ width: image.naturalWidth, height: image.naturalHeight });
+        URL.revokeObjectURL(objectUrl);
+      };
+      image.onerror = () => {
+        resolve({ width: 0, height: 0 });
+        URL.revokeObjectURL(objectUrl);
+      };
+      image.src = objectUrl;
+    });
+
+  const centerSelectedImage = () => {
+    const imageType = selectedImageType;
+    if (!imageType) return;
+
+    const attrs = editor.getAttributes(imageType);
+    const width = attrs.width ? `${attrs.width}`.replace("px", "") : null;
+    const widthStyle = width ? `width: ${width}px;` : "width: 100%;";
+
+    editor
+      .chain()
+      .focus()
+      .updateAttributes(imageType, {
+        containerStyle: `${widthStyle} height: auto; cursor: pointer; margin: 0.5rem auto;`,
+        wrapperStyle: "display: flex; margin: 0;",
+      })
+      .run();
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("이미지 파일만 업로드할 수 있습니다.");
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const imageSize = await getImageSize(file);
+      const resolvedUserId = userId ?? (await supabase.auth.getUser()).data.user?.id;
+      if (!resolvedUserId) {
+        alert("이미지를 업로드하려면 로그인이 필요합니다.");
+        return;
+      }
+
+      const fileExt = file.name.split(".").pop() || "jpg";
+      const fileName = `${resolvedUserId}-${crypto.randomUUID()}.${fileExt}`;
+      const filePath = `uploads/${fileName}`;
+
+      const { error } = await supabase.storage
+        .from("post-assets")
+        .upload(filePath, file);
+
+      if (error) throw error;
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("post-assets").getPublicUrl(filePath);
+
+      const initialWidth =
+        imageSize.width > 0 ? Math.min(imageSize.width, 760) : 760;
+
+      editor.chain().focus().setImage({
+        src: publicUrl,
+        width: initialWidth,
+        containerStyle: `width: ${initialWidth}px; height: auto; cursor: pointer; margin: 0.5rem auto;`,
+        wrapperStyle: "display: flex; margin: 0;",
+      } as any).run();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "알 수 없는 오류";
+      alert("이미지 업로드 실패: " + message);
+    } finally {
+      setUploadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   const insertYoutube = () => {
@@ -204,7 +291,8 @@ export default function Toolbar({ editor, userId, allowMedia = true }: Props) {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="p-1.5 hover:bg-gray-200"
+            disabled={uploadingImage}
+            className="p-1.5 hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
             title="이미지 업로드"
           >
             <ImageIcon size={18} />
@@ -216,6 +304,16 @@ export default function Toolbar({ editor, userId, allowMedia = true }: Props) {
             className="hidden" 
             accept="image/*"
           />
+
+          <button
+            type="button"
+            onClick={centerSelectedImage}
+            disabled={!selectedImageType}
+            className="p-1.5 hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-30"
+            title="선택한 이미지 가운데 정렬"
+          >
+            <AlignCenter size={18} />
+          </button>
 
           <button
             type="button"

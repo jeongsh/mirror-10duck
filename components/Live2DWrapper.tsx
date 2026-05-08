@@ -10,6 +10,7 @@ import { useCharacterStore } from "@/store/useCharacterStore";
 import type { CharacterActionKey } from "@/types/character";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
+import { formatDateTime, getCalendarEvents, getNewsItems } from "@/lib/otaku/hub";
 
 declare global {
   interface Window {
@@ -70,6 +71,14 @@ const PAGE_DIALOGUE_PRESETS: {
     lines: ["새 소식부터 확인해볼까요?", "공식 발표와 루머를 구분해서 볼게요."],
   },
   {
+    match: (pathname) => pathname.startsWith("/releases"),
+    lines: ["관심 신작 알림을 확인해볼까요?", "공식 일정이 바뀌었는지 같이 볼까요?"],
+  },
+  {
+    match: (pathname) => pathname.startsWith("/calendar"),
+    lines: ["오늘 볼 일정부터 확인해볼까요?", "내 관심작 일정만 추려볼까요?"],
+  },
+  {
     match: (pathname) => pathname.startsWith("/reviews"),
     lines: ["리뷰를 볼 때 스포일러 표시를 확인해요.", "평가 포인트를 같이 살펴볼까요?"],
   },
@@ -85,7 +94,7 @@ interface SpeechAnchor {
   y: number;
 }
 
-type AssistantActionKey = "briefing" | "review";
+type AssistantActionKey = "today" | "week" | "following" | "news" | "review";
 
 function normalizeCharacterAction(action: CharacterActionKey): CharacterActionKey {
   if (action === "tap_body") return "attention";
@@ -1018,10 +1027,52 @@ export default function Live2DWrapper() {
     setAssistantOpen(false);
 
     try {
-      if (action === "briefing") {
+      if (action === "today") {
+        const todayEvents = getCalendarEvents().filter(
+          (event) => ymdKey(event.startsAt) === ymdKey(new Date()),
+        );
+        const message =
+          todayEvents.length > 0
+            ? `오늘은 ${todayEvents.slice(0, 3).map((event) => event.title).join(", ")} 일정이 있어요.`
+            : "오늘 등록된 방영/연재/출시 일정은 없어요.";
+        setTemporaryMessage(message, ASSISTANT_RESPONSE_DURATION_MS);
+        useCharacterStore.getState().setEmotion("happy");
+        return;
+      }
+
+      if (action === "week") {
+        const now = new Date();
+        const weekEvents = getCalendarEvents()
+          .filter((event) => isWithinDays(new Date(event.startsAt), now, 7))
+          .slice(0, 3);
+        const message =
+          weekEvents.length > 0
+            ? `이번 주엔 ${weekEvents.map((event) => `${formatDateTime(event.startsAt)} ${event.title}`).join(", ")}가 있어요.`
+            : "이번 주 관심 일정은 아직 비어 있어요.";
+        setTemporaryMessage(message, ASSISTANT_RESPONSE_DURATION_MS);
+        useCharacterStore.getState().setEmotion("happy");
+        return;
+      }
+
+      if (action === "following") {
+        const followed = getCalendarEvents().filter((event) => event.isFollowing).slice(0, 3);
         const unreadCount = await fetchUnreadCount();
+        const eventText =
+          followed.length > 0
+            ? followed.map((event) => event.title).join(", ")
+            : "관심작 일정 없음";
         setTemporaryMessage(
-          `\uc548 \uc77d\uc740 \uc54c\ub9bc ${unreadCount}\uac1c\uac00 \uc788\uc5b4\uc694.`,
+          `내 관심작: ${eventText}. 안 읽은 알림은 ${unreadCount}개예요.`,
+          ASSISTANT_RESPONSE_DURATION_MS
+        );
+        useCharacterStore.getState().setEmotion("happy");
+        return;
+      }
+
+      if (action === "news") {
+        const latestNews = getNewsItems().slice(0, 3);
+        setTemporaryMessage(
+          `새 소식: ${latestNews.map((item) => item.title).join(", ")}`,
           ASSISTANT_RESPONSE_DURATION_MS
         );
         useCharacterStore.getState().setEmotion("happy");
@@ -1247,12 +1298,39 @@ function AssistantQuickActions({
     >
       <button
         type="button"
-        data-testid="assistant-action-briefing"
+        data-testid="assistant-action-today"
         className={buttonClass}
         disabled={busyAction !== null}
-        onClick={() => onAction("briefing")}
+        onClick={() => onAction("today")}
       >
-        {busyAction === "briefing" ? "\ud655\uc778 \uc911" : "\ube0c\ub9ac\ud551"}
+        {busyAction === "today" ? "\ud655\uc778 \uc911" : "\uc624\ub298 \ubc29\uc601"}
+      </button>
+      <button
+        type="button"
+        data-testid="assistant-action-week"
+        className={buttonClass}
+        disabled={busyAction !== null}
+        onClick={() => onAction("week")}
+      >
+        {busyAction === "week" ? "\ud655\uc778 \uc911" : "\uc774\ubc88 \uc8fc"}
+      </button>
+      <button
+        type="button"
+        data-testid="assistant-action-following"
+        className={buttonClass}
+        disabled={busyAction !== null}
+        onClick={() => onAction("following")}
+      >
+        {busyAction === "following" ? "\ud655\uc778 \uc911" : "\ub0b4 \uad00\uc2ec\uc791"}
+      </button>
+      <button
+        type="button"
+        data-testid="assistant-action-news"
+        className={buttonClass}
+        disabled={busyAction !== null}
+        onClick={() => onAction("news")}
+      >
+        {busyAction === "news" ? "\ud655\uc778 \uc911" : "\uc0c8 \uc18c\uc2dd"}
       </button>
       <button
         type="button"
@@ -1273,4 +1351,20 @@ function AssistantQuickActions({
       </button>
     </div>
   );
+}
+
+function ymdKey(value: string | Date): string {
+  const d = typeof value === "string" ? new Date(value) : value;
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : `${n}`;
+}
+
+function isWithinDays(target: Date, base: Date, days: number): boolean {
+  const start = new Date(base.getFullYear(), base.getMonth(), base.getDate()).getTime();
+  const end = start + days * 24 * 60 * 60 * 1000;
+  const time = target.getTime();
+  return time >= start && time <= end;
 }

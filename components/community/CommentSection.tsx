@@ -19,6 +19,7 @@ import { formatIp } from "@/lib/utils/formatIp";
  * - 텍스트 댓글 입력 시 본문 안에 스티커 토큰을 섞을 수 있다 (`StickerPicker`).
  * - 입력란을 비워두고 "스티커 답글" 버튼으로 한 장만 찍는 코멘트도 가능.
  * - 본인 댓글은 삭제 가능.
+ * - isNews 옵션으로 뉴스 댓글 테이블 지원.
  */
 interface Props {
   postId: string;
@@ -26,11 +27,20 @@ interface Props {
   viewerId: string | null;
   viewerEmail: string | null;
   allowAnonymous?: boolean;
+  isNews?: boolean; // 뉴스 댓글 여부
   /** 댓글 스레드가 바뀐 뒤(등록/삭제) 상위에서 글 집계를 다시 읽을 때 */
   onThreadChanged?: () => void;
 }
 
-export default function CommentSection({ postId, postAuthorId, viewerId, viewerEmail, allowAnonymous = false, onThreadChanged }: Props) {
+export default function CommentSection({ 
+  postId, 
+  postAuthorId, 
+  viewerId, 
+  viewerEmail, 
+  allowAnonymous = false, 
+  isNews = false,
+  onThreadChanged 
+}: Props) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
@@ -43,17 +53,26 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
 
+  const tableName = isNews ? "news_comments" : "comments";
+  const idColumn = isNews ? "news_id" : "post_id";
+  const effectiveAllowAnonymous = isNews ? false : allowAnonymous;
+
   const refresh = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
-      .from("comments")
+      .from(tableName)
       .select("*, profiles(*)")
-      .eq("post_id", postId)
+      .eq(idColumn, postId)
       .order("created_at", { ascending: true });
 
-    if (!error && data) setComments(data as Comment[]);
+    if (error) {
+      console.error("Fetch comments failed:", error);
+      alert(`댓글을 불러오는데 실패했습니다: ${error.message}`);
+    } else if (data) {
+      setComments(data as Comment[]);
+    }
     setLoading(false);
-  }, [postId]);
+  }, [postId, tableName, idColumn]);
 
   useEffect(() => {
     refresh();
@@ -72,7 +91,7 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
 
   const handleSubmitText = async () => {
     const isAnonymous = !viewerId;
-    if (isAnonymous && !allowAnonymous) {
+    if (isAnonymous && !effectiveAllowAnonymous) {
       alert("댓글은 로그인 후 작성 가능합니다.");
       return;
     }
@@ -88,9 +107,9 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
 
     setSubmitting(true);
     const { data: insertedComment, error } = await supabase
-      .from("comments")
+      .from(tableName)
       .insert({
-        post_id: postId,
+        [idColumn]: postId,
         author_id: isAnonymous ? null : viewerId,
         author_email: isAnonymous ? "anonymous" : viewerEmail,
         content: text,
@@ -109,28 +128,30 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
       return;
     }
 
-    // 알림 전송
-    if (replyTo) {
-      const parent = comments.find(c => c.id === replyTo);
-      if (parent && parent.author_id && parent.author_id !== viewerId) {
+    // 알림 전송 (뉴스는 일단 제외하거나 추후 지원)
+    if (!isNews) {
+      if (replyTo) {
+        const parent = comments.find(c => c.id === replyTo);
+        if (parent && parent.author_id && parent.author_id !== viewerId) {
+          await createNotification({
+            receiverId: parent.author_id,
+            senderId: viewerId,
+            type: 'REPLY',
+            title: '새 답글',
+            content: '내 댓글에 새로운 답글이 달렸습니다.',
+            linkUrl: `${window.location.pathname}#comment-${insertedComment?.id ?? replyTo}`,
+          });
+        }
+      } else if (postAuthorId && postAuthorId !== viewerId) {
         await createNotification({
-          receiverId: parent.author_id,
+          receiverId: postAuthorId,
           senderId: viewerId,
-          type: 'REPLY',
-          title: '새 답글',
-          content: '내 댓글에 새로운 답글이 달렸습니다.',
-          linkUrl: `${window.location.pathname}#comment-${insertedComment?.id ?? replyTo}`,
+          type: 'COMMENT',
+          title: '새 댓글',
+          content: '내 글에 새로운 댓글이 달렸습니다.',
+          linkUrl: `${window.location.pathname}#comment-${insertedComment?.id ?? ""}`,
         });
       }
-    } else if (postAuthorId && postAuthorId !== viewerId) {
-      await createNotification({
-        receiverId: postAuthorId,
-        senderId: viewerId,
-        type: 'COMMENT',
-        title: '새 댓글',
-        content: '내 글에 새로운 댓글이 달렸습니다.',
-        linkUrl: `${window.location.pathname}#comment-${insertedComment?.id ?? ""}`,
-      });
     }
 
     setText("");
@@ -141,7 +162,7 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
 
   const handleSubmitStickerOnly = async (token: string) => {
     const isAnonymous = !viewerId;
-    if (isAnonymous && !allowAnonymous) {
+    if (isAnonymous && !effectiveAllowAnonymous) {
       alert("스티커 답글은 로그인 후 가능합니다.");
       return;
     }
@@ -153,9 +174,9 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
 
     setSubmitting(true);
     const { data: insertedComment, error } = await supabase
-      .from("comments")
+      .from(tableName)
       .insert({
-        post_id: postId,
+        [idColumn]: postId,
         author_id: isAnonymous ? null : viewerId,
         author_email: isAnonymous ? "anonymous" : viewerEmail,
         content: null,
@@ -174,28 +195,30 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
       return;
     }
 
-    // 알림 전송 (스티커 전용)
-    if (replyTo) {
-      const parent = comments.find(c => c.id === replyTo);
-      if (parent && parent.author_id && parent.author_id !== viewerId) {
+    // 알림 전송 (뉴스는 일단 제외)
+    if (!isNews) {
+      if (replyTo) {
+        const parent = comments.find(c => c.id === replyTo);
+        if (parent && parent.author_id && parent.author_id !== viewerId) {
+          await createNotification({
+            receiverId: parent.author_id,
+            senderId: viewerId,
+            type: 'REPLY',
+            title: '새 답글 (스티커)',
+            content: '내 댓글에 새로운 스티커 답글이 달렸습니다.',
+            linkUrl: `${window.location.pathname}#comment-${insertedComment?.id ?? replyTo}`,
+          });
+        }
+      } else if (postAuthorId && postAuthorId !== viewerId) {
         await createNotification({
-          receiverId: parent.author_id,
+          receiverId: postAuthorId,
           senderId: viewerId,
-          type: 'REPLY',
-          title: '새 답글 (스티커)',
-          content: '내 댓글에 새로운 스티커 답글이 달렸습니다.',
-          linkUrl: `${window.location.pathname}#comment-${insertedComment?.id ?? replyTo}`,
+          type: 'COMMENT',
+          title: '새 댓글 (스티커)',
+          content: '내 글에 새로운 스티커 댓글이 달렸습니다.',
+          linkUrl: `${window.location.pathname}#comment-${insertedComment?.id ?? ""}`,
         });
       }
-    } else if (postAuthorId && postAuthorId !== viewerId) {
-      await createNotification({
-        receiverId: postAuthorId,
-        senderId: viewerId,
-        type: 'COMMENT',
-        title: '새 댓글 (스티커)',
-        content: '내 글에 새로운 스티커 댓글이 달렸습니다.',
-        linkUrl: `${window.location.pathname}#comment-${insertedComment?.id ?? ""}`,
-      });
     }
 
     setReplyTo(null);
@@ -205,7 +228,7 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
 
   const handleDelete = async (commentId: string) => {
     if (!confirm("이 댓글을 삭제할까요?")) return;
-    const { error } = await supabase.from("comments").delete().eq("id", commentId);
+    const { error } = await supabase.from(tableName).delete().eq("id", commentId);
     if (error) {
       alert(`삭제 실패: ${error.message}`);
       return;
@@ -220,7 +243,7 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
     if (!editText.trim()) return;
     setSubmitting(true);
     const { error } = await supabase
-      .from("comments")
+      .from(tableName)
       .update({ content: editText })
       .eq("id", commentId);
     
@@ -243,7 +266,7 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
 
     const { error } = await supabase.from("reports").insert({
       reporter_id: viewerId,
-      target_type: "COMMENT",
+      target_type: isNews ? "NEWS_COMMENT" : "COMMENT",
       target_id: commentId,
       reason_category: "기타",
       reason_detail: reason
@@ -470,7 +493,7 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
           </div>
         )}
 
-        {!viewerId && allowAnonymous && (
+        {!viewerId && effectiveAllowAnonymous && (
           <div className="flex gap-2 mb-2">
             <input
               type="text"
@@ -493,13 +516,13 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
           ref={textareaRef}
           rows={3}
           placeholder={
-            viewerId || allowAnonymous
+            viewerId || effectiveAllowAnonymous
               ? "텍스트 댓글을 작성하세요. 본문에 스티커 토큰을 섞을 수 있습니다."
               : "댓글을 작성하려면 로그인하세요."
           }
           value={text}
           onChange={(e) => setText(e.target.value)}
-          disabled={!viewerId && !allowAnonymous}
+          disabled={!viewerId && !effectiveAllowAnonymous}
           className="w-full border border-dashed border-gray-400 bg-white px-3 py-2 text-sm disabled:bg-gray-100 disabled:text-gray-400"
         />
 
@@ -512,7 +535,7 @@ export default function CommentSection({ postId, postAuthorId, viewerId, viewerE
           <button
             type="button"
             onClick={handleSubmitText}
-            disabled={(!viewerId && !allowAnonymous) || submitting || !text.trim()}
+            disabled={(!viewerId && !effectiveAllowAnonymous) || submitting || !text.trim()}
             className="ml-auto border border-dashed border-gray-800 bg-gray-900 px-4 py-2 text-xs font-bold uppercase tracking-widest text-white hover:bg-gray-700 disabled:opacity-50"
           >
             {submitting ? "등록 중..." : "댓글 등록"}
