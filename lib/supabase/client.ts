@@ -9,4 +9,17 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+declare global {
+  // eslint-disable-next-line no-var
+  var __supabaseClient:
+    | ReturnType<typeof createClient>
+    | undefined;
+}
+
+export const supabase =
+  globalThis.__supabaseClient ??
+  createClient(supabaseUrl, supabaseAnonKey);
+
+if (process.env.NODE_ENV !== "production") {
+  globalThis.__supabaseClient = supabase;
+}
