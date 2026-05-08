@@ -115,7 +115,7 @@ export default function ProfilePage() {
   const [cardSaving, setCardSaving] = useState(false);
   const [cardMessage, setCardMessage] = useState("");
   const [cropSrc, setCropSrc] = useState<string | null>(null);
-  const [cropType, setCropType] = useState<"banner" | "avatar">("banner");
+  const [cropType, setCropType] = useState<"profileAvatar" | "oshi" | "banner" | "avatar">("banner");
 
   // 오시 & 배지 상태
   const [oshiList, setOshiList] = useState<OshiRegistration[]>([]);
@@ -392,55 +392,20 @@ export default function ProfilePage() {
     }
   };
 
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    setLoading(true);
-    try {
-      const fileExt = file.name.split('.').pop();
-      const filePath = `${user.id}/avatars/avatar-${Date.now()}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('character-assets')
-        .upload(filePath, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('character-assets')
-        .getPublicUrl(filePath);
-
-      setModalAvatarDraft(publicUrl);
-    } catch (err: any) {
-      alert(`업로드 오류: ${err.message}`);
-    } finally {
-      setLoading(false);
-      e.target.value = "";
-    }
+    setCropType("profileAvatar");
+    setCropSrc(URL.createObjectURL(file));
+    e.target.value = "";
   };
 
-  const handleOshiImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleOshiImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
-    setOshiImageUploading(true);
-    try {
-      const ext = file.name.split(".").pop();
-      const filePath = `${user.id}/oshi/${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage
-        .from("character-assets")
-        .upload(filePath, file, { upsert: true });
-      if (uploadError) throw uploadError;
-      const { data: { publicUrl } } = supabase.storage
-        .from("character-assets")
-        .getPublicUrl(filePath);
-      setOshiForm((f) => ({ ...f, image_url: publicUrl }));
-    } catch (err: any) {
-      alert(`업로드 오류: ${err.message}`);
-    } finally {
-      setOshiImageUploading(false);
-      e.target.value = "";
-    }
+    setCropType("oshi");
+    setCropSrc(URL.createObjectURL(file));
+    e.target.value = "";
   };
 
   const openAvatarModal = () => {
@@ -520,23 +485,53 @@ export default function ProfilePage() {
     e.target.value = "";
   };
 
+  const uploadCroppedImage = async (blob: Blob, path: string) => {
+    const { error: uploadError } = await supabase.storage
+      .from("character-assets")
+      .upload(path, blob, { upsert: true, contentType: "image/jpeg" });
+    if (uploadError) throw uploadError;
+    const { data: { publicUrl } } = supabase.storage
+      .from("character-assets")
+      .getPublicUrl(path);
+    return publicUrl;
+  };
+
   const handleCropConfirm = async (blob: Blob) => {
     if (!user) return;
     const type = cropType;
     if (cropSrc) URL.revokeObjectURL(cropSrc);
     setCropSrc(null);
 
+    if (type === "profileAvatar") {
+      setLoading(true);
+      try {
+        const publicUrl = await uploadCroppedImage(blob, `${user.id}/avatars/avatar-${Date.now()}.jpg`);
+        setModalAvatarDraft(publicUrl);
+      } catch (err: any) {
+        alert(`업로드 오류: ${err.message}`);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (type === "oshi") {
+      setOshiImageUploading(true);
+      try {
+        const publicUrl = await uploadCroppedImage(blob, `${user.id}/oshi/${Date.now()}.jpg`);
+        setOshiForm((f) => ({ ...f, image_url: publicUrl }));
+      } catch (err: any) {
+        alert(`업로드 오류: ${err.message}`);
+      } finally {
+        setOshiImageUploading(false);
+      }
+      return;
+    }
+
     if (type === "banner") {
       setCardImageUploading(true);
       try {
-        const filePath = `${user.id}/card/${Date.now()}.jpg`;
-        const { error: uploadError } = await supabase.storage
-          .from("character-assets")
-          .upload(filePath, blob, { upsert: true, contentType: "image/jpeg" });
-        if (uploadError) throw uploadError;
-        const { data: { publicUrl } } = supabase.storage
-          .from("character-assets")
-          .getPublicUrl(filePath);
+        const publicUrl = await uploadCroppedImage(blob, `${user.id}/card/${Date.now()}.jpg`);
         setCardImageUrl(publicUrl);
       } catch (err: any) {
         alert(`업로드 오류: ${err.message}`);
@@ -546,14 +541,7 @@ export default function ProfilePage() {
     } else {
       setCardAvatarUploading(true);
       try {
-        const filePath = `${user.id}/card/avatar-${Date.now()}.jpg`;
-        const { error: uploadError } = await supabase.storage
-          .from("character-assets")
-          .upload(filePath, blob, { upsert: true, contentType: "image/jpeg" });
-        if (uploadError) throw uploadError;
-        const { data: { publicUrl } } = supabase.storage
-          .from("character-assets")
-          .getPublicUrl(filePath);
+        const publicUrl = await uploadCroppedImage(blob, `${user.id}/card/avatar-${Date.now()}.jpg`);
         setCardAvatarUrl(publicUrl);
       } catch (err: any) {
         alert(`업로드 오류: ${err.message}`);
@@ -679,7 +667,21 @@ export default function ProfilePage() {
       {cropSrc && (
         <CardImageCropModal
           imageSrc={cropSrc}
-          aspect={cropType === "avatar" ? 1 : 4}
+          aspect={cropType === "banner" ? 4 : 1}
+          title={
+            cropType === "profileAvatar"
+              ? "프로필 이미지 리사이즈"
+              : cropType === "oshi"
+                ? "오시 이미지 리사이즈"
+                : cropType === "avatar"
+                  ? "카드 아바타 리사이즈"
+                  : "카드 배경 이미지 리사이즈"
+          }
+          outputSize={
+            cropType === "banner"
+              ? { width: 1200, height: 300 }
+              : { width: 512, height: 512 }
+          }
           onConfirm={handleCropConfirm}
           onCancel={() => { URL.revokeObjectURL(cropSrc); setCropSrc(null); }}
         />
