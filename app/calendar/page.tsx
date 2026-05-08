@@ -6,11 +6,16 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  ExternalLink,
+  Clock3,
+  Edit3,
+  MapPin,
   MessageSquareText,
-  PenLine,
+  Plus,
+  Trash2,
+  User,
+  X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   CATEGORY_LABELS,
   EVENT_TYPE_LABELS,
@@ -18,7 +23,6 @@ import {
   addMonths,
   buildMonthGrid,
   filterByCategory,
-  formatDateTime,
   getCalendarEvents,
   startOfMonth,
   type CalendarEvent,
@@ -28,15 +32,42 @@ import {
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const TABS: OtakuCategory[] = PUBLIC_CATEGORIES;
+const PERSONAL_EVENTS_STORAGE_KEY = "duck-personal-calendar-events-v1";
+
+type PersonalCalendarForm = {
+  id: string | null;
+  title: string;
+  startsAt: string;
+  location: string;
+};
 
 export default function CalendarPage() {
   const [cursor, setCursor] = useState<Date>(() => startOfMonth(new Date()));
   const [activeCategory, setActiveCategory] = useState<OtakuCategory>("all");
   const [followingOnly, setFollowingOnly] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [personalEvents, setPersonalEvents] = useState<CalendarEvent[]>([]);
+  const [followOverrides, setFollowOverrides] = useState<Record<string, boolean>>({});
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [personalForm, setPersonalForm] = useState<PersonalCalendarForm>({
+    id: null,
+    title: "",
+    startsAt: "",
+    location: "",
+  });
 
   const today = useMemo(() => new Date(), []);
-  const events = useMemo(() => getCalendarEvents(), []);
+  const baseEvents = useMemo(() => getCalendarEvents(), []);
+  const events = useMemo(
+    () =>
+      [...baseEvents, ...personalEvents]
+        .map((event) => ({
+          ...event,
+          isFollowing: followOverrides[event.id] ?? event.isFollowing,
+        }))
+        .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt)),
+    [baseEvents, followOverrides, personalEvents],
+  );
   const monthEvents = useMemo(() => {
     const categoryFiltered = filterByCategory(events, activeCategory);
     return categoryFiltered
@@ -57,11 +88,113 @@ export default function CalendarPage() {
     return map;
   }, [monthEvents]);
 
-  const selectedEvent =
-    monthEvents.find((event) => event.id === selectedId) ?? monthEvents[0] ?? null;
-  const todayEvents = monthEvents.filter((event) => ymdKey(event.startsAt) === ymdKey(today));
-  const weekEvents = monthEvents.filter((event) => isWithinDays(new Date(event.startsAt), today, 7));
   const monthLabel = `${cursor.getFullYear()}년 ${cursor.getMonth() + 1}월`;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(PERSONAL_EVENTS_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as CalendarEvent[];
+      const sanitized = parsed.filter((event) => {
+        return (
+          event &&
+          typeof event.id === "string" &&
+          typeof event.title === "string" &&
+          typeof event.startsAt === "string" &&
+          event.category === "personal" &&
+          event.type === "personal"
+        );
+      });
+      setPersonalEvents(sanitized);
+    } catch {
+      window.localStorage.removeItem(PERSONAL_EVENTS_STORAGE_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(PERSONAL_EVENTS_STORAGE_KEY, JSON.stringify(personalEvents));
+  }, [personalEvents]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest("[data-event-popup='true']")) return;
+      if (target.closest("[data-event-trigger='true']")) return;
+      setSelectedId(null);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [selectedId]);
+
+  function handleSavePersonalEvent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!personalForm.title.trim() || !personalForm.startsAt) return;
+
+    const startsAt = new Date(personalForm.startsAt).toISOString();
+    if (personalForm.id) {
+      setPersonalEvents((current) =>
+        current.map((saved) =>
+          saved.id === personalForm.id
+            ? {
+                ...saved,
+                title: personalForm.title.trim(),
+                startsAt,
+                platform: personalForm.location.trim() || undefined,
+              }
+            : saved,
+        ),
+      );
+      setSelectedId(personalForm.id);
+    } else {
+      const next: CalendarEvent = {
+        id: `personal-${Date.now()}`,
+        category: "personal",
+        type: "personal",
+        title: personalForm.title.trim(),
+        startsAt,
+        timezone: "Asia/Seoul",
+        platform: personalForm.location.trim() || undefined,
+        isFollowing: true,
+        reminderOffsetMinutes: null,
+      };
+      setPersonalEvents((current) => [...current, next]);
+      setSelectedId(next.id);
+    }
+
+    setPersonalForm({ id: null, title: "", startsAt: "", location: "" });
+    setIsModalOpen(false);
+  }
+
+  function handleDeletePersonalEvent(eventId: string) {
+    setPersonalEvents((current) => current.filter((event) => event.id !== eventId));
+    setSelectedId((current) => (current === eventId ? null : current));
+  }
+
+  function handleEditPersonalEvent(event: CalendarEvent) {
+    const localValue = toLocalDateTimeValue(event.startsAt);
+    setPersonalForm({
+      id: event.id,
+      title: event.title,
+      startsAt: localValue,
+      location: event.platform ?? "",
+    });
+    setIsModalOpen(true);
+  }
+
+  function handleOpenCreateModal() {
+    setPersonalForm({ id: null, title: "", startsAt: "", location: "" });
+    setIsModalOpen(true);
+  }
+
+  function handleToggleFollow(eventId: string, nextValue: boolean) {
+    setFollowOverrides((current) => ({ ...current, [eventId]: nextValue }));
+  }
 
   return (
     <main className="flex w-full flex-col gap-4">
@@ -95,8 +228,8 @@ export default function CalendarPage() {
         </div>
       </header>
 
-      <section className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_280px]">
-        <div className="border border-dashed border-gray-500 bg-white/70 p-3">
+      <section className="w-full">
+        <div className="w-full border border-dashed border-gray-500 bg-white/70 p-3">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <button
@@ -150,6 +283,17 @@ export default function CalendarPage() {
             </div>
           </div>
 
+          <div className="mb-3 flex justify-end">
+            <button
+              type="button"
+              onClick={handleOpenCreateModal}
+              className="inline-flex h-9 items-center justify-center gap-1 border border-dashed border-gray-600 bg-gray-900 px-3 text-sm font-semibold text-white hover:bg-gray-700"
+            >
+              <Plus size={14} />
+              내 캘린더 저장
+            </button>
+          </div>
+
           <div className="grid grid-cols-7 border-b border-dashed border-gray-400 pb-2 text-center text-xs font-semibold">
             {WEEKDAYS.map((weekday, index) => (
               <span
@@ -170,11 +314,9 @@ export default function CalendarPage() {
               const isToday = ymdKey(day) === ymdKey(today);
 
               return (
-                <button
+                <div
                   key={day.toISOString()}
-                  type="button"
-                  onClick={() => dayEvents[0] && setSelectedId(dayEvents[0].id)}
-                  className={`min-h-[112px] border-b border-r border-dashed border-gray-300 p-1.5 text-left text-xs ${
+                  className={`relative min-h-[112px] border-b border-r border-dashed border-gray-300 p-1.5 text-left text-xs ${
                     inMonth ? "bg-white/80 hover:bg-gray-50" : "bg-gray-100/60 text-gray-400"
                   }`}
                 >
@@ -194,196 +336,201 @@ export default function CalendarPage() {
                   </div>
                   <ul className="mt-1 space-y-1">
                     {dayEvents.slice(0, 3).map((event) => (
-                      <li
-                        key={event.id}
-                        className={`truncate border border-dashed px-1 py-0.5 text-[10px] ${
-                          event.isFollowing
-                            ? "border-pink-300 bg-pink-50 text-pink-700"
-                            : "border-gray-300 bg-gray-100 text-gray-700"
-                        }`}
-                        title={event.title}
-                      >
-                        {EVENT_TYPE_LABELS[event.type]} · {event.title}
+                      <li key={event.id} className="relative">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelectedId((current) => (current === event.id ? null : event.id))
+                          }
+                          data-event-trigger="true"
+                          className={`w-full truncate border border-dashed px-1 py-0.5 text-left text-[10px] ${
+                            selectedId === event.id
+                              ? "border-gray-800 bg-gray-200 text-gray-900"
+                              : event.isFollowing
+                                ? "border-pink-300 bg-pink-50 text-pink-700"
+                                : "border-gray-300 bg-gray-100 text-gray-700"
+                          }`}
+                          title={event.title}
+                        >
+                          {EVENT_TYPE_LABELS[event.type]} · {event.title}
+                        </button>
+                        {selectedId === event.id ? (
+                          <MiniEventPopup
+                            event={event}
+                            onUnfollow={
+                              event.isFollowing && event.category !== "personal"
+                                ? () => handleToggleFollow(event.id, false)
+                                : undefined
+                            }
+                            onDeletePersonal={
+                              event.category === "personal"
+                                ? () => handleDeletePersonalEvent(event.id)
+                                : undefined
+                            }
+                            onEditPersonal={
+                              event.category === "personal"
+                                ? () => handleEditPersonalEvent(event)
+                                : undefined
+                            }
+                          />
+                        ) : null}
                       </li>
                     ))}
                     {dayEvents.length > 3 ? (
                       <li className="text-[10px] text-gray-500">+{dayEvents.length - 3}</li>
                     ) : null}
                   </ul>
-                </button>
+                </div>
               );
             })}
           </div>
         </div>
-
-        <aside className="flex flex-col gap-3">
-          <SummaryPanel title="오늘" events={todayEvents} onSelect={setSelectedId} />
-          <SummaryPanel title="이번 주" events={weekEvents} onSelect={setSelectedId} />
-        </aside>
       </section>
-
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_360px]">
-        <div className="border border-dashed border-gray-500 bg-white/70 p-4">
-          <h2 className="mb-3 text-sm font-bold text-gray-600">[{monthLabel} 일정]</h2>
-          {monthEvents.length === 0 ? (
-            <p className="py-8 text-center text-sm text-gray-500">표시할 일정이 없습니다.</p>
-          ) : (
-            <ul className="divide-y divide-dashed divide-gray-300 border border-dashed border-gray-300">
-              {monthEvents.map((event) => (
-                <li key={event.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(event.id)}
-                    className={`grid w-full grid-cols-[96px_1fr_auto] items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 ${
-                      selectedEvent?.id === event.id ? "bg-gray-100" : ""
-                    }`}
-                  >
-                    <span className="font-mono text-xs text-gray-500">
-                      {formatDateTime(event.startsAt)}
-                    </span>
-                    <span className="min-w-0 truncate font-semibold text-gray-800">
-                      {event.title}
-                    </span>
-                    <span className="border border-dashed border-gray-300 bg-white px-2 py-0.5 text-[11px] text-gray-500">
-                      {EVENT_TYPE_LABELS[event.type]}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+      {isModalOpen ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/35 p-4">
+          <form
+            onSubmit={handleSavePersonalEvent}
+            className="w-full max-w-lg border border-dashed border-gray-500 bg-white p-4"
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-bold text-gray-900">
+                {personalForm.id ? "내 일정 수정" : "내 캘린더 저장"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="inline-flex h-8 w-8 items-center justify-center border border-dashed border-gray-400 bg-white hover:bg-gray-100"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <div className="space-y-2">
+              <input
+                value={personalForm.title}
+                onChange={(event) =>
+                  setPersonalForm((current) => ({ ...current, title: event.target.value }))
+                }
+                type="text"
+                placeholder="내 일정 제목"
+                className="h-10 w-full border border-dashed border-gray-400 bg-white px-3 text-sm outline-none focus:border-gray-700"
+                required
+              />
+              <input
+                value={personalForm.startsAt}
+                onChange={(event) =>
+                  setPersonalForm((current) => ({ ...current, startsAt: event.target.value }))
+                }
+                type="datetime-local"
+                className="h-10 w-full border border-dashed border-gray-400 bg-white px-3 text-sm outline-none focus:border-gray-700"
+                required
+              />
+              <input
+                value={personalForm.location}
+                onChange={(event) =>
+                  setPersonalForm((current) => ({ ...current, location: event.target.value }))
+                }
+                type="text"
+                placeholder="장소"
+                className="h-10 w-full border border-dashed border-gray-400 bg-white px-3 text-sm outline-none focus:border-gray-700"
+              />
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="inline-flex h-9 items-center justify-center border border-dashed border-gray-400 bg-white px-3 text-sm hover:bg-gray-100"
+              >
+                취소
+              </button>
+              <button
+                type="submit"
+                className="inline-flex h-9 items-center justify-center gap-1 border border-dashed border-gray-600 bg-gray-900 px-3 text-sm font-semibold text-white hover:bg-gray-700"
+              >
+                <Plus size={14} />
+                {personalForm.id ? "수정 저장" : "저장"}
+              </button>
+            </div>
+          </form>
         </div>
-
-        <EventDetail event={selectedEvent} />
-      </section>
+      ) : null}
     </main>
   );
 }
 
-function SummaryPanel({
-  title,
-  events,
-  onSelect,
+function MiniEventPopup({
+  event,
+  onUnfollow,
+  onEditPersonal,
+  onDeletePersonal,
 }: {
-  title: string;
-  events: CalendarEvent[];
-  onSelect: (id: string) => void;
+  event: CalendarEvent;
+  onUnfollow?: () => void;
+  onEditPersonal?: () => void;
+  onDeletePersonal?: () => void;
 }) {
-  return (
-    <section className="border border-dashed border-gray-500 bg-white/70 p-3">
-      <h2 className="mb-2 text-sm font-bold text-gray-700">{title}</h2>
-      {events.length === 0 ? (
-        <p className="text-xs text-gray-500">일정 없음</p>
-      ) : (
-        <ul className="space-y-2">
-          {events.slice(0, 5).map((event) => (
-            <li key={event.id}>
-              <button
-                type="button"
-                onClick={() => onSelect(event.id)}
-                className="w-full border border-dashed border-gray-300 bg-white px-2 py-2 text-left hover:bg-gray-100"
-              >
-                <div className="truncate text-xs font-bold text-gray-800">{event.title}</div>
-                <div className="mt-1 flex justify-between gap-2 text-[11px] text-gray-500">
-                  <span>{EVENT_TYPE_LABELS[event.type]}</span>
-                  <span>{formatDateTime(event.startsAt)}</span>
-                </div>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
+  const shortTime = new Intl.DateTimeFormat("ko-KR", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(event.startsAt));
 
-function EventDetail({ event }: { event: CalendarEvent | null }) {
   if (!event) {
-    return (
-      <aside className="border border-dashed border-gray-500 bg-white/70 p-4 text-sm text-gray-500">
-        일정을 선택하면 알림과 관련 액션을 설정할 수 있습니다.
-      </aside>
-    );
+    return null;
   }
 
   return (
-    <aside className="border border-dashed border-gray-500 bg-white/80 p-4">
-      <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
-        <span className="border border-dashed border-gray-400 bg-gray-100 px-2 py-0.5 font-bold text-gray-700">
-          {event.category === "community" || event.category === "personal"
-            ? "기타"
-            : CATEGORY_LABELS[event.category]}
-        </span>
-        <span>{EVENT_TYPE_LABELS[event.type]}</span>
-        <span>{event.timezone}</span>
+    <aside
+      data-event-popup="true"
+      className="absolute top-full left-0 z-20 mt-1 w-[260px] border border-gray-400 bg-white p-3 shadow-[0_4px_16px_rgba(0,0,0,0.18)]"
+    >
+      <h3 className="truncate text-sm font-bold text-gray-900">{event.title}</h3>
+      <div className="mt-2 flex flex-col gap-1.5 text-[11px] text-gray-700">
+        <p className="flex items-center gap-1">
+          <Clock3 size={12} />
+          {shortTime}
+        </p>
+        <p className="flex items-center gap-1">
+          <MapPin size={12} />
+          {event.platform ?? "미정"}
+        </p>
+        <p className="flex items-center gap-1">
+          <User size={12} />
+          {event.isFollowing ? "관심 일정" : "공개 일정"}
+        </p>
       </div>
-      <h2 className="mt-2 text-lg font-bold text-gray-950">{event.title}</h2>
-      <dl className="mt-3 grid grid-cols-[72px_1fr] gap-x-3 gap-y-2 text-sm">
-        <dt className="text-gray-500">시간</dt>
-        <dd className="font-semibold text-gray-800">{formatDateTime(event.startsAt)}</dd>
-        {event.episodeLabel ? (
-          <>
-            <dt className="text-gray-500">회차</dt>
-            <dd>{event.episodeLabel}</dd>
-          </>
-        ) : null}
-        {event.platform ? (
-          <>
-            <dt className="text-gray-500">플랫폼</dt>
-            <dd>{event.platform}</dd>
-          </>
-        ) : null}
-        <dt className="text-gray-500">알림</dt>
-        <dd>
-          {event.isFollowing
-            ? event.reminderOffsetMinutes === 30
-              ? "30분 전 + 당일"
-              : "당일 알림"
-            : "관심 등록 필요"}
-        </dd>
-      </dl>
-
-      <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-        {event.relatedBoardSlug ? (
-          <Link
-            href={getBoardHref(event.relatedBoardSlug)}
-            className="inline-flex items-center justify-center gap-1 border border-dashed border-gray-500 bg-white px-2 py-2 hover:bg-gray-100"
+      <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+        {onUnfollow ? (
+          <button
+            type="button"
+            onClick={onUnfollow}
+            className="inline-flex items-center justify-center gap-1 border border-dashed border-pink-300 bg-pink-50 px-2 py-1.5 text-pink-700 hover:bg-pink-100"
           >
-            <MessageSquareText size={15} />
-            관련 채널
-          </Link>
+            <Bell size={12} />
+            팔로우 해제
+          </button>
         ) : null}
-        {event.relatedBoardSlug ? (
-          <Link
-            href={getBoardWriteHref(event.relatedBoardSlug, event.title)}
-            className="inline-flex items-center justify-center gap-1 border border-dashed border-gray-500 bg-white px-2 py-2 hover:bg-gray-100"
+        {onEditPersonal ? (
+          <button
+            type="button"
+            onClick={onEditPersonal}
+            className="inline-flex items-center justify-center gap-1 border border-dashed border-gray-500 bg-white px-2 py-1.5 hover:bg-gray-100"
           >
-            <PenLine size={15} />
-            글쓰기
-          </Link>
+            <Edit3 size={12} />
+            수정
+          </button>
         ) : null}
-        {event.sourceUrl ? (
-          <a
-            href={event.sourceUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center justify-center gap-1 border border-dashed border-gray-500 bg-white px-2 py-2 hover:bg-gray-100"
+        {onDeletePersonal ? (
+          <button
+            type="button"
+            onClick={onDeletePersonal}
+            className="inline-flex items-center justify-center gap-1 border border-dashed border-red-300 bg-red-50 px-2 py-1.5 text-red-700 hover:bg-red-100"
           >
-            <ExternalLink size={15} />
-            출처
-          </a>
+            <Trash2 size={12} />
+            삭제
+          </button>
         ) : null}
-        <button
-          type="button"
-          className={`inline-flex items-center justify-center gap-1 border border-dashed px-2 py-2 ${
-            event.isFollowing
-              ? "border-pink-400 bg-pink-50 text-pink-700"
-              : "border-gray-500 bg-white hover:bg-gray-100"
-          }`}
-        >
-          <Bell size={15} />
-          {event.isFollowing ? "알림 설정됨" : "알림 받기"}
-        </button>
       </div>
     </aside>
   );
@@ -393,18 +540,8 @@ function isSameMonth(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
 }
 
-function getBoardHref(slug: string): string {
-  return slug === "board" ? "/board" : `/board/${slug}`;
-}
-
-function getBoardWriteHref(slug: string, title: string): string {
-  const topic = encodeURIComponent(title);
-  return slug === "board" ? `/feed/write?topic=${topic}` : `/board/${slug}/write?topic=${topic}`;
-}
-
-function isWithinDays(target: Date, base: Date, days: number): boolean {
-  const start = new Date(base.getFullYear(), base.getMonth(), base.getDate()).getTime();
-  const end = start + days * 24 * 60 * 60 * 1000;
-  const time = target.getTime();
-  return time >= start && time <= end;
+function toLocalDateTimeValue(value: string): string {
+  const date = new Date(value);
+  const localMs = date.getTime() - date.getTimezoneOffset() * 60 * 1000;
+  return new Date(localMs).toISOString().slice(0, 16);
 }

@@ -57,6 +57,15 @@ export type CalendarEvent = {
   episodeLabel?: string;
   platform?: string;
   sourceUrl?: string;
+  kakaoPlace?: {
+    id: string;
+    name: string;
+    lat: number;
+    lng: number;
+    roadAddress?: string;
+    address?: string;
+    placeUrl?: string;
+  };
   relatedBoardSlug?: string;
   relatedBoardLabel?: string;
   isFollowing: boolean;
