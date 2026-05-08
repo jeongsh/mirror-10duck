@@ -21,7 +21,7 @@ export type ReleaseFormState = {
   season: string;
   episodeCount: string;
   details: string;
-  lastCheckedAt: string;
+  releaseDate: string;
 };
 
 export const emptyReleaseForm: ReleaseFormState = {
@@ -37,7 +37,7 @@ export const emptyReleaseForm: ReleaseFormState = {
   season: "",
   episodeCount: "",
   details: "",
-  lastCheckedAt: "",
+  releaseDate: "",
 };
 
 export function ReleaseForm({
@@ -115,7 +115,7 @@ export function ReleaseForm({
           ? data.chapters?.toString() ?? prev.episodeCount
           : data.episodes?.toString() ?? prev.episodeCount,
       details: formatDetailsForTextarea(buildAniListDetails(data)) || prev.details,
-      lastCheckedAt: toDatetimeLocal(new Date()),
+      releaseDate: formatAniListStartDate(data.startDate) || prev.releaseDate,
     }));
   };
 
@@ -285,10 +285,10 @@ export function ReleaseForm({
           </select>
         </label>
         <TextInput
-          label="마지막 확인"
-          type="datetime-local"
-          value={form.lastCheckedAt}
-          onChange={(value) => set("lastCheckedAt", value)}
+          label="출시 일자"
+          type="date"
+          value={form.releaseDate}
+          onChange={(value) => set("releaseDate", value)}
         />
       </div>
 
@@ -478,18 +478,6 @@ export function emptyToNull(value: string) {
   return trimmed ? trimmed : null;
 }
 
-export function datetimeLocalToIso(value: string) {
-  return value ? new Date(value).toISOString() : null;
-}
-
-export function isoToDatetimeLocal(value: string | null | undefined) {
-  if (!value) return "";
-  const d = new Date(value);
-  const offset = d.getTimezoneOffset();
-  const local = new Date(d.getTime() - offset * 60 * 1000);
-  return local.toISOString().slice(0, 16);
-}
-
 export type ReleaseDetailEntry = {
   label: string;
   value: string;
@@ -561,6 +549,11 @@ type AniListMedia = {
   seasonYear: number | null;
   episodes: number | null;
   chapters: number | null;
+  startDate: {
+    year: number | null;
+    month: number | null;
+    day: number | null;
+  } | null;
 };
 
 async function searchAnilistMedia(search: string, type: AniListMediaType) {
@@ -606,6 +599,11 @@ async function searchAnilistMedia(search: string, type: AniListMediaType) {
           seasonYear
           episodes
           chapters
+          startDate {
+            year
+            month
+            day
+          }
         }
       }
     }
@@ -660,14 +658,13 @@ function formatAniListSeason(year: number | null, season: AniListMedia["season"]
   return [year, season ? label[season] : null].filter(Boolean).join(" ");
 }
 
-function toDatetimeLocal(value: Date) {
-  const offset = value.getTimezoneOffset();
-  const local = new Date(value.getTime() - offset * 60 * 1000);
-  return local.toISOString().slice(0, 16);
-}
-
 function hasHangul(value: string | null | undefined) {
   return Boolean(value && /[가-힣]/.test(value));
+}
+
+function formatAniListStartDate(value: AniListMedia["startDate"]) {
+  if (!value?.year || !value.month || !value.day) return "";
+  return `${value.year}-${String(value.month).padStart(2, "0")}-${String(value.day).padStart(2, "0")}`;
 }
 
 function pickKoreanTitle(media: AniListMedia) {

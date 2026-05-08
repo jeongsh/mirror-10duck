@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import {
   ReleaseForm,
   csvToArray,
-  datetimeLocalToIso,
   emptyReleaseForm,
   emptyToNull,
   numberOrNull,
@@ -38,7 +37,7 @@ export default function CreateReleasePage() {
         season: emptyToNull(form.season),
         episode_count: numberOrNull(form.episodeCount),
         details_json: parseDetails(form.details),
-        last_checked_at: datetimeLocalToIso(form.lastCheckedAt),
+        release_date: emptyToNull(form.releaseDate),
       },
     ]);
 

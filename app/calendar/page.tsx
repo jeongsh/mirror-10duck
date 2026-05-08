@@ -16,6 +16,8 @@ import {
   X,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { supabase } from "@/lib/supabase/client";
+import { fetchFollowedReleaseIds, getCurrentUserId, setReleaseFollow } from "@/lib/supabase/releaseFollows";
 import {
   CATEGORY_LABELS,
   EVENT_TYPE_LABELS,
@@ -26,6 +28,7 @@ import {
   getCalendarEvents,
   startOfMonth,
   type CalendarEvent,
+  type CalendarEventType,
   type OtakuCategory,
   ymdKey,
 } from "@/lib/otaku/hub";
@@ -41,13 +44,22 @@ type PersonalCalendarForm = {
   location: string;
 };
 
+type ReleaseDateRow = {
+  id: string;
+  category: "ANIME" | "MANGA" | "GAME";
+  title: string;
+  release_date: string;
+};
+
 export default function CalendarPage() {
   const [cursor, setCursor] = useState<Date>(() => startOfMonth(new Date()));
   const [activeCategory, setActiveCategory] = useState<OtakuCategory>("all");
   const [followingOnly, setFollowingOnly] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [personalEvents, setPersonalEvents] = useState<CalendarEvent[]>([]);
-  const [followOverrides, setFollowOverrides] = useState<Record<string, boolean>>({});
+  const [dbEvents, setDbEvents] = useState<CalendarEvent[]>([]);
+  const [followedReleaseIds, setFollowedReleaseIds] = useState<Set<string>>(new Set());
+  const [userId, setUserId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [personalForm, setPersonalForm] = useState<PersonalCalendarForm>({
     id: null,
@@ -58,15 +70,97 @@ export default function CalendarPage() {
 
   const today = useMemo(() => new Date(), []);
   const baseEvents = useMemo(() => getCalendarEvents(), []);
+
+  useEffect(() => {
+    const fetchEvents = async () => {
+      const { data, error } = await supabase
+        .from("release_events")
+        .select(`
+          id,
+          title,
+          starts_at,
+          timezone,
+          event_type,
+          episode_label,
+          platform,
+          source_url,
+          release_item_id,
+          release_items (
+            category
+          )
+        `)
+        .eq("status", "PUBLISHED");
+
+      const { data: releaseItems, error: releaseItemsError } = await supabase
+        .from("release_items")
+        .select("id, category, title, release_date")
+        .neq("status", "HIDDEN")
+        .not("release_date", "is", null);
+
+      if (error) {
+        console.error("Error fetching calendar events:", error);
+      }
+
+      if (releaseItemsError) {
+        console.error("Error fetching release dates:", releaseItemsError);
+      }
+
+      const currentUserId = await getCurrentUserId();
+      setUserId(currentUserId);
+
+      let persistedFollowedIds = new Set<string>();
+      if (currentUserId) {
+        try {
+          persistedFollowedIds = await fetchFollowedReleaseIds(currentUserId);
+        } catch (followError) {
+          console.error("Error fetching release follows:", followError);
+        }
+      }
+      setFollowedReleaseIds(persistedFollowedIds);
+
+      if (data || releaseItems) {
+        const mappedData: CalendarEvent[] = ((data ?? []) as any[]).map((item) => ({
+          id: item.id,
+          contentId: item.release_item_id,
+          category: item.release_items?.category?.toLowerCase() || "anime",
+          type: item.event_type.toLowerCase() as CalendarEventType,
+          title: item.title,
+          startsAt: item.starts_at,
+          timezone: item.timezone,
+          episodeLabel: item.episode_label,
+          platform: item.platform,
+          sourceUrl: item.source_url,
+          isFollowing: false,
+          reminderOffsetMinutes: null,
+        }));
+        const mappedReleaseDates: CalendarEvent[] = ((releaseItems ?? []) as ReleaseDateRow[]).map((item) => ({
+          id: `release-date-${item.id}`,
+          contentId: item.id,
+          category: item.category.toLowerCase() as Exclude<OtakuCategory, "all">,
+          type: item.category === "MANGA" ? "manga_volume" : "anime_airing",
+          title: item.title,
+          startsAt: dateOnlyToKstIso(item.release_date),
+          timezone: "Asia/Seoul",
+          platform: "출시 일자",
+          isFollowing: false,
+          reminderOffsetMinutes: null,
+        }));
+        setDbEvents([...mappedData, ...mappedReleaseDates]);
+      }
+    };
+
+    void fetchEvents();
+  }, []);
+
   const events = useMemo(
     () =>
-      [...baseEvents, ...personalEvents]
+      [...baseEvents, ...dbEvents, ...personalEvents]
         .map((event) => ({
           ...event,
-          isFollowing: followOverrides[event.id] ?? event.isFollowing,
+          isFollowing: event.contentId ? followedReleaseIds.has(event.contentId) : event.isFollowing,
         }))
         .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt)),
-    [baseEvents, followOverrides, personalEvents],
+    [baseEvents, dbEvents, followedReleaseIds, personalEvents],
   );
   const monthEvents = useMemo(() => {
     const categoryFiltered = filterByCategory(events, activeCategory);
@@ -192,8 +286,31 @@ export default function CalendarPage() {
     setIsModalOpen(true);
   }
 
-  function handleToggleFollow(eventId: string, nextValue: boolean) {
-    setFollowOverrides((current) => ({ ...current, [eventId]: nextValue }));
+  async function handleToggleFollow(releaseItemId: string, nextValue: boolean) {
+    if (!userId) {
+      alert("로그인 후 일정 알림을 받을 수 있습니다.");
+      return;
+    }
+
+    setFollowedReleaseIds((current) => {
+      const next = new Set(current);
+      if (nextValue) next.add(releaseItemId);
+      else next.delete(releaseItemId);
+      return next;
+    });
+
+    try {
+      await setReleaseFollow(userId, releaseItemId, nextValue);
+    } catch (error) {
+      setFollowedReleaseIds((current) => {
+        const next = new Set(current);
+        if (nextValue) next.delete(releaseItemId);
+        else next.add(releaseItemId);
+        return next;
+      });
+      const message = error instanceof Error ? error.message : "알 수 없는 오류";
+      alert("일정 알림 변경 실패: " + message);
+    }
   }
 
   return (
@@ -358,8 +475,8 @@ export default function CalendarPage() {
                           <MiniEventPopup
                             event={event}
                             onUnfollow={
-                              event.isFollowing && event.category !== "personal"
-                                ? () => handleToggleFollow(event.id, false)
+                              event.isFollowing && event.contentId && event.category !== "personal"
+                                ? () => void handleToggleFollow(event.contentId!, false)
                                 : undefined
                             }
                             onDeletePersonal={
@@ -544,4 +661,8 @@ function toLocalDateTimeValue(value: string): string {
   const date = new Date(value);
   const localMs = date.getTime() - date.getTimezoneOffset() * 60 * 1000;
   return new Date(localMs).toISOString().slice(0, 16);
+}
+
+function dateOnlyToKstIso(value: string): string {
+  return `${value}T00:00:00+09:00`;
 }

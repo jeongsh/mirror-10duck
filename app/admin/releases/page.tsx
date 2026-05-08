@@ -14,7 +14,7 @@ type AdminReleaseRow = {
   season: string | null;
   episode_count: number | null;
   status: string;
-  last_checked_at: string | null;
+  release_date: string | null;
 };
 
 export default function AdminReleasesPage() {
@@ -27,7 +27,7 @@ export default function AdminReleasesPage() {
       setLoading(true);
       const { data, error } = await supabase
         .from("release_items")
-        .select("id, category, title, original_title, poster_url, season, episode_count, status, last_checked_at")
+        .select("id, category, title, original_title, poster_url, season, episode_count, status, release_date")
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -42,7 +42,7 @@ export default function AdminReleasesPage() {
             season: item.season,
             episode_count: item.episodeCount,
             status: "PUBLISHED",
-            last_checked_at: item.lastCheckedAt,
+            release_date: item.releaseDate,
           })),
         );
       } else {

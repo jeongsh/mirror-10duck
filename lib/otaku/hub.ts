@@ -26,7 +26,7 @@ export type ReleaseItem = {
   season: string;
   episodeCount: number | null;
   details?: Array<{ label: string; value: string }>;
-  lastCheckedAt: string;
+  releaseDate: string | null;
   isFollowing: boolean;
   notifications: {
     sameDay: boolean;
@@ -168,7 +168,7 @@ export function getReleaseItems(now = new Date()): ReleaseItem[] {
       studios: ["Studio Lumi"],
       season: "2026 여름",
       episodeCount: 12,
-      lastCheckedAt: isoAt(addDays(now, -1), 10, 0),
+      releaseDate: ymdAt(addDays(now, 14)),
       isFollowing: true,
       notifications: { sameDay: true, thirtyMinutesBefore: false, changeNotice: true },
     },
@@ -187,7 +187,7 @@ export function getReleaseItems(now = new Date()): ReleaseItem[] {
       studios: ["월간 코믹 루나"],
       season: "2026 상반기",
       episodeCount: null,
-      lastCheckedAt: isoAt(addDays(now, -2), 15, 30),
+      releaseDate: ymdAt(addDays(now, 30)),
       isFollowing: false,
       notifications: { sameDay: true, thirtyMinutesBefore: false, changeNotice: false },
     },
@@ -272,6 +272,10 @@ function addDays(d: Date, days: number): Date {
 
 function isoAt(d: Date, hours: number, minutes: number): string {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), hours, minutes).toISOString();
+}
+
+function ymdAt(d: Date): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
 function pad2(n: number): string {

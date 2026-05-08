@@ -4,14 +4,13 @@ import Link from "next/link";
 import { Bell, BellRing } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { fetchFollowedReleaseIds, getCurrentUserId, setReleaseFollow } from "@/lib/supabase/releaseFollows";
 import {
   CATEGORY_LABELS,
   PUBLIC_CATEGORIES,
   type OtakuCategory,
   type ReleaseItem,
   filterByCategory,
-  formatDateTime,
-  getCalendarEvents,
   getReleaseItems,
 } from "@/lib/otaku/hub";
 
@@ -23,9 +22,9 @@ export default function ReleasesPage() {
   const [activeCategory, setActiveCategory] = useState<OtakuCategory>("all");
   const [releases, setReleases] = useState<ReleaseItem[]>([]);
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
+  const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const events = useMemo(() => getCalendarEvents(), []);
   const visibleReleases = useMemo(
     () => filterByCategory(releases, activeCategory),
     [activeCategory, releases],
@@ -37,20 +36,32 @@ export default function ReleasesPage() {
       const { data, error } = await supabase
         .from("release_items")
         .select(
-          "id, category, title, original_title, synopsis, poster_url, banner_url, genres, studios, season, episode_count, status, last_checked_at",
+          "id, category, title, original_title, synopsis, poster_url, banner_url, genres, studios, season, episode_count, status, release_date",
         )
         .neq("status", "HIDDEN")
         .order("created_at", { ascending: false });
+
+      const currentUserId = await getCurrentUserId();
+      setUserId(currentUserId);
+
+      let persistedFollowedIds = new Set<string>();
+      if (currentUserId) {
+        try {
+          persistedFollowedIds = await fetchFollowedReleaseIds(currentUserId);
+        } catch (followError) {
+          console.error("Error fetching release follows:", followError);
+        }
+      }
 
       if (error) {
         console.error("Error fetching releases:", error);
         const fallback = getReleaseItems();
         setReleases(fallback);
-        setFollowedIds(new Set(fallback.filter((item) => item.isFollowing).map((item) => item.id)));
+        setFollowedIds(persistedFollowedIds.size > 0 ? persistedFollowedIds : new Set(fallback.filter((item) => item.isFollowing).map((item) => item.id)));
       } else {
         const mapped = ((data ?? []) as ReleaseRow[]).map(mapReleaseRow);
         setReleases(mapped);
-        setFollowedIds(new Set(mapped.filter((item) => item.isFollowing).map((item) => item.id)));
+        setFollowedIds(persistedFollowedIds);
       }
       setLoading(false);
     };
@@ -58,13 +69,32 @@ export default function ReleasesPage() {
     void fetchReleases();
   }, []);
 
-  const toggleFollow = (id: string) => {
+  const toggleFollow = async (id: string) => {
+    if (!userId) {
+      alert("로그인 후 일정 알림을 받을 수 있습니다.");
+      return;
+    }
+
+    const nextEnabled = !followedIds.has(id);
     setFollowedIds((current) => {
       const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (nextEnabled) next.add(id);
+      else next.delete(id);
       return next;
     });
+
+    try {
+      await setReleaseFollow(userId, id, nextEnabled);
+    } catch (error) {
+      setFollowedIds((current) => {
+        const next = new Set(current);
+        if (nextEnabled) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+      const message = error instanceof Error ? error.message : "알 수 없는 오류";
+      alert("일정 알림 변경 실패: " + message);
+    }
   };
 
   return (
@@ -136,7 +166,7 @@ export default function ReleasesPage() {
                 </Link>
                 <button
                   type="button"
-                  onClick={() => toggleFollow(item.id)}
+                  onClick={() => void toggleFollow(item.id)}
                   className={`absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center border border-dashed shadow-sm ${
                     followed
                       ? "border-pink-400 bg-pink-50 text-pink-700"
@@ -182,7 +212,7 @@ type ReleaseRow = {
   season: string | null;
   episode_count: number | null;
   status: "DRAFT" | "PUBLISHED" | "HIDDEN";
-  last_checked_at: string | null;
+  release_date: string | null;
 };
 
 function mapReleaseRow(row: ReleaseRow): ReleaseItem {
@@ -198,7 +228,7 @@ function mapReleaseRow(row: ReleaseRow): ReleaseItem {
     studios: row.studios ?? [],
     season: row.season ?? "미정",
     episodeCount: row.episode_count,
-    lastCheckedAt: row.last_checked_at || new Date().toISOString(),
+    releaseDate: row.release_date,
     isFollowing: false,
     notifications: {
       sameDay: false,

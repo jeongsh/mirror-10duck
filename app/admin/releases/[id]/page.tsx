@@ -8,11 +8,9 @@ import {
   type ReleaseFormState,
   arrayToCsv,
   csvToArray,
-  datetimeLocalToIso,
   emptyReleaseForm,
   emptyToNull,
   formatDetailsForTextarea,
-  isoToDatetimeLocal,
   numberOrNull,
   parseDetails,
 } from "@/components/releases/AdminReleaseForm";
@@ -33,7 +31,7 @@ type ReleaseEditRow = {
   season: string | null;
   episode_count: number | null;
   details_json: unknown | null;
-  last_checked_at: string | null;
+  release_date: string | null;
 };
 
 export default function AdminReleaseEditPage({ params }: { params: Promise<{ id: string }> }) {
@@ -49,7 +47,7 @@ export default function AdminReleaseEditPage({ params }: { params: Promise<{ id:
       const { data, error } = await supabase
         .from("release_items")
         .select(
-          "id, category, status, title, original_title, synopsis, poster_url, banner_url, genres, studios, season, episode_count, details_json, last_checked_at",
+          "id, category, status, title, original_title, synopsis, poster_url, banner_url, genres, studios, season, episode_count, details_json, release_date",
         )
         .eq("id", id)
         .single();
@@ -76,7 +74,7 @@ export default function AdminReleaseEditPage({ params }: { params: Promise<{ id:
         season: item.season ?? "",
         episodeCount: item.episode_count?.toString() ?? "",
         details: formatDetailsForTextarea(item.details_json),
-        lastCheckedAt: isoToDatetimeLocal(item.last_checked_at),
+        releaseDate: item.release_date ?? "",
       });
       setLoading(false);
     };
@@ -106,7 +104,7 @@ export default function AdminReleaseEditPage({ params }: { params: Promise<{ id:
         season: emptyToNull(form.season),
         episode_count: numberOrNull(form.episodeCount),
         details_json: parseDetails(form.details),
-        last_checked_at: datetimeLocalToIso(form.lastCheckedAt),
+        release_date: emptyToNull(form.releaseDate),
       })
       .eq("id", id);
 

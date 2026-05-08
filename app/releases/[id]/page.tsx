@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { Bell, BellRing } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { fetchFollowedReleaseIds, getCurrentUserId, setReleaseFollow } from "@/lib/supabase/releaseFollows";
 import {
   CATEGORY_LABELS,
   type OtakuCategory,
@@ -22,6 +23,7 @@ export default function ReleaseDetailPage() {
   const [item, setItem] = useState<ReleaseItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [followed, setFollowed] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
   const events = useMemo(
     () => getCalendarEvents().filter((event) => event.contentId === item?.id),
     [item?.id],
@@ -34,20 +36,32 @@ export default function ReleaseDetailPage() {
       const { data, error } = await supabase
         .from("release_items")
         .select(
-          "id, category, title, original_title, synopsis, poster_url, banner_url, genres, studios, season, episode_count, details_json, status, last_checked_at",
+          "id, category, title, original_title, synopsis, poster_url, banner_url, genres, studios, season, episode_count, details_json, status, release_date",
         )
         .eq("id", id)
         .single();
+
+      const currentUserId = await getCurrentUserId();
+      setUserId(currentUserId);
+
+      let persistedFollowedIds = new Set<string>();
+      if (currentUserId) {
+        try {
+          persistedFollowedIds = await fetchFollowedReleaseIds(currentUserId);
+        } catch (followError) {
+          console.error("Error fetching release follows:", followError);
+        }
+      }
 
       if (error) {
         console.error("Error fetching release detail:", error);
         const fallback = getReleaseItemById(id);
         setItem(fallback ?? null);
-        setFollowed(fallback?.isFollowing ?? false);
+        setFollowed(fallback ? persistedFollowedIds.has(fallback.id) || fallback.isFollowing : false);
       } else if (data) {
         const mapped = mapReleaseRow(data as ReleaseRow);
         setItem(mapped);
-        setFollowed(mapped.isFollowing);
+        setFollowed(persistedFollowedIds.has(mapped.id));
       }
 
       setLoading(false);
@@ -55,6 +69,25 @@ export default function ReleaseDetailPage() {
 
     if (params.id) void fetchRelease();
   }, [params.id]);
+
+  const toggleFollow = async () => {
+    if (!item) return;
+    if (!userId) {
+      alert("로그인 후 일정 알림을 받을 수 있습니다.");
+      return;
+    }
+
+    const nextEnabled = !followed;
+    setFollowed(nextEnabled);
+
+    try {
+      await setReleaseFollow(userId, item.id, nextEnabled);
+    } catch (error) {
+      setFollowed(!nextEnabled);
+      const message = error instanceof Error ? error.message : "알 수 없는 오류";
+      alert("일정 알림 변경 실패: " + message);
+    }
+  };
 
   if (loading) {
     return (
@@ -77,7 +110,7 @@ export default function ReleaseDetailPage() {
 
   return (
     <main className="flex w-full flex-col gap-6">
-      <Hero item={item} followed={followed} onToggleFollow={() => setFollowed((v) => !v)} />
+      <Hero item={item} followed={followed} onToggleFollow={() => void toggleFollow()} />
 
       <Panel title="소개">
         <p className="text-sm leading-7 text-gray-700 whitespace-pre-wrap">
@@ -241,7 +274,7 @@ type ReleaseRow = {
   episode_count: number | null;
   details_json: unknown | null;
   status: "DRAFT" | "PUBLISHED" | "HIDDEN";
-  last_checked_at: string | null;
+  release_date: string | null;
 };
 
 function mapReleaseRow(row: ReleaseRow): ReleaseItem {
@@ -258,7 +291,7 @@ function mapReleaseRow(row: ReleaseRow): ReleaseItem {
     season: row.season ?? "미정",
     episodeCount: row.episode_count,
     details: parseDetailEntries(row.details_json),
-    lastCheckedAt: row.last_checked_at || new Date().toISOString(),
+    releaseDate: row.release_date,
     isFollowing: false,
     notifications: {
       sameDay: false,
@@ -284,6 +317,7 @@ function parseDetailEntries(value: unknown): Array<{ label: string; value: strin
 function buildDetailEntries(item: ReleaseItem) {
   const entries = [
     ...(item.details ?? []),
+    { label: "출시 일자", value: item.releaseDate ?? "미정" },
     { label: "분기", value: item.season || "미정" },
     { label: "화수", value: item.episodeCount ? `${item.episodeCount}화` : "미정" },
     {
