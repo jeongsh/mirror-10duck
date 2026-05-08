@@ -134,6 +134,7 @@ export default function CharacterControls() {
 }
 
 function BasicPanel() {
+  const authUser = useAuthUser();
   const emotion = useCharacterStore((s) => s.emotion);
   const isTracking = useCharacterStore((s) => s.isTracking);
   const setEmotion = useCharacterStore((s) => s.setEmotion);
@@ -148,7 +149,7 @@ function BasicPanel() {
   };
 
   const handleRealNotify = async (type: "COMMENT" | "MESSAGE") => {
-    const userId = useAuthUser.getState().user?.id;
+    const userId = authUser?.id;
     if (!userId) {
       notify("로그인이 필요합니다.", "sad");
       return;

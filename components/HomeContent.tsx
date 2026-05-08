@@ -115,7 +115,7 @@ export default function HomeContent() {
                       {post.title || "제목 없음"}
                     </span>
                     <span className="w-24 shrink-0 truncate text-right text-xs text-gray-500">
-                      {post.author_email.split("@")[0]}
+                      {post.author_email?.split("@")[0] ?? "익명"}
                     </span>
                     <span className="w-28 shrink-0 text-right text-[10px] text-gray-400 tabular-nums">
                       조회 {postAggregateDefaults(post).view_count} · 댓글{" "}

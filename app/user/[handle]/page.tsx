@@ -306,7 +306,8 @@ export default function UserFeedPage() {
           posts.map((post) => {
             const stats = postAggregateDefaults(post);
             const { body, imageUrls } = splitFeedBody(post.content);
-            const authorHandle = post.profiles?.handle || post.profiles?.nickname || post.author_email.split("@")[0];
+            const authorHandle =
+              post.profiles?.handle || post.profiles?.nickname || post.author_email?.split("@")[0] || "익명";
 
             return (
               <article
@@ -368,7 +369,11 @@ export default function UserFeedPage() {
                         <MessageCircle size={17} />
                         {stats.comment_count}
                       </button>
-                      <ReactionBar postId={post.id} viewerId={currentUser?.id ?? null} authorId={post.author_id} />
+                      <ReactionBar
+                        postId={post.id}
+                        viewerId={currentUser?.id ?? null}
+                        authorId={post.author_id ?? undefined}
+                      />
                       <span className="flex items-center gap-1">
                         <Eye size={17} />
                         {stats.view_count}

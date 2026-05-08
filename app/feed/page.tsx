@@ -79,7 +79,7 @@ export default function FeedPage() {
 
   const enrichProfiles = useCallback(async (rows: CommunityPost[]) => {
     const missingAuthorIds = Array.from(
-      new Set(rows.filter((post) => !post.profiles).map((post) => post.author_id)),
+      new Set(rows.filter((post) => !post.profiles && !!post.author_id).map((post) => post.author_id as string)),
     );
 
     if (missingAuthorIds.length === 0) return rows;
@@ -95,7 +95,7 @@ export default function FeedPage() {
 
     return rows.map((post) => ({
       ...post,
-      profiles: post.profiles ?? profileMap.get(post.author_id) ?? null,
+      profiles: post.profiles ?? (post.author_id ? profileMap.get(post.author_id) ?? null : null),
     }));
   }, []);
 
@@ -518,7 +518,8 @@ export default function FeedPage() {
           posts.map((post) => {
             const stats = postAggregateDefaults(post);
             const { body, imageUrls } = splitFeedBody(post.content);
-            const authorHandle = post.profiles?.handle || post.profiles?.nickname || post.author_email.split("@")[0];
+            const authorHandle =
+              post.profiles?.handle || post.profiles?.nickname || post.author_email?.split("@")[0] || "익명";
 
             return (
               <article
@@ -621,7 +622,7 @@ export default function FeedPage() {
                       <ReactionBar
                         postId={post.id}
                         viewerId={currentUser?.id ?? null}
-                        authorId={post.author_id}
+                        authorId={post.author_id ?? undefined}
                       />
 
                       <span className="flex items-center gap-1">

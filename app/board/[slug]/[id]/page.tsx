@@ -118,7 +118,7 @@ export default function BoardPostDetailPage() {
       alert("로그인이 필요합니다.");
       return;
     }
-    if (!post || post.author_id === userId) return;
+    if (!post || !post.author_id || post.author_id === userId) return;
 
     if (isFollowingAuthor) {
       await supabase
@@ -227,7 +227,7 @@ export default function BoardPostDetailPage() {
       alert(error.message);
     } else {
       setPost({ ...post, is_hot: newHotStatus });
-      if (newHotStatus && userId && post.author_id !== userId) {
+      if (newHotStatus && userId && post.author_id && post.author_id !== userId) {
         await createNotification({
           receiverId: post.author_id,
           senderId: userId || null,
@@ -332,7 +332,7 @@ export default function BoardPostDetailPage() {
               setPost((p) => (p ? { ...p, upvote_count: next.upvote_count, downvote_count: next.downvote_count } : null))
             }
           />
-          <ReactionBar postId={post.id} viewerId={userId || null} authorId={post.author_id} />
+          <ReactionBar postId={post.id} viewerId={userId || null} authorId={post.author_id ?? undefined} />
         </div>
       ) : null}
 
@@ -399,7 +399,7 @@ export default function BoardPostDetailPage() {
       {post ? (
         <CommentSection
           postId={post.id}
-          postAuthorId={post.author_id}
+          postAuthorId={post.author_id ?? undefined}
           viewerId={userId || null}
           viewerEmail={userEmail || null}
           allowAnonymous={board?.allow_anonymous ?? false}

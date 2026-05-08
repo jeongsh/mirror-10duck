@@ -405,7 +405,7 @@ export default function BoardPage() {
                     <div className="flex items-center overflow-hidden">
                       <IdentityBadge
                         profile={post.profiles}
-                        fallback={{ nickname: post.anonymous_nickname || post.author_email.split("@")[0] || "익명" }}
+                        fallback={{ nickname: post.anonymous_nickname || post.author_email?.split("@")[0] || "익명" }}
                         isAnonymous={post.is_anonymous || !post.author_id}
                         ip={formatIp(post.author_ip)}
                         size="sm"
@@ -502,7 +502,7 @@ export default function BoardPage() {
                     <div className="flex items-center overflow-hidden">
                       <IdentityBadge
                         profile={post.profiles}
-                        fallback={{ nickname: post.anonymous_nickname || post.author_email.split("@")[0] || "익명" }}
+                        fallback={{ nickname: post.anonymous_nickname || post.author_email?.split("@")[0] || "익명" }}
                         isAnonymous={post.is_anonymous || !post.author_id}
                         ip={formatIp(post.author_ip)}
                         size="sm"
