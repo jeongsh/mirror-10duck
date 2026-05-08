@@ -6,10 +6,12 @@ import RightSidebar from "./RightSidebar";
 export default function MainLayoutClient({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isAdmin = pathname?.startsWith("/admin");
+  const isAuth = pathname?.startsWith("/auth");
+  const hideChrome = isAdmin || isAuth;
 
   return (
     <>
-      {!isAdmin && (
+      {!hideChrome && (
         <div className="sticky top-20 z-10 hidden h-0 w-0 2xl:block">
           <aside className="absolute right-[calc(100%+20px)] top-0 flex h-[600px] w-[200px] flex-col items-center justify-center border border-dashed border-gray-400 bg-gray-100/50 text-center text-xs text-gray-400">
             [Left
@@ -20,7 +22,7 @@ export default function MainLayoutClient({ children }: { children: React.ReactNo
       )}
       <div className="flex flex-col items-start gap-6 lg:flex-row">
         <div className="min-w-0 flex-1 w-full">{children}</div>
-        {!isAdmin && <RightSidebar />}
+        {!hideChrome && <RightSidebar />}
       </div>
     </>
   );

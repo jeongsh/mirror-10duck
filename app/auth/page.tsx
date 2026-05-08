@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
@@ -9,6 +10,7 @@ import { checkHandleAvailability } from "@/lib/supabase/profiles";
 type AuthMode = "login" | "signup";
 
 export default function AuthPage() {
+  const router = useRouter();
   const authUser = useAuthUser();
   const [mode, setMode] = useState<AuthMode>("login");
   const [loginId, setLoginId] = useState("");
@@ -86,7 +88,11 @@ export default function AuthPage() {
       if (error) {
         setMessage(error.message);
       } else {
-        setMessage("로그인 성공. 채널 목록에서 글을 작성해 보세요.");
+        setMessage("로그인 성공. 홈으로 이동합니다.");
+        setLoading(false);
+        router.push("/");
+        router.refresh();
+        return;
       }
     }
 
@@ -101,7 +107,7 @@ export default function AuthPage() {
   };
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-4 p-6">
+    <main className="mx-auto flex w-full max-w-2xl flex-col gap-4">
       <header className="border border-dashed border-gray-500 bg-white/70 p-4">
         <h1 className="text-lg font-bold">Supabase 인증</h1>
         <p className="mt-2 text-sm text-gray-600">
