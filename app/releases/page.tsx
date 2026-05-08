@@ -109,107 +109,61 @@ export default function ReleasesPage() {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+      <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
         {loading ? (
-          <p className="border border-dashed border-gray-500 bg-white/70 p-6 text-sm text-gray-500">
+          <p className="col-span-full border border-dashed border-gray-500 bg-white/70 p-6 text-sm text-gray-500">
             로딩 중...
           </p>
         ) : visibleReleases.length === 0 ? (
-          <p className="border border-dashed border-gray-500 bg-white/70 p-6 text-sm text-gray-500">
+          <p className="col-span-full border border-dashed border-gray-500 bg-white/70 p-6 text-sm text-gray-500">
             등록된 신작이 없습니다.
           </p>
         ) : (
           visibleReleases.map((item) => {
-          const itemEvents = events.filter((event) => event.contentId === item.id);
-          const followed = followedIds.has(item.id);
+            const followed = followedIds.has(item.id);
 
-          return (
-            <article
-              key={item.id}
-              className="group relative flex min-h-full flex-col overflow-hidden border border-dashed border-gray-500 bg-white/80 transition-colors hover:bg-gray-50"
-            >
-              <Link href={`/releases/${item.id}`} className="block aspect-[4/3] overflow-hidden bg-gray-100">
-                <img
-                  src={item.posterUrl}
-                  alt=""
-                  className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
-                />
-              </Link>
-              <button
-                type="button"
-                onClick={() => toggleFollow(item.id)}
-                className={`absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center border border-dashed shadow-sm ${
-                  followed
-                    ? "border-pink-400 bg-pink-50 text-pink-700"
-                    : "border-gray-500 bg-white/90 text-gray-700 hover:bg-white"
-                }`}
-                title={followed ? "알림 해제" : "알림 받기"}
-                aria-label={followed ? "알림 해제" : "알림 받기"}
+            return (
+              <article
+                key={item.id}
+                className="group relative flex flex-col overflow-hidden border border-dashed border-gray-500 bg-white/80 transition-colors hover:bg-gray-50"
               >
-                {followed ? <BellRing size={17} /> : <Bell size={17} />}
-              </button>
-              <Link href={`/releases/${item.id}`} className="flex flex-1 flex-col gap-3 p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="border border-dashed border-gray-400 bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-700">
-                    {CATEGORY_LABELS[item.category]}
-                  </span>
-                  <span className="text-[10px] text-gray-500">
-                    확인 {formatDateTime(item.lastCheckedAt)}
-                  </span>
-                </div>
-
-                <div>
-                  <h2 className="text-lg font-bold text-gray-950 group-hover:underline">
-                    {item.title}
-                  </h2>
-                  <p className="mt-1 line-clamp-2 text-sm leading-6 text-gray-600">
-                    {item.synopsis}
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {item.genres.map((tag) => (
-                      <span
-                        key={tag}
-                        className="border border-dashed border-gray-300 bg-white px-2 py-1 text-[11px] text-gray-500"
-                      >
-                        #{tag}
-                      </span>
-                    ))}
+                <Link href={`/releases/${item.id}`} className="block aspect-[4/3] overflow-hidden bg-gray-100">
+                  <img
+                    src={item.posterUrl}
+                    alt=""
+                    className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
+                  />
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => toggleFollow(item.id)}
+                  className={`absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center border border-dashed shadow-sm ${
+                    followed
+                      ? "border-pink-400 bg-pink-50 text-pink-700"
+                      : "border-gray-500 bg-white/90 text-gray-700 hover:bg-white"
+                  }`}
+                  title={followed ? "알림 해제" : "알림 받기"}
+                  aria-label={followed ? "알림 해제" : "알림 받기"}
+                >
+                  {followed ? <BellRing size={15} /> : <Bell size={15} />}
+                </button>
+                <Link href={`/releases/${item.id}`} className="flex flex-1 flex-col gap-1 p-2">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="border border-dashed border-gray-400 bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-700">
+                      {CATEGORY_LABELS[item.category]}
+                    </span>
                   </div>
-                </div>
 
-                <div className="border border-dashed border-gray-300 bg-gray-50 p-2">
-                  <div className="mb-1 text-[11px] font-bold text-gray-500">신작 정보</div>
-                  <dl className="grid grid-cols-[56px_1fr] gap-x-2 gap-y-1 text-xs text-gray-700">
-                    <dt className="text-gray-500">분기</dt>
-                    <dd>{item.season}</dd>
-                    <dt className="text-gray-500">제작</dt>
-                    <dd className="truncate">{item.studios.join(", ")}</dd>
-                    <dt className="text-gray-500">화수</dt>
-                    <dd>{item.episodeCount ? `${item.episodeCount}화` : "미정"}</dd>
-                  </dl>
-                </div>
-
-                <div className="border border-dashed border-gray-300 bg-gray-50 p-2">
-                  <div className="mb-1 text-[11px] font-bold text-gray-500">예정 일정</div>
-                  {itemEvents.length > 0 ? (
-                    <ul className="space-y-1 text-xs text-gray-700">
-                      {itemEvents.map((event) => (
-                        <li key={event.id} className="flex justify-between gap-2">
-                          <span className="truncate">{event.title}</span>
-                          <span className="shrink-0 text-gray-500">
-                            {formatDateTime(event.startsAt)}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-xs text-gray-500">등록된 일정이 없습니다.</p>
-                  )}
-                </div>
-              </Link>
-            </article>
-          );
-        }))}
+                  <div>
+                    <h2 className="text-sm font-bold text-gray-950 group-hover:underline line-clamp-2">
+                      {item.title}
+                    </h2>
+                  </div>
+                </Link>
+              </article>
+            );
+          })
+        )}
       </section>
     </main>
   );

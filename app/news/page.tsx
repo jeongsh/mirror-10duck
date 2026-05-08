@@ -60,6 +60,22 @@ export default function NewsPage() {
     [activeCategory, newsItems],
   );
 
+  const dateRange = useMemo(() => {
+    if (newsItems.length === 0) return "";
+    const dates = newsItems.map((item) => new Date(item.publishedAt).getTime());
+    const maxDate = new Date(Math.max(...dates));
+    const minDate = new Date(Math.min(...dates));
+    
+    const formatDate = (date: Date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, "0");
+      const d = String(date.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    };
+    
+    return `(${formatDate(maxDate)} ~ ${formatDate(minDate)})`;
+  }, [newsItems]);
+
   return (
     <main className="flex w-full flex-col gap-4">
       <header className="border border-dashed border-gray-500 bg-white/80 p-4">
@@ -102,44 +118,50 @@ export default function NewsPage() {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <div className="text-sm text-gray-600 px-1">
+        뉴스 <span className="font-bold text-black">{newsItems.length}</span>개 등록됨 {dateRange}
+      </div>
+
+      <section className="flex flex-col border border-dashed border-gray-500 bg-white/80">
         {visibleItems.map((item) => (
           <Link
             key={item.id}
             href={`/news/${item.id}`}
-            className="group overflow-hidden border border-dashed border-gray-500 bg-white/80 transition-colors hover:bg-gray-50"
+            className="flex flex-col sm:flex-row gap-4 p-4 border-b border-dashed border-gray-300 last:border-b-0 hover:bg-gray-50 group"
           >
-            <div className="aspect-[16/7] w-full overflow-hidden bg-gray-100">
+            <div className="w-full sm:w-48 h-32 sm:h-28 flex-shrink-0 overflow-hidden bg-gray-100 border border-gray-200">
               <img
                 src={item.thumbnailUrl}
                 alt=""
                 className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
               />
             </div>
-            <div className="flex flex-col gap-3 p-4">
-              <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
-                <span className="border border-dashed border-gray-400 bg-gray-100 px-2 py-0.5 font-bold text-gray-700">
-                  {CATEGORY_LABELS[item.category]}
-                </span>
-                <span>{formatRelativeDate(item.publishedAt)}</span>
-              </div>
-
+            <div className="flex flex-col justify-between flex-1 py-1">
               <div>
-                <h2 className="text-lg font-bold text-gray-950 group-hover:underline">
-                  {item.title}
-                </h2>
-                <p className="mt-1 text-sm leading-6 text-gray-600">{item.summary}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-base font-bold text-gray-950 group-hover:underline">
+                    {item.title}
+                  </h2>
+                  <span className="bg-red-600 text-white text-[10px] px-1 font-bold rounded-sm">HOT</span>
+                  <span className="text-red-600 text-xs font-bold">[1]</span>
+                </div>
+                <p className="mt-1 text-sm text-gray-600 line-clamp-2">{item.summary}</p>
               </div>
-
-              <div className="flex flex-wrap gap-1">
-                {item.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="border border-dashed border-gray-300 bg-white px-2 py-1 text-[11px] text-gray-500"
-                  >
-                    #{tag}
-                  </span>
-                ))}
+              
+              <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 mt-2">
+                <span className="font-semibold text-gray-700">{CATEGORY_LABELS[item.category]}</span>
+                <span className="text-gray-300">|</span>
+                <span>{item.editorName || "운영팀"}</span>
+                <span className="text-gray-300">|</span>
+                <span>{(() => {
+                  const d = new Date(item.publishedAt);
+                  const y = d.getFullYear();
+                  const m = String(d.getMonth() + 1).padStart(2, "0");
+                  const date = String(d.getDate()).padStart(2, "0");
+                  const h = String(d.getHours()).padStart(2, "0");
+                  const min = String(d.getMinutes()).padStart(2, "0");
+                  return `${y}-${m}-${date} ${h}:${min}`;
+                })()}</span>
               </div>
             </div>
           </Link>

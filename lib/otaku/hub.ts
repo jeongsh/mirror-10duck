@@ -203,66 +203,7 @@ export function getReleaseItemById(id: string, now = new Date()): ReleaseItem | 
 }
 
 export function getCalendarEvents(now = new Date()): CalendarEvent[] {
-  return [
-    {
-      id: "cal-anime-1",
-      contentId: "rel-anime-1",
-      category: "anime",
-      type: "anime_airing",
-      title: "별빛 학원 2기 4화",
-      startsAt: isoAt(now, 23, 30),
-      timezone: "Asia/Seoul",
-      episodeLabel: "4화",
-      platform: "TV / OTT",
-      sourceUrl: "https://example.com/starlight/schedule",
-      relatedBoardSlug: "anime",
-      relatedBoardLabel: "애니 채널",
-      isFollowing: true,
-      reminderOffsetMinutes: 0,
-    },
-    {
-      id: "cal-manga-1",
-      contentId: "rel-manga-1",
-      category: "manga",
-      type: "manga_serial",
-      title: "마법서점의 주인님 최신화",
-      startsAt: isoAt(addDays(now, 1), 0, 0),
-      timezone: "Asia/Seoul",
-      platform: "웹연재",
-      sourceUrl: "https://example.com/bookstore/releases",
-      relatedBoardSlug: "manga",
-      relatedBoardLabel: "만화 채널",
-      isFollowing: false,
-      reminderOffsetMinutes: null,
-    },
-    {
-      id: "cal-manga-2",
-      contentId: "rel-manga-1",
-      category: "manga",
-      type: "manga_volume",
-      title: "마법서점의 주인님 3권 정발",
-      startsAt: isoAt(addDays(now, 10), 9, 0),
-      timezone: "Asia/Seoul",
-      platform: "서점 / 전자책",
-      sourceUrl: "https://example.com/bookstore/releases",
-      relatedBoardSlug: "manga",
-      relatedBoardLabel: "만화 채널",
-      isFollowing: false,
-      reminderOffsetMinutes: null,
-    },
-    {
-      id: "cal-community-1",
-      category: "community",
-      type: "community_event",
-      title: "이번 주 감상글 모아보기",
-      startsAt: isoAt(addDays(now, 3), 21, 0),
-      timezone: "Asia/Seoul",
-      relatedBoardSlug: "board",
-      relatedBoardLabel: "채널",
-      isFollowing: false,
-      reminderOffsetMinutes: null,
-    },
-  ];
+  return [];
 }
 
 export function filterByCategory<T extends { category: string }>(
