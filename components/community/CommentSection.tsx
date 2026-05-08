@@ -128,8 +128,8 @@ export default function CommentSection({
       return;
     }
 
-    // 알림 전송 (뉴스는 일단 제외하거나 추후 지원)
-    if (!isNews) {
+    // 알림 전송 (로그인 사용자 + 뉴스 아님)
+    if (!isNews && viewerId) {
       if (replyTo) {
         const parent = comments.find(c => c.id === replyTo);
         if (parent && parent.author_id && parent.author_id !== viewerId) {
@@ -195,8 +195,8 @@ export default function CommentSection({
       return;
     }
 
-    // 알림 전송 (뉴스는 일단 제외)
-    if (!isNews) {
+    // 알림 전송 (로그인 사용자 + 뉴스 아님)
+    if (!isNews && viewerId) {
       if (replyTo) {
         const parent = comments.find(c => c.id === replyTo);
         if (parent && parent.author_id && parent.author_id !== viewerId) {
