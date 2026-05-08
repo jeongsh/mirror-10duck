@@ -40,3 +40,13 @@ export async function checkAndGrantOshiBadges(userId: string): Promise<string[]>
   }
   return data ?? [];
 }
+
+export async function checkAndGrantActivityBadges(userId: string): Promise<string[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)("check_and_grant_activity_badges", {
+    p_user_id: userId,
+  });
+
+  if (error) return [];
+  return data ?? [];
+}

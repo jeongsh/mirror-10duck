@@ -10,6 +10,7 @@ import CharacterSticker from "@/components/stickers/CharacterSticker";
 import { insertAtTextarea } from "@/lib/stickers/insertAtCursor";
 import IdentityBadge from "@/components/community/IdentityBadge";
 import { createNotification } from "@/lib/community/notifications";
+import { checkAndGrantActivityBadges } from "@/lib/supabase/badges";
 import { getClientIp } from "@/lib/community/actions";
 import { formatIp } from "@/lib/utils/formatIp";
 
@@ -154,6 +155,7 @@ export default function CommentSection({
       }
     }
 
+    if (viewerId) checkAndGrantActivityBadges(viewerId);
     setText("");
     setReplyTo(null);
     await refresh();
@@ -221,6 +223,7 @@ export default function CommentSection({
       }
     }
 
+    if (viewerId) checkAndGrantActivityBadges(viewerId);
     setReplyTo(null);
     await refresh();
     onThreadChanged?.();
