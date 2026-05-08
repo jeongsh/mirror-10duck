@@ -1,13 +1,13 @@
-name: Mirror to Personal Repo (for Vercel Hobby)
+name: Mirror to Personal Repo (Preview via dev)
 
 on:
   push:
     branches:
-      - main
+      - dev
   workflow_dispatch:
 
 concurrency:
-  group: mirror-to-personal-main
+  group: mirror-to-personal-dev
   cancel-in-progress: true
 
 jobs:
@@ -29,7 +29,7 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Push main branch to personal mirror repo
+      - name: Push dev branch to personal mirror repo
         env:
           MIRROR_REPO: ${{ secrets.MIRROR_REPO }}
           MIRROR_TOKEN: ${{ secrets.MIRROR_TOKEN }}
@@ -49,4 +49,4 @@ jobs:
           echo "Mirror target: ${MIRROR_REPO}"
           git remote add mirror "https://x-access-token:${MIRROR_TOKEN}@github.com/${MIRROR_REPO}.git"
           git ls-remote mirror >/dev/null
-          git push mirror HEAD:main --force
+          git push mirror HEAD:dev --force
