@@ -11,8 +11,10 @@ import {
   datetimeLocalToIso,
   emptyReleaseForm,
   emptyToNull,
+  formatDetailsForTextarea,
   isoToDatetimeLocal,
   numberOrNull,
+  parseDetails,
 } from "@/components/releases/AdminReleaseForm";
 import { supabase } from "@/lib/supabase/client";
 import type { OtakuCategory } from "@/lib/otaku/hub";
@@ -30,6 +32,7 @@ type ReleaseEditRow = {
   studios: string[] | null;
   season: string | null;
   episode_count: number | null;
+  details_json: unknown | null;
   last_checked_at: string | null;
 };
 
@@ -46,7 +49,7 @@ export default function AdminReleaseEditPage({ params }: { params: Promise<{ id:
       const { data, error } = await supabase
         .from("release_items")
         .select(
-          "id, category, status, title, original_title, synopsis, poster_url, banner_url, genres, studios, season, episode_count, last_checked_at",
+          "id, category, status, title, original_title, synopsis, poster_url, banner_url, genres, studios, season, episode_count, details_json, last_checked_at",
         )
         .eq("id", id)
         .single();
@@ -72,6 +75,7 @@ export default function AdminReleaseEditPage({ params }: { params: Promise<{ id:
         studios: arrayToCsv(item.studios),
         season: item.season ?? "",
         episodeCount: item.episode_count?.toString() ?? "",
+        details: formatDetailsForTextarea(item.details_json),
         lastCheckedAt: isoToDatetimeLocal(item.last_checked_at),
       });
       setLoading(false);
@@ -101,6 +105,7 @@ export default function AdminReleaseEditPage({ params }: { params: Promise<{ id:
         studios: csvToArray(form.studios),
         season: emptyToNull(form.season),
         episode_count: numberOrNull(form.episodeCount),
+        details_json: parseDetails(form.details),
         last_checked_at: datetimeLocalToIso(form.lastCheckedAt),
       })
       .eq("id", id);

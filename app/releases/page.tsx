@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { Bell, BellRing } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/lib/supabase/client";
 import {
   CATEGORY_LABELS,
   PUBLIC_CATEGORIES,
   type OtakuCategory,
+  type ReleaseItem,
   filterByCategory,
   formatDateTime,
   getCalendarEvents,
@@ -14,19 +16,47 @@ import {
 } from "@/lib/otaku/hub";
 
 const TABS: OtakuCategory[] = PUBLIC_CATEGORIES;
+const EMPTY_IMAGE =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600' viewBox='0 0 800 600'%3E%3Crect width='800' height='600' fill='%23f3f4f6'/%3E%3Ctext x='400' y='300' text-anchor='middle' fill='%239ca3af' font-family='sans-serif' font-size='28'%3ENo Image%3C/text%3E%3C/svg%3E";
 
 export default function ReleasesPage() {
   const [activeCategory, setActiveCategory] = useState<OtakuCategory>("all");
-  const [followedIds, setFollowedIds] = useState<Set<string>>(
-    () => new Set(getReleaseItems().filter((item) => item.isFollowing).map((item) => item.id)),
-  );
+  const [releases, setReleases] = useState<ReleaseItem[]>([]);
+  const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
 
-  const releases = useMemo(() => getReleaseItems(), []);
   const events = useMemo(() => getCalendarEvents(), []);
   const visibleReleases = useMemo(
     () => filterByCategory(releases, activeCategory),
     [activeCategory, releases],
   );
+
+  useEffect(() => {
+    const fetchReleases = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("release_items")
+        .select(
+          "id, category, title, original_title, synopsis, poster_url, banner_url, genres, studios, season, episode_count, status, last_checked_at",
+        )
+        .neq("status", "HIDDEN")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching releases:", error);
+        const fallback = getReleaseItems();
+        setReleases(fallback);
+        setFollowedIds(new Set(fallback.filter((item) => item.isFollowing).map((item) => item.id)));
+      } else {
+        const mapped = ((data ?? []) as ReleaseRow[]).map(mapReleaseRow);
+        setReleases(mapped);
+        setFollowedIds(new Set(mapped.filter((item) => item.isFollowing).map((item) => item.id)));
+      }
+      setLoading(false);
+    };
+
+    void fetchReleases();
+  }, []);
 
   const toggleFollow = (id: string) => {
     setFollowedIds((current) => {
@@ -80,7 +110,16 @@ export default function ReleasesPage() {
       </section>
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        {visibleReleases.map((item) => {
+        {loading ? (
+          <p className="border border-dashed border-gray-500 bg-white/70 p-6 text-sm text-gray-500">
+            로딩 중...
+          </p>
+        ) : visibleReleases.length === 0 ? (
+          <p className="border border-dashed border-gray-500 bg-white/70 p-6 text-sm text-gray-500">
+            등록된 신작이 없습니다.
+          </p>
+        ) : (
+          visibleReleases.map((item) => {
           const itemEvents = events.filter((event) => event.contentId === item.id);
           const followed = followedIds.has(item.id);
 
@@ -170,8 +209,47 @@ export default function ReleasesPage() {
               </Link>
             </article>
           );
-        })}
+        }))}
       </section>
     </main>
   );
+}
+
+type ReleaseRow = {
+  id: string;
+  category: "ANIME" | "MANGA" | "GAME";
+  title: string;
+  original_title: string | null;
+  synopsis: string;
+  poster_url: string | null;
+  banner_url: string | null;
+  genres: string[] | null;
+  studios: string[] | null;
+  season: string | null;
+  episode_count: number | null;
+  status: "DRAFT" | "PUBLISHED" | "HIDDEN";
+  last_checked_at: string | null;
+};
+
+function mapReleaseRow(row: ReleaseRow): ReleaseItem {
+  return {
+    id: row.id,
+    category: row.category.toLowerCase() as Exclude<OtakuCategory, "all">,
+    title: row.title,
+    originalTitle: row.original_title ?? "",
+    synopsis: row.synopsis,
+    posterUrl: row.poster_url || EMPTY_IMAGE,
+    bannerUrl: row.banner_url || row.poster_url || EMPTY_IMAGE,
+    genres: row.genres ?? [],
+    studios: row.studios ?? [],
+    season: row.season ?? "미정",
+    episodeCount: row.episode_count,
+    lastCheckedAt: row.last_checked_at || new Date().toISOString(),
+    isFollowing: false,
+    notifications: {
+      sameDay: false,
+      thirtyMinutesBefore: false,
+      changeNotice: false,
+    },
+  };
 }

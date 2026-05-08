@@ -25,6 +25,7 @@ export type ReleaseItem = {
   studios: string[];
   season: string;
   episodeCount: number | null;
+  details?: Array<{ label: string; value: string }>;
   lastCheckedAt: string;
   isFollowing: boolean;
   notifications: {

@@ -9,6 +9,7 @@ import {
   emptyReleaseForm,
   emptyToNull,
   numberOrNull,
+  parseDetails,
 } from "@/components/releases/AdminReleaseForm";
 import { supabase } from "@/lib/supabase/client";
 
@@ -36,6 +37,7 @@ export default function CreateReleasePage() {
         studios: csvToArray(form.studios),
         season: emptyToNull(form.season),
         episode_count: numberOrNull(form.episodeCount),
+        details_json: parseDetails(form.details),
         last_checked_at: datetimeLocalToIso(form.lastCheckedAt),
       },
     ]);
