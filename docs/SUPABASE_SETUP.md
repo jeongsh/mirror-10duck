@@ -1,5 +1,24 @@
 # Supabase Setup (Phase 2.2)
 
+## 0) DB 작업 필수 수칙 (반드시 준수)
+
+아래는 이 프로젝트에서 DB 변경 시 반드시 지켜야 하는 규칙입니다.
+
+- `schema.sql`은 참고용 덤프다. 실행/배포 기준은 항상 `docs/migrations/*.sql`이다.
+- 권한 검사는 UI가 아니라 DB(RLS)가 최종 기준이다. 클라이언트 체크만으로 권한을 보장하지 않는다.
+- 관리자 권한 기준은 단일화한다.
+  - 기본 기준: JWT role(`app_metadata.role` 또는 `user_metadata.role`)이 `ADMIN`
+  - DB 정책은 `private.is_admin()` 같은 공통 함수로 일관되게 사용한다.
+- 사용자 식별 FK는 기본적으로 `auth.users(id)`를 기준으로 잡는다.
+  - `profiles`는 표시/프로필 정보 용도로 사용하고, 트랜잭션 테이블의 강제 FK를 이중으로 물지 않는다.
+- `public` 스키마 테이블은 노출 가능성을 전제로 RLS를 반드시 켠다.
+- `INSERT/UPDATE` 정책을 만들 때는 `WITH CHECK`를 반드시 명시한다.
+- 정책 변경 시 `DROP POLICY IF EXISTS ...` 후 `CREATE POLICY ...` 순서로 적용해 드리프트를 줄인다.
+- 마이그레이션 마지막에는 `notify pgrst, 'reload schema';`를 포함해 스키마 캐시 불일치를 줄인다.
+- 파괴적 변경(`DROP TABLE`, `DROP COLUMN`, FK 제거)은 즉시 실행하지 않는다.
+  - 1) 사용처 확인 -> 2) 비파괴 마이그레이션 -> 3) 앱 반영 -> 4) 모니터링 -> 5) 최종 제거 순서를 따른다.
+- 운영 데이터 대상 DDL은 가능하면 트랜잭션/롤백 계획을 함께 준비하고, 적용 전 백업 스냅샷을 남긴다.
+
 ## 1) 환경 변수
 
 프로젝트 루트에 `.env.local` 파일을 만들고 아래 값을 넣습니다.

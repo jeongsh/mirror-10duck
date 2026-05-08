@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { isAdminUser } from "@/lib/supabase/admin";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { Report } from "@/types/community";
@@ -85,16 +86,8 @@ export default function AdminReportsPage() {
         return;
       }
 
-      setLoading(true);
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("user_id", authUser.id)
-        .single();
-
       if (cancelled) return;
-
-      if (profile?.role === "ADMIN") {
+      if (isAdminUser(authUser)) {
         setIsAdmin(true);
         await fetchReports();
       } else {
