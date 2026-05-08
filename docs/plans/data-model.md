@@ -28,17 +28,13 @@
 - [ ] `sticker_assets`: sticker_id, emotion, storage_key, width, height
 - [ ] `board_moderators`: board_id, user_id, role, created_at
 - [ ] `board_tabs`: board_id, key, label, sort_order
-- [ ] `works`: slug, media_type, status, representative_title, synopsis, poster_url, banner_url, official_url
-- [ ] `work_titles`: work_id, locale, title, title_type
-- [ ] `work_genres`: work_id, genre
-- [ ] `work_tags`: work_id, tag
-- [ ] `work_staff`: work_id, role, name
-- [ ] `work_releases`: work_id, release_type, release_date, season, platform, episode_count, volume_count
-- [ ] `work_links`: work_id, link_type, label, url, is_affiliate
-- [ ] `work_reviews`: work_id, author_id, review_type, score, spoiler_level, title, content
-- [ ] `work_ratings`: work_id, user_id, score, verdict_tag, taste_tags, spoiler_level
-- [ ] `work_news`: work_id, title, summary, source_url, source_type, published_at, verified_at
-- [ ] `work_relations`: source_work_id, target_work_id, relation_type
+- [ ] `external_sources`: source_type, name, url, reliability, enabled, created_at
+- [ ] `news_items`: source_id, category, title, summary, thumbnail_url, original_url, published_at, collected_at, status
+- [ ] `content_items`: external_source_id, external_id, content_type, title, image_url, official_url, tags, status, last_checked_at
+- [ ] `release_events`: content_item_id, event_type, starts_at, timezone, recurrence_rule, platform, episode_label, source_url, status
+- [ ] `user_content_follows`: user_id, content_item_id, notify_enabled, created_at
+- [ ] `user_calendar_events`: user_id, title, event_type, starts_at, timezone, note, linked_content_item_id
+- [ ] `reminder_settings`: user_id, target_type, target_id, reminder_type, offset_minutes, enabled
 
 ## 3. 기존 테이블 보강 후보
 
@@ -54,7 +50,6 @@
 - [x] `posts.downvote_count`
 - [ ] `posts.status`
 - [ ] `posts.board_tab`
-- [ ] `posts.work_id`
 - [ ] `posts.spoiler_level`
 - [ ] `comments.parent_comment_id`
 - [ ] `comments.author_display_name`
