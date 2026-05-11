@@ -204,6 +204,11 @@ export default function Live2DWrapper() {
     useCharacterStore.getState().setMessage(null);
   }
 
+  function isCharacterClickBlocked(): boolean {
+    const state = useCharacterStore.getState();
+    return Boolean(assistantOpen || state.message || state.emotion !== "idle");
+  }
+
   const getMotionMeta = async (
     currentModelPath: string,
     group: string,
@@ -510,6 +515,7 @@ export default function Live2DWrapper() {
         // 히트 영역 → 액션 매핑 (profile 기반)
         localModel.on("hit", (hitAreas: string[]) => {
           if (Date.now() < suppressCharacterClickUntilRef.current) return;
+          if (isCharacterClickBlocked()) return;
 
           lastHitAtRef.current = Date.now();
           if (pointerFallbackTimeoutRef.current) {
@@ -1098,11 +1104,7 @@ export default function Live2DWrapper() {
   }
 
   function schedulePointerFallbackAction() {
-    if (assistantOpen || useCharacterStore.getState().message) {
-      suppressCharacterClickUntilRef.current = Date.now() + 250;
-      closeSpeechBubble();
-      return;
-    }
+    if (isCharacterClickBlocked()) return;
 
     const model = modelRef.current;
     if (!model) return;

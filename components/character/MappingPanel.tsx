@@ -1,5 +1,6 @@
 "use client";
 
+import { ModelHitAreasDevPanel } from "@/components/character/ModelHitAreasDevPanel";
 import { useCharacterLibraryStore } from "@/store/useCharacterLibraryStore";
 import { useCharacterStore } from "@/store/useCharacterStore";
 import {
@@ -129,6 +130,11 @@ export default function MappingPanel() {
 
       {/* 히트 영역 */}
       <div className="border border-dashed border-gray-400 bg-white/60 p-2 space-y-2">
+        <ModelHitAreasDevPanel
+          profileId={profile.id}
+          modelPath={profile.modelPath}
+          hitAreaMap={profile.hitAreaMap}
+        />
         <div className="text-[11px] tracking-widest uppercase text-gray-500">
           [히트 영역 → 액션]
         </div>

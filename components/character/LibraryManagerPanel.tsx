@@ -22,6 +22,7 @@ import {
   type CharacterViewConfig,
 } from "@/types/character";
 import { CharacterUploadPreview } from "./CharacterUploader";
+import { ModelHitAreasDevPanel } from "./ModelHitAreasDevPanel";
 
 function parseNumberOr(value: string, fallback: number): number {
   const n = Number(value);
@@ -765,6 +766,18 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
         >
           [상황별 대사 저장]
         </button>
+      </Section>
+
+      <Section title="HitAreas 점검 (개발용)">
+        <ModelHitAreasDevPanel
+          profileId={target.id}
+          modelPath={target.modelPath}
+          hitAreaMap={target.hitAreaMap}
+        />
+        <p className="text-[11px] leading-4 text-gray-500">
+          model3.json 의 HitAreas 와 프로필의 hitAreaMap 매핑을 비교합니다. 목록이 비어 있으면
+          Live2D 런타임은 전체 캔버스 클릭 폴백을 씁니다.
+        </p>
       </Section>
 
       <div className="border border-dashed border-amber-500 bg-amber-50 p-3 text-xs text-amber-800">

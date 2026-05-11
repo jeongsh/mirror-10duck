@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import { parseHitAreasFromModel3Json } from "@/lib/live2d/model3HitAreas";
 import { loadModelZipEntries } from "@/lib/live2d/modelZip";
 
 /**
@@ -531,17 +532,7 @@ export async function installModelFromZip(
   const hasError = issues.some((i) => i.level === "error");
 
   // 추가 분석 정보 (UI 노출용).
-  // HitAreas 가 배열이 아니거나 엔트리가 이상하면 그냥 빈 배열 처리.
-  const hitAreas = Array.isArray(model3.HitAreas)
-    ? (model3.HitAreas as unknown[])
-        .filter(
-          (v): v is { Id: string; Name?: string } =>
-            !!v &&
-            typeof v === "object" &&
-            typeof (v as { Id?: unknown }).Id === "string"
-        )
-        .map((h) => ({ id: h.Id, name: h.Name ?? h.Id }))
-    : [];
+  const hitAreas = parseHitAreasFromModel3Json(model3);
 
   let poseParts: { groupIndex: number; id: string }[] = [];
   if (model3.FileReferences.Pose) {
