@@ -15,14 +15,19 @@ import { useCharacterStore } from "@/store/useCharacterStore";
 import {
   ALL_ACTIONS,
   ALL_EMOTIONS,
+  CORE_EMOTIONS,
+  getCharacterSupportedEmotions,
   type CharacterActionKey,
   type CharacterEmotion,
   type DialogueMap,
   type CharacterProfile,
   type CharacterViewConfig,
+  type MotionRef,
+  type CharacterScenarioMapping,
+  type CharacterScenarioKey,
 } from "@/types/character";
-import { CharacterUploadPreview } from "./CharacterUploader";
-import { ModelHitAreasDevPanel } from "./ModelHitAreasDevPanel";
+import { CharacterUploadPreview, type MotionPreviewRequest } from "./CharacterUploader";
+import MappingPanel from "./MappingPanel";
 
 function parseNumberOr(value: string, fallback: number): number {
   const n = Number(value);
@@ -49,6 +54,31 @@ function cloneDialogues(dialogues: DialogueMap): DialogueMap {
       Object.entries(dialogues.actions).map(([key, value]) => [key, [...(value ?? [])]])
     ),
   };
+}
+
+const MANAGED_DIALOGUE_EMOTIONS: CharacterEmotion[] = CORE_EMOTIONS;
+const MANAGED_DIALOGUE_ACTIONS: CharacterActionKey[] = [
+  "attention",
+  "greet",
+  "typing",
+  "cheer",
+  "celebrate",
+];
+
+function compactDialogues(dialogues: DialogueMap): DialogueMap {
+  const emotions: DialogueMap["emotions"] = {};
+  for (const emotion of MANAGED_DIALOGUE_EMOTIONS) {
+    const lines = dialogues.emotions[emotion]?.slice(0, 2);
+    if (lines?.length) emotions[emotion] = lines;
+  }
+
+  const actions: DialogueMap["actions"] = {};
+  for (const action of MANAGED_DIALOGUE_ACTIONS) {
+    const lines = dialogues.actions[action]?.slice(0, 2);
+    if (lines?.length) actions[action] = lines;
+  }
+
+  return { emotions, actions };
 }
 
 interface DialoguePreset {
@@ -206,6 +236,10 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
   const [thumbnailBusy, setThumbnailBusy] = useState(false);
   const [thumbnailError, setThumbnailError] = useState<string | null>(null);
   const [previewMessage, setPreviewMessage] = useState<string | null>(null);
+  const [previewExpressionId, setPreviewExpressionId] = useState<string | null>(null);
+  const [previewExpressionNonce, setPreviewExpressionNonce] = useState(0);
+  const [motionPreviewRequest, setMotionPreviewRequest] = useState<MotionPreviewRequest | null>(null);
+  const [latestHitAreas, setLatestHitAreas] = useState<string[]>([]);
   const [trackingOverrides, setTrackingOverrides] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<{ kind: "success" | "error"; text: string } | null>(
     null
@@ -247,7 +281,11 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
     setDraftName(target.name);
     setDraftDescription(target.description ?? "");
     setDraftView(target.defaultView);
-    setDraftDialogues(cloneDialogues(target.dialogues));
+    setDraftDialogues(compactDialogues(target.dialogues));
+    setPreviewExpressionId(null);
+    setPreviewExpressionNonce(0);
+    setMotionPreviewRequest(null);
+    setLatestHitAreas([]);
   }, [target?.id]);
 
   const hasBasicDraftChanges =
@@ -350,8 +388,8 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
 
   const saveDialogueDraft = () => {
     try {
-      patchTarget({ dialogues: draftDialogues });
-      showToast("success", "상황별 대사를 저장했습니다.");
+      patchTarget({ dialogues: compactDialogues(draftDialogues) });
+      showToast("success", "기본 반응 대사를 저장했습니다.");
     } catch (e) {
       showToast("error", e instanceof Error ? e.message : "대사 저장에 실패했습니다.");
     }
@@ -395,22 +433,81 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
     }
   };
 
-  const notify = (msg: string, emotion: CharacterEmotion = "happy") => {
+  const notify = (
+    msg: string,
+    emotion: CharacterEmotion = "happy",
+    scenarioKey?: CharacterScenarioKey
+  ) => {
+    const store = useCharacterStore.getState();
+    const scenarioMapping = scenarioKey ? store.profile?.scenarioMap?.[scenarioKey] : null;
+    setPreviewExpressionId(null);
     setPreviewMessage(msg);
-    useCharacterStore.getState().setMessage(msg);
-    useCharacterStore.getState().setEmotion(emotion);
+    store.setMessage(msg);
+    if (scenarioKey) {
+      store.triggerScenario(scenarioKey);
+    }
+    if (!scenarioMapping?.expressionId) {
+      store.setEmotion(emotion);
+    }
     setTimeout(() => {
       setPreviewMessage((current) => (current === msg ? null : current));
-      if (useCharacterStore.getState().message === msg) {
-        useCharacterStore.getState().setMessage(null);
+      const nextStore = useCharacterStore.getState();
+      if (nextStore.message === msg) {
+        nextStore.setMessage(null);
+        nextStore.triggerScenario("idle_return");
+        if (!nextStore.profile?.scenarioMap?.idle_return?.expressionId) {
+          nextStore.setEmotion("idle");
+        }
       }
     }, 3000);
   };
 
+  const previewExpression = (expressionId: string) => {
+    const message = `표정 미리보기: ${expressionId}`;
+    setPreviewExpressionId(expressionId);
+    setPreviewExpressionNonce(Date.now());
+    setPreviewMessage(message);
+    setTimeout(() => {
+      setPreviewMessage((current) => (current === message ? null : current));
+    }, 2200);
+  };
+
+  const previewMotion = (motion: MotionRef) => {
+    const message = `모션 재생: ${motion.group || "(default)"} #${motion.index}`;
+    setPreviewMessage(message);
+    setMotionPreviewRequest({
+      group: motion.group,
+      index: motion.index,
+      nonce: Date.now(),
+    });
+    setTimeout(() => {
+      setPreviewMessage((current) => (current === message ? null : current));
+    }, 2200);
+  };
+
+  const previewScenario = (scenario: CharacterScenarioMapping, label: string) => {
+    const message = `상황 미리보기: ${label}`;
+    setPreviewExpressionId(scenario.expressionId ?? null);
+    setPreviewExpressionNonce(Date.now());
+    const motion = scenario.motion ?? target?.motionMap.idle ?? null;
+    if (motion) {
+      setMotionPreviewRequest({
+        group: motion.group,
+        index: motion.index,
+        nonce: Date.now(),
+      });
+    }
+    setPreviewMessage(message);
+    setTimeout(() => {
+      setPreviewMessage((current) => (current === message ? null : current));
+    }, 2400);
+  };
+
   const applyDialoguePreset = (preset: DialoguePreset) => {
-    setDraftDialogues(cloneDialogues(preset.dialogues));
+    const nextDialogues = compactDialogues(preset.dialogues);
+    setDraftDialogues(cloneDialogues(nextDialogues));
     showToast("success", `${preset.name} 대사 프리셋을 적용했습니다. 저장을 눌러 반영하세요.`);
-    notify(preset.dialogues.emotions[preset.previewEmotion]?.[0] ?? preset.name, preset.previewEmotion);
+    notify(nextDialogues.emotions[preset.previewEmotion]?.[0] ?? preset.name, preset.previewEmotion);
   };
 
   const handleRealNotify = async (type: "COMMENT" | "MESSAGE") => {
@@ -430,6 +527,14 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
       HOT_PROMOTED: "surprised",
       SYSTEM: "idle",
     };
+    const NOTIFICATION_SCENARIOS: Record<string, CharacterScenarioKey> = {
+      COMMENT: "notification",
+      REPLY: "notification",
+      REACTION: "notification",
+      FOLLOW: "notification",
+      HOT_PROMOTED: "notification",
+      SYSTEM: "notification",
+    };
 
     let target: any;
     if (type === "COMMENT") {
@@ -439,11 +544,16 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
     }
 
     if (target) {
-      notify(target.content, NOTIFICATION_EMOTIONS[target.type] || "happy");
+      notify(
+        target.content,
+        NOTIFICATION_EMOTIONS[target.type] || "happy",
+        NOTIFICATION_SCENARIOS[target.type] ?? "notification"
+      );
     } else {
       notify(
         type === "COMMENT" ? "최근 댓글 알림이 없습니다." : "최근 쪽지 알림이 없습니다.",
-        "idle"
+        "idle",
+        "notification"
       );
     }
   };
@@ -454,6 +564,9 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
         ? isTracking
         : getTrackingPreference(authUser?.user_metadata, target.id, true))
     : true;
+  const supportedPreviewEmotions = getCharacterSupportedEmotions(target, {
+    includeOptional: true,
+  });
 
   return (
     <div className="space-y-3">
@@ -470,66 +583,88 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
         </div>
       )}
 
-      <Section title="미리보기 위치">
+      <Section title="미리보기 / 상황 매핑">
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-[340px_minmax(0,1fr)]">
-          <CharacterUploadPreview
-            key={target.id}
-            modelUrl={target.modelPath}
-            view={draftView}
-            onViewChange={updatePreviewView}
-            onCaptureReady={(capture) => {
-              previewCaptureRef.current = capture;
-            }}
-            profile={target}
-            emotion={emotion}
-            message={previewMessage}
-            viewCommitMode="end"
-          />
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-              <label className="text-xs text-gray-700">
-                이름
-                <input
-                  value={draftName}
-                  onChange={(e) => setDraftName(e.target.value)}
-                  className="mt-1 w-full border border-dashed border-gray-500 bg-white/80 px-2 py-1"
-                />
-              </label>
-              <label className="text-xs text-gray-700">
-                소개
-                <input
-                  value={draftDescription}
-                  onChange={(e) => setDraftDescription(e.target.value)}
-                  className="mt-1 w-full border border-dashed border-gray-500 bg-white/80 px-2 py-1"
-                />
-              </label>
+          <div className="space-y-3 lg:sticky lg:top-4 lg:self-start">
+            <CharacterUploadPreview
+              key={target.id}
+              modelUrl={target.modelPath}
+              view={draftView}
+              onViewChange={updatePreviewView}
+              onCaptureReady={(capture) => {
+                previewCaptureRef.current = capture;
+              }}
+              profile={target}
+              emotion={emotion}
+              previewExpressionId={previewExpressionId}
+              previewExpressionNonce={previewExpressionNonce}
+              motionPreviewRequest={motionPreviewRequest}
+              onHitAreas={(hitAreas) => setLatestHitAreas(hitAreas)}
+              message={previewMessage}
+              viewCommitMode="end"
+            />
+            <div className="border border-dashed border-gray-300 bg-white/50 p-2 text-[11px] text-gray-600">
+              최근 클릭 HitArea: {latestHitAreas.length > 0 ? latestHitAreas.join(", ") : "(아직 없음)"}
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              {(["scale", "x", "y"] as const).map((key) => (
-                <label key={key} className="text-xs text-gray-700">
-                  {key}
+            <div className="space-y-2 border border-dashed border-gray-300 bg-white/50 p-2">
+              <div className="grid grid-cols-1 gap-2">
+                <label className="text-xs text-gray-700">
+                  이름
                   <input
-                    type="number"
-                    step={key === "scale" ? "0.01" : "1"}
-                    value={draftView[key]}
-                    onChange={(e) =>
-                      setDraftView({
-                        ...draftView,
-                        [key]: parseNumberOr(e.target.value, draftView[key]),
-                      })
-                    }
+                    value={draftName}
+                    onChange={(e) => setDraftName(e.target.value)}
                     className="mt-1 w-full border border-dashed border-gray-500 bg-white/80 px-2 py-1"
                   />
                 </label>
-              ))}
+                <label className="text-xs text-gray-700">
+                  소개
+                  <input
+                    value={draftDescription}
+                    onChange={(e) => setDraftDescription(e.target.value)}
+                    className="mt-1 w-full border border-dashed border-gray-500 bg-white/80 px-2 py-1"
+                  />
+                </label>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {(["scale", "x", "y"] as const).map((key) => (
+                  <label key={key} className="text-xs text-gray-700">
+                    {key}
+                    <input
+                      type="number"
+                      step={key === "scale" ? "0.01" : "1"}
+                      value={draftView[key]}
+                      onChange={(e) =>
+                        setDraftView({
+                          ...draftView,
+                          [key]: parseNumberOr(e.target.value, draftView[key]),
+                        })
+                      }
+                      className="mt-1 w-full border border-dashed border-gray-500 bg-white/80 px-2 py-1"
+                    />
+                  </label>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={saveBasicDraft}
+                className="border border-dashed border-blue-500 bg-blue-50 px-2 py-1 text-[11px] tracking-widest uppercase text-blue-700"
+              >
+                [기본 정보 / 위치 저장]
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={saveBasicDraft}
-              className="border border-dashed border-blue-500 bg-blue-50 px-2 py-1 text-[11px] tracking-widest uppercase text-blue-700"
-            >
-              [기본 정보 / 위치 저장]
-            </button>
+          </div>
+          <div className="space-y-2">
+            <MappingPanel
+              profile={target}
+              onPatch={patchTarget}
+              onPreviewExpression={previewExpression}
+              onPreviewMotion={previewMotion}
+              onPreviewScenario={previewScenario}
+              highlightedHitAreaIds={latestHitAreas}
+            />
+            <p className="text-[11px] leading-4 text-gray-500">
+              상황별로 표정과 액션을 한 번에 매핑합니다. `[미리보기]`를 누르면 왼쪽 모델에서 바로 확인할 수 있습니다.
+            </p>
           </div>
         </div>
       </Section>
@@ -552,7 +687,7 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
               [감정 전환 · emotion = {emotion}]
             </div>
             <div className="flex flex-wrap gap-2">
-              {ALL_EMOTIONS.map((e: CharacterEmotion) => (
+              {supportedPreviewEmotions.map((e: CharacterEmotion) => (
                 <button
                   key={e}
                   type="button"
@@ -618,14 +753,14 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
               </button>
               <button
                 type="button"
-                onClick={() => notify("다녀오셨어요? 환영해요!", "happy")}
+                onClick={() => notify("다녀오셨어요? 환영해요!", "happy", "login")}
                 className="border border-dashed border-gray-600 bg-green-100/70 px-3 py-1 text-xs tracking-widest uppercase"
               >
                 [로그인 (접속)]
               </button>
               <button
                 type="button"
-                onClick={() => notify("안녕히가세요! 또 봐요!", "sad")}
+                onClick={() => notify("안녕히가세요! 또 봐요!", "sad", "logout")}
                 className="border border-dashed border-gray-600 bg-red-100/70 px-3 py-1 text-xs tracking-widest uppercase"
               >
                 [로그아웃]
@@ -674,10 +809,10 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
         </div>
       </Section>
 
-      <Section title="상황별 대사">
+      <Section title="기본 반응 대사">
         <div className="space-y-2 border border-dashed border-gray-300 bg-white/40 p-3">
           <div className="text-[11px] tracking-widest uppercase text-gray-500">
-            [기본 제공 대사 프리셋]
+            [톤 프리셋]
           </div>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
             {DIALOGUE_PRESETS.map((preset) => (
@@ -696,15 +831,15 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
             ))}
           </div>
           <p className="text-[11px] leading-4 text-gray-500">
-            프리셋을 누르면 아래 감정/액션별 대사 초안이 교체됩니다. 저장 전까지는 캐릭터에 반영되지 않습니다.
+            여기서는 전역 기본 반응만 관리합니다. 페이지 입장 대사는 나중에 페이지별 프리셋에서 따로 관리합니다.
           </p>
         </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div className="space-y-2">
             <div className="text-[11px] tracking-widest uppercase text-gray-500">
-              [감정별 대사 (줄바꿈 = 1개 대사)]
+              [공통 감정 대사 (최대 2줄)]
             </div>
-            {ALL_EMOTIONS.map((emotion) => (
+            {MANAGED_DIALOGUE_EMOTIONS.map((emotion) => (
               <label key={emotion} className="block text-xs">
                 <span className="mb-1 flex items-center justify-between gap-2 font-mono">
                   <span>{emotion}</span>
@@ -731,9 +866,9 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
           </div>
           <div className="space-y-2">
             <div className="text-[11px] tracking-widest uppercase text-gray-500">
-              [액션별 대사 (줄바꿈 = 1개 대사)]
+              [공통 액션 대사 (최대 2줄)]
             </div>
-            {ALL_ACTIONS.map((action) => (
+            {MANAGED_DIALOGUE_ACTIONS.map((action) => (
               <label key={action} className="block text-xs">
                 <span className="mb-1 flex items-center justify-between gap-2 font-mono">
                   <span>{action}</span>
@@ -764,25 +899,10 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
           onClick={saveDialogueDraft}
           className="border border-dashed border-blue-500 bg-blue-50 px-2 py-1 text-[11px] tracking-widest uppercase text-blue-700"
         >
-          [상황별 대사 저장]
+          [기본 반응 대사 저장]
         </button>
       </Section>
 
-      <Section title="HitAreas 점검 (개발용)">
-        <ModelHitAreasDevPanel
-          profileId={target.id}
-          modelPath={target.modelPath}
-          hitAreaMap={target.hitAreaMap}
-        />
-        <p className="text-[11px] leading-4 text-gray-500">
-          model3.json 의 HitAreas 와 프로필의 hitAreaMap 매핑을 비교합니다. 목록이 비어 있으면
-          Live2D 런타임은 전체 캔버스 클릭 폴백을 씁니다.
-        </p>
-      </Section>
-
-      <div className="border border-dashed border-amber-500 bg-amber-50 p-3 text-xs text-amber-800">
-        고급 매핑(표정/모션/히트영역/모핑/의상/사운드)은 추후 전문가용 페이지에서 제공될 예정입니다.
-      </div>
     </div>
   );
 }

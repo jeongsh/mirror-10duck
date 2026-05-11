@@ -2,8 +2,10 @@ import { create } from "zustand";
 import type {
   CharacterEmotion,
   CharacterProfile,
+  CharacterScenarioKey,
   CharacterViewConfig,
 } from "@/types/character";
+import { resolveSupportedEmotion, withRecommendedScenarioMap } from "@/types/character";
 
 export type { CharacterEmotion } from "@/types/character";
 
@@ -23,6 +25,7 @@ export interface CharacterState {
   isTracking: boolean;
   modelPath: string | null;
   emotion: CharacterEmotion;
+  scenarioRequest: { key: CharacterScenarioKey; nonce: number } | null;
   message: string | null;
   error: string | null;
   modelConfig: CharacterViewConfig | null;
@@ -40,6 +43,7 @@ export interface CharacterState {
   setTracking: (tracking: boolean) => void;
   setModelPath: (path: string | null) => void;
   setEmotion: (emotion: CharacterEmotion) => void;
+  triggerScenario: (key: CharacterScenarioKey) => void;
   setMessage: (message: string | null) => void;
   setError: (error: string | null) => void;
   setModelConfig: (config: CharacterViewConfig | null) => void;
@@ -61,6 +65,7 @@ const INITIAL_STATE: Omit<
   | "setTracking"
   | "setModelPath"
   | "setEmotion"
+  | "triggerScenario"
   | "setMessage"
   | "setError"
   | "setModelConfig"
@@ -77,6 +82,7 @@ const INITIAL_STATE: Omit<
   isTracking: true,
   modelPath: null,
   emotion: "idle",
+  scenarioRequest: null,
   message: null,
   error: null,
   modelConfig: null,
@@ -89,7 +95,7 @@ export const useCharacterStore = create<CharacterState>((set) => ({
   ...INITIAL_STATE,
 
   setProfile: (profile) =>
-    set(() => {
+    set((state) => {
       if (!profile) {
         return {
           profile: null,
@@ -100,22 +106,24 @@ export const useCharacterStore = create<CharacterState>((set) => ({
           modelConfig: null,
         };
       }
+      const normalizedProfile = withRecommendedScenarioMap(profile);
       const selectedOutfits: Record<string, string> = {};
-      for (const group of profile.outfits) {
+      for (const group of normalizedProfile.outfits) {
         const def = group.defaultPartId ?? group.parts[0]?.id;
         if (def) selectedOutfits[group.id] = def;
       }
       const morphValues: Record<string, number> = {};
-      for (const slider of profile.morphSliders) {
+      for (const slider of normalizedProfile.morphSliders) {
         morphValues[slider.paramId] = slider.defaultValue;
       }
       return {
-        profile,
-        modelPath: profile.modelPath,
+        profile: normalizedProfile,
+        modelPath: normalizedProfile.modelPath,
+        emotion: resolveSupportedEmotion(normalizedProfile, state.emotion),
         selectedOutfits,
         partOpacities: {},
         morphValues,
-        modelConfig: profile.defaultView,
+        modelConfig: normalizedProfile.defaultView,
       };
     }),
 
@@ -123,7 +131,17 @@ export const useCharacterStore = create<CharacterState>((set) => ({
   setReady: (ready) => set({ isReady: ready }),
   setTracking: (tracking) => set({ isTracking: tracking }),
   setModelPath: (path) => set({ modelPath: path }),
-  setEmotion: (emotion) => set({ emotion }),
+  setEmotion: (emotion) =>
+    set((state) => ({
+      emotion: resolveSupportedEmotion(state.profile, emotion),
+    })),
+  triggerScenario: (key) =>
+    set({
+      scenarioRequest: {
+        key,
+        nonce: Date.now(),
+      },
+    }),
   setMessage: (message) => set({ message }),
   setError: (error) => set({ error }),
   setModelConfig: (config) => set({ modelConfig: config }),

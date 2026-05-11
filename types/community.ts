@@ -102,26 +102,50 @@ export type PostVoteType = "up" | "down";
 /**
  * Phase 2.3 캐릭터-커뮤니티 연결 도메인 타입.
  *
- * - 스티커: 사용자의 캐릭터 라이브러리 항목을 디시콘 스타일로 본문/댓글에 임베드.
+ * - 스티커: 사용자가 직접 등록하거나 AI 생성 플로우로 만든 별도 에셋을 본문/댓글에 임베드.
  * - 리액션: 글에 6종 감정 리액션 + 반응자의 캐릭터 썸네일 누적 표시.
  * - 댓글: 텍스트 댓글 또는 스티커-only "스티커 답글".
  */
 
 /**
- * 스티커 = (characterId, emotion) 한 쌍.
+ * 레거시 스티커 토큰 = (characterId, emotion) 한 쌍.
  * 본문에는 `:sticker/{characterId}/{emotion}:` 토큰으로 직렬화된다.
  *
- * - characterId 는 라이브러리에 등록된 `CharacterProfile.id` (예: builtin-mao-pro).
- * - emotion 은 `CharacterEmotion` 키 (idle/happy/...).
+ * 이 구조는 현재 렌더러 하위 호환용이다. 정식 스티커는 캐릭터의 Live2D 표정 지원
+ * 여부와 분리된 `stickers` / `sticker_assets` 기반 에셋으로 관리한다.
  *
- * 토큰을 그대로 보관하고 렌더 시 라이브러리에서 매칭되는 캐릭터의 썸네일/이름으로 변환한다.
- * (= 캐릭터 매핑이 바뀌어도 토큰은 "어느 캐릭터의 어떤 표정"인지 의미를 잃지 않는다.)
+ * - characterId 는 라이브러리에 등록된 `CharacterProfile.id` (예: builtin-mao-pro).
+ * - emotion 은 레거시 감정 키 (idle/happy/...).
  */
 export type StickerToken = {
   characterId: string;
   emotion: string;
   /** 본문에 들어가는 직렬화 형식. */
   raw: string;
+};
+
+export type StickerVisibility = "PRIVATE" | "UNLISTED" | "PUBLIC";
+export type StickerSourceType = "USER_UPLOAD" | "AI_GENERATED";
+
+export type StickerAsset = {
+  id: string;
+  sticker_id: string;
+  label: string;
+  storage_key: string;
+  width: number | null;
+  height: number | null;
+  source_type: StickerSourceType;
+};
+
+export type StickerPack = {
+  id: string;
+  owner_user_id: string;
+  character_id: string | null;
+  name: string;
+  visibility: StickerVisibility;
+  source_type: StickerSourceType;
+  assets?: StickerAsset[];
+  created_at: string;
 };
 
 /** 글/댓글에 달 수 있는 6종 감정 리액션. */

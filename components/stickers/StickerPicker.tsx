@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useCharacterLibraryStore } from "@/store/useCharacterLibraryStore";
-import { ALL_EMOTIONS, type CharacterEmotion } from "@/types/character";
+import { CORE_EMOTIONS, type CharacterEmotion } from "@/types/character";
 import { buildStickerToken } from "@/lib/stickers/token";
 import CharacterSticker from "./CharacterSticker";
 
@@ -10,7 +10,9 @@ import CharacterSticker from "./CharacterSticker";
  * 본문/댓글 에디터 옆에 붙여서 사용하는 스티커 피커.
  *
  * - "스티커 삽입" 버튼을 누르면 팝오버가 열린다.
- * - 라이브러리에 등록된 캐릭터 목록과 8종 감정 그리드를 보여준다.
+ * - 현재는 레거시 토큰(`characterId + emotion`)을 넣는 임시 피커다.
+ * - 제품 기준 스티커는 Live2D 표정 지원 여부와 분리된 별도 에셋이며,
+ *   향후 `stickers` / `sticker_assets` 목록을 읽는 피커로 교체한다.
  * - 셀을 누르면 `:sticker/{characterId}/{emotion}:` 토큰을 콜백으로 전달한다.
  *
  * 외부 클릭/ESC 로 닫히도록 처리하여 모바일/웹 모두에서 자연스럽게 동작.
@@ -98,7 +100,7 @@ export default function StickerPicker({ onInsert, label = "스티커 삽입", cl
               </div>
 
               <div className="grid grid-cols-4 gap-2">
-                {ALL_EMOTIONS.map((emotion) => (
+                {CORE_EMOTIONS.map((emotion) => (
                   <button
                     key={emotion}
                     type="button"
@@ -122,7 +124,7 @@ export default function StickerPicker({ onInsert, label = "스티커 삽입", cl
                 ))}
               </div>
               <p className="mt-3 text-[10px] text-gray-400">
-                선택한 셀이 본문 커서 위치에 토큰으로 삽입됩니다.
+                임시 레거시 피커입니다. 정식 스티커는 직접 등록하거나 AI 생성한 스티커 에셋 목록에서 선택하게 됩니다.
               </p>
             </>
           )}

@@ -7,7 +7,11 @@ import { listCharacterProfiles } from "@/lib/supabase/characters";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { useCharacterLibraryStore } from "@/store/useCharacterLibraryStore";
 import { useCharacterStore } from "@/store/useCharacterStore";
-import { ALL_EMOTIONS, type CharacterEmotion } from "@/types/character";
+import {
+  getCharacterSupportedEmotions,
+  type CharacterEmotion,
+  type CharacterScenarioKey,
+} from "@/types/character";
 import type { CharacterProfile } from "@/types/character";
 import CharacterUploader from "./character/CharacterUploader";
 import CharacterLibraryPanel from "./character/CharacterLibraryPanel";
@@ -136,15 +140,33 @@ export default function CharacterControls() {
 function BasicPanel() {
   const authUser = useAuthUser();
   const emotion = useCharacterStore((s) => s.emotion);
+  const profile = useCharacterStore((s) => s.profile);
   const isTracking = useCharacterStore((s) => s.isTracking);
   const setEmotion = useCharacterStore((s) => s.setEmotion);
   const setTracking = useCharacterStore((s) => s.setTracking);
+  const supportedEmotions = getCharacterSupportedEmotions(profile, { includeOptional: true });
 
-  const notify = (msg: string, emotion: CharacterEmotion = "happy") => {
-    useCharacterStore.getState().setMessage(msg);
-    useCharacterStore.getState().setEmotion(emotion);
+  const notify = (
+    msg: string,
+    emotion: CharacterEmotion = "happy",
+    scenarioKey?: CharacterScenarioKey
+  ) => {
+    const store = useCharacterStore.getState();
+    const scenarioMapping = scenarioKey ? store.profile?.scenarioMap?.[scenarioKey] : null;
+    store.setMessage(msg);
+    if (scenarioKey) {
+      store.triggerScenario(scenarioKey);
+    }
+    if (!scenarioMapping?.expressionId) {
+      store.setEmotion(emotion);
+    }
     setTimeout(() => {
-      useCharacterStore.getState().setMessage(null);
+      const nextStore = useCharacterStore.getState();
+      nextStore.setMessage(null);
+      nextStore.triggerScenario("idle_return");
+      if (!nextStore.profile?.scenarioMap?.idle_return?.expressionId) {
+        nextStore.setEmotion("idle");
+      }
     }, 3000);
   };
 
@@ -166,6 +188,14 @@ function BasicPanel() {
       HOT_PROMOTED: "surprised",
       SYSTEM: "idle",
     };
+    const NOTIFICATION_SCENARIOS: Record<string, CharacterScenarioKey> = {
+      COMMENT: "notification",
+      REPLY: "notification",
+      REACTION: "notification",
+      FOLLOW: "notification",
+      HOT_PROMOTED: "notification",
+      SYSTEM: "notification",
+    };
 
     let target: any;
     if (type === "COMMENT") {
@@ -175,11 +205,16 @@ function BasicPanel() {
     }
 
     if (target) {
-      notify(target.content, NOTIFICATION_EMOTIONS[target.type] || "happy");
+      notify(
+        target.content,
+        NOTIFICATION_EMOTIONS[target.type] || "happy",
+        NOTIFICATION_SCENARIOS[target.type] ?? "notification"
+      );
     } else {
       notify(
         type === "COMMENT" ? "최근 댓글 알림이 없습니다." : "최근 쪽지 알림이 없습니다.",
-        "idle"
+        "idle",
+        "notification"
       );
     }
   };
@@ -191,7 +226,7 @@ function BasicPanel() {
           [감정 전환 · emotion = {emotion}]
         </div>
         <div className="flex flex-wrap gap-2">
-          {ALL_EMOTIONS.map((e: CharacterEmotion) => (
+          {supportedEmotions.map((e: CharacterEmotion) => (
             <button
               key={e}
               type="button"
@@ -242,14 +277,14 @@ function BasicPanel() {
           </button>
           <button
             type="button"
-            onClick={() => notify("다녀오셨어요? 환영해요!")}
+            onClick={() => notify("다녀오셨어요? 환영해요!", "happy", "login")}
             className="border border-dashed border-gray-600 bg-green-100/70 px-3 py-1 text-xs tracking-widest uppercase"
           >
             [로그인 (접속)]
           </button>
           <button
             type="button"
-            onClick={() => notify("안녕히가세요! 또 봐요!")}
+            onClick={() => notify("안녕히가세요! 또 봐요!", "sad", "logout")}
             className="border border-dashed border-gray-600 bg-red-100/70 px-3 py-1 text-xs tracking-widest uppercase"
           >
             [로그아웃]

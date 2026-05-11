@@ -7,7 +7,7 @@ import { Application, Ticker } from "pixi.js";
 import { Live2DModel, MotionPriority } from "@naari3/pixi-live2d-display";
 import { LIVE2D_VIEWPORT } from "@/lib/live2d/viewport";
 import { useCharacterStore } from "@/store/useCharacterStore";
-import type { CharacterActionKey } from "@/types/character";
+import type { CharacterActionKey, CharacterScenarioKey, MotionRef } from "@/types/character";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { formatDateTime, getCalendarEvents } from "@/lib/otaku/hub";
@@ -83,6 +83,13 @@ const PAGE_DIALOGUE_PRESETS: {
     lines: ["리뷰를 볼 때 스포일러 표시를 확인해요.", "평가 포인트를 같이 살펴볼까요?"],
   },
 ];
+
+const NOTIFICATION_SCENARIOS: Record<string, CharacterScenarioKey> = {
+  COMMENT: "notification",
+  REPLY: "notification",
+  REACTION: "notification",
+  FOLLOW: "notification",
+};
 
 interface MotionFileMeta {
   durationMs: number;
@@ -261,6 +268,81 @@ export default function Live2DWrapper() {
     } catch (e) {
       console.warn("[Live2DWrapper] getMotionMeta warning:", e);
       return null;
+    }
+  };
+
+  const applyExpressionById = async (expressionId: string): Promise<void> => {
+    const model = modelRef.current;
+    if (!model) return;
+
+    const expManager = (
+      model.internalModel as unknown as {
+        motionManager?: {
+          expressionManager?: {
+            stopAllExpressions?: () => void;
+          };
+        };
+      }
+    ).motionManager?.expressionManager;
+
+    try {
+      expManager?.stopAllExpressions?.();
+    } catch (e) {
+      console.warn("[Live2DWrapper] expression clear warning:", e);
+    }
+
+    restoreNeutralParameters(model);
+
+    try {
+      await model.expression(expressionId);
+    } catch (e) {
+      console.warn("[Live2DWrapper] expression apply warning:", e);
+    }
+  };
+
+  const playMappedMotion = (motion: MotionRef, restoreIdle = true) => {
+    const model = modelRef.current;
+    if (!model) return;
+
+    try {
+      void model.motion(motion.group, motion.index, MotionPriority.FORCE);
+
+      if (!restoreIdle) return;
+
+      pendingIdleReturnRef.current = true;
+      const scheduleSeq = ++actionIdleTimeoutSeqRef.current;
+      const scheduleFallback = (delayMs: number) => {
+        if (scheduleSeq !== actionIdleTimeoutSeqRef.current) return;
+        if (actionIdleTimeoutRef.current) {
+          clearTimeout(actionIdleTimeoutRef.current);
+        }
+        actionIdleTimeoutRef.current = setTimeout(() => {
+          if (modelRef.current !== model) return;
+          const latestProfile = useCharacterStore.getState().profile;
+          const idleMotion = latestProfile?.scenarioMap?.idle_return?.motion ?? latestProfile?.motionMap.idle;
+          pendingIdleReturnRef.current = false;
+          if (!idleMotion) return;
+          try {
+            void model.motion(idleMotion.group, idleMotion.index, MotionPriority.FORCE);
+          } catch (e) {
+            console.warn("[Live2DWrapper] fallback idle restore warning:", e);
+          }
+        }, delayMs);
+      };
+
+      scheduleFallback(1200);
+
+      if (modelPath) {
+        void getMotionMeta(modelPath, motion.group, motion.index).then((meta) => {
+          if (!meta || scheduleSeq !== actionIdleTimeoutSeqRef.current) return;
+          const calculatedDelay = meta.loop
+            ? Math.min(Math.max(Math.round(meta.durationMs * 0.45), 900), 1800)
+            : Math.max(600, meta.durationMs + 120);
+          scheduleFallback(calculatedDelay);
+        });
+      }
+    } catch (e) {
+      console.warn("[Live2DWrapper] motion play warning:", e);
     }
   };
 
@@ -627,16 +709,26 @@ export default function Live2DWrapper() {
               payload.new.type === 'REPLY' ? '새 답글' :
               payload.new.type === 'REACTION' ? '새 리액션' : '새로운 알림';
             
-            useCharacterStore.getState().setMessage(`${typeLabel}이 도착했어요!`);
-            
-            // 기분 좋음 표시
-            useCharacterStore.getState().setEmotion('happy');
+            const scenarioKey = NOTIFICATION_SCENARIOS[payload.new.type] ?? "notification";
+            const store = useCharacterStore.getState();
+            const scenarioMapping = store.profile?.scenarioMap?.[scenarioKey];
+
+            store.setMessage(`${typeLabel}이 도착했어요!`);
+            store.triggerScenario(scenarioKey);
+
+            if (!scenarioMapping?.expressionId) {
+              store.setEmotion("happy");
+            }
             
             // 일정 시간 후 메시지 초기화
             setTimeout(() => {
               if (isMounted) {
-                useCharacterStore.getState().setMessage(null);
-                useCharacterStore.getState().setEmotion('idle');
+                const nextStore = useCharacterStore.getState();
+                nextStore.setMessage(null);
+                nextStore.triggerScenario("idle_return");
+                if (!nextStore.profile?.scenarioMap?.idle_return?.expressionId) {
+                  nextStore.setEmotion("idle");
+                }
               }
             }, 5000);
           }
@@ -649,6 +741,23 @@ export default function Live2DWrapper() {
       supabase.removeChannel(notificationChannel);
     };
   }, [userId]);
+
+  const scenarioRequest = useCharacterStore((s) => s.scenarioRequest);
+  useEffect(() => {
+    if (!scenarioRequest || !appReady || !modelRef.current) return;
+
+    const profile = useCharacterStore.getState().profile;
+    const mapping = profile?.scenarioMap?.[scenarioRequest.key];
+    if (!profile) return;
+
+    if (mapping?.expressionId) {
+      void applyExpressionById(mapping.expressionId);
+    }
+    const motion = mapping?.motion ?? profile.motionMap.idle;
+    if (motion) {
+      playMappedMotion(motion);
+    }
+  }, [scenarioRequest, appReady, modelPath]);
 
   useEffect(() => {
     if (!assistantOpen) return;
@@ -970,7 +1079,7 @@ export default function Live2DWrapper() {
             actionIdleTimeoutRef.current = setTimeout(() => {
               if (modelRef.current !== model) return;
               const latestProfile = useCharacterStore.getState().profile;
-              const idleMotion = latestProfile?.motionMap.idle;
+              const idleMotion = latestProfile?.scenarioMap?.idle_return?.motion ?? latestProfile?.motionMap.idle;
               pendingIdleReturnRef.current = false;
               if (!idleMotion) return;
               try {

@@ -130,7 +130,7 @@ Supabase Auth가 자동으로 관리하는 사용자 테이블입니다.
 - `updated_at` `timestamptz` NOT NULL, 기본값 `now()` (trigger로 갱신)
 - `user_id` `uuid` NOT NULL, `auth.users(id)` FK (연결된 `public.profiles(user_id)`)
 - `character_id` `text` NOT NULL (앱의 `CharacterProfile.id`)
-- `profile_json` `jsonb` NOT NULL (`CharacterProfile` 전체 스냅샷)
+- `profile_json` `jsonb` NOT NULL (`CharacterProfile` 전체 스냅샷. `scenarioMap`은 상황별 표정+모션 매핑의 기준이고, `expressionMap`/`motionMap`은 고급/호환 매핑으로 유지)
 
 ### 인덱스/키
 - Primary Key: `id`
@@ -219,7 +219,7 @@ Phase 2.3 캐릭터-커뮤니티 연결의 댓글 시스템입니다.
 ## 11) 추후 확장 후보 테이블
 
 향후 `Phase 3+`에서 분리/추가 권장:
-- `stickers`, `sticker_assets`: 스티커 메타/파일 매핑 (현재는 라이브러리 캐릭터를 그대로 스티커 소스로 활용)
+- `stickers`, `sticker_assets`: 직접 등록/AI 생성 스티커 메타와 파일 매핑. Live2D 캐릭터 표정 지원 여부와 분리해 관리
 - `character_assets`: 업로드 모델 파일(Zip/Texture/모션) 스토리지 메타
 
 ---

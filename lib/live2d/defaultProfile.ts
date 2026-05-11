@@ -1,10 +1,11 @@
 import type { CharacterProfile } from "@/types/character";
+import { withRecommendedScenarioMap } from "@/types/character";
 
 /**
  * mao_pro 샘플을 우리 서비스의 기본 내장 캐릭터로 래핑.
  * 업로드 플로우 없이 늘 라이브러리에 존재해 "로드 예시" 역할을 한다.
  */
-export const MAO_PRO_PROFILE: CharacterProfile = {
+export const MAO_PRO_PROFILE: CharacterProfile = withRecommendedScenarioMap({
   id: "builtin-mao-pro",
   name: "마오쨩 (샘플)",
   description:
@@ -163,13 +164,13 @@ export const MAO_PRO_PROFILE: CharacterProfile = {
   blobUrls: [],
   isBuiltIn: true,
   createdAt: 0,
-};
+});
 
 /**
  * Pichu 모델 기본 내장 프로필.
  * 사용자가 처음 진입했을 때 기본 캐릭터로 로드된다.
  */
-export const PICHU_PROFILE: CharacterProfile = {
+export const PICHU_PROFILE: CharacterProfile = withRecommendedScenarioMap({
   id: "builtin-pichu",
   name: "피츄",
   description: "가볍게 사용할 수 있는 기본 내장 캐릭터.",
@@ -215,4 +216,4 @@ export const PICHU_PROFILE: CharacterProfile = {
   blobUrls: [],
   isBuiltIn: true,
   createdAt: 0,
-};
+});

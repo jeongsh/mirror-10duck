@@ -35,6 +35,7 @@
 - `thumbnailUrl?`: 썸네일 URL(옵션)
 - `expressionMap`: 감정 키(`idle/happy/sad/...`) -> exp3 ID
 - `motionMap`: 액션 키(`tap_head/tap_body/...`) -> `{ group, index }`
+- `scenarioMap`: 상황 키(`login/logout/notification/...`) -> `{ expressionId, motion }`
 - `hitAreaMap`: 히트영역 ID -> 액션 키
 - `outfits`: 파츠 토글 그룹
 - `morphSliders`: 실시간 조절 파라미터 목록
@@ -45,6 +46,21 @@
 - `blobUrls`: 런타임 URL revoke용 목록(현재 프론트 메모리용)
 - `isBuiltIn`: 내장 캐릭터 여부
 - `createdAt`: 생성 시각(epoch ms)
+
+감정 세트 운영 기준:
+- `ALL_EMOTIONS` 8종은 내부 호환/고급 매핑 후보입니다.
+- 제품 표면에서 우선 노출하는 기본 감정은 `idle/happy/sad/surprised/angry` 입니다.
+- `shy/love/wink`는 선택 감정이며, 크리에이터나 업로드 모델이 반드시 대응해야 하는 필수 슬롯이 아닙니다.
+- 런타임에서 지원하지 않는 감정을 요청하면 `happy` 또는 `idle` 같은 가까운 기본 감정으로 폴백합니다.
+- 스티커는 Live2D 표정 지원 여부와 분리된 별도 에셋입니다. 사용자가 직접 등록하거나 AI 생성 플로우로 만든 스티커만 커뮤니티 피커에 노출합니다.
+
+상황별 매핑 운영 기준:
+- 관리 화면의 기본 매핑은 감정/액션을 따로 등록하지 않고, `CHARACTER_SCENARIOS`에 정의된 상황별로 표정과 모션을 한 번에 고릅니다.
+- 현재 기본 상황은 로그인, 로그아웃, 알림 공통, 글쓰기 중, 기본 복귀입니다.
+- 댓글/답글/리액션/팔로우/시스템 알림은 말풍선 텍스트와 추후 사운드는 분리하되, Live2D 모션은 `notification` 공통 매핑을 사용합니다.
+- 캐릭터가 처음 등록되거나 예전 저장 데이터에 `scenarioMap`이 없으면 `expressionMap`/`motionMap` 기반 추천 매핑을 자동으로 채웁니다.
+- 모델에 맞는 표정이나 모션이 없으면 비워둘 수 있고, 런타임은 기존 `idle`/기본 상태로 폴백합니다.
+- 개별 `expressionMap`/`motionMap`은 호환성과 세밀 조정을 위한 고급 설정으로 유지합니다.
 
 백엔드에서 특히 중요한 부분:
 - `dialogues`는 `string[]` 배열이라 다국어/버전 관리 테이블 분리를 고려하는 게 좋습니다.
@@ -151,6 +167,9 @@
 - `expressionMap`은 `null` 허용 필드가 있어야 함
 - `motionMap`/`hitAreaMap`은 모델별 편차가 커서 유효성 검사 완화 필요
 - `defaultView`는 사용자별 저장(개인화)과 캐릭터 기본값 저장을 분리할지 결정 필요
+- 관리 화면의 매핑 UI는 `model3.json`을 다시 읽어 실제 Expressions/Motions/HitAreas 후보만 선택지로 보여준다. DB에는 최종 `scenarioMap`/고급 매핑만 저장하고, 후보 목록은 모델 파일에서 재구성한다.
+- 매핑 UI는 파일명만 보고 판단하지 않도록 상황 `[미리보기]`, 고급 표정 `[보기]`, 고급 모션 `[재생]`, 미리보기 클릭 기반 HitArea 로그를 제공한다.
+- 대사는 전역 기본 반응과 페이지별 입장 대사를 분리한다. 캐릭터 관리 화면에는 핵심 감정/액션의 기본 반응만 두고, 페이지별 대사는 별도 프리셋 편집으로 확장한다.
 
 4) 업로드 API 설계 팁
 - 서버에서도 동일 검증 규칙(확장자/용량/시그니처) 재검증 권장

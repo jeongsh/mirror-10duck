@@ -31,6 +31,21 @@ export const ALL_EMOTIONS: CharacterEmotion[] = [
 ];
 
 /**
+ * 제품 표면에서 우선 노출할 기본 감정.
+ * ALL_EMOTIONS 는 내부 호환/고급 매핑 후보이고, 일반 사용자 UI 는 캐릭터가
+ * 실제 지원하는 CORE_EMOTIONS 중심으로 시작한다.
+ */
+export const CORE_EMOTIONS: CharacterEmotion[] = [
+  "idle",
+  "happy",
+  "sad",
+  "surprised",
+  "angry",
+];
+
+export const OPTIONAL_EMOTIONS: CharacterEmotion[] = ["shy", "love", "wink"];
+
+/**
  * 사용자 상호작용 액션. Live2DWrapper 의 hit / idle 로직이 이 키를 참조한다.
  */
 export type CharacterActionKey =
@@ -67,6 +82,52 @@ export const ALL_ACTIONS: CharacterActionKey[] = [
 export interface MotionRef {
   group: string;
   index: number;
+}
+
+export type CharacterScenarioKey =
+  | "login"
+  | "logout"
+  | "notification"
+  | "writing"
+  | "idle_return";
+
+export interface CharacterScenarioDefinition {
+  key: CharacterScenarioKey;
+  label: string;
+  description: string;
+}
+
+export const CHARACTER_SCENARIOS: CharacterScenarioDefinition[] = [
+  {
+    key: "login",
+    label: "로그인",
+    description: "사용자가 접속했을 때의 첫 인사",
+  },
+  {
+    key: "logout",
+    label: "로그아웃",
+    description: "사용자가 나갈 때의 짧은 인사",
+  },
+  {
+    key: "notification",
+    label: "알림 공통",
+    description: "댓글, 답글, 리액션, 팔로우, 시스템 알림에 공통으로 쓰는 움직임",
+  },
+  {
+    key: "writing",
+    label: "글쓰기 중",
+    description: "사용자가 글을 작성하거나 정리할 때",
+  },
+  {
+    key: "idle_return",
+    label: "기본 복귀",
+    description: "상호작용이 끝나고 기본 상태로 돌아갈 때",
+  },
+];
+
+export interface CharacterScenarioMapping {
+  expressionId?: string | null;
+  motion?: MotionRef | null;
 }
 
 /**
@@ -163,6 +224,8 @@ export interface CharacterProfile {
   expressionMap: Partial<Record<CharacterEmotion, string | null>>;
   /** 추상 액션 → 모션 그룹/인덱스. */
   motionMap: Partial<Record<CharacterActionKey, MotionRef | null>>;
+  /** 제품 상황 → 실제 표정/모션. 관리 UI 의 기본 매핑 단위. */
+  scenarioMap?: Partial<Record<CharacterScenarioKey, CharacterScenarioMapping>>;
 
   /** 히트 영역 ID → 발동할 액션 키. */
   hitAreaMap: { hitAreaId: string; action: CharacterActionKey }[];
@@ -193,4 +256,131 @@ export interface CharacterProfile {
   isBuiltIn: boolean;
 
   createdAt: number;
+}
+
+function firstDefined<T>(...values: (T | null | undefined)[]): T | null {
+  return values.find((value): value is T => value != null) ?? null;
+}
+
+/**
+ * 업로드 자동 매핑 결과를 제품 상황 단위 기본값으로 접어 넣는다.
+ * 크리에이터가 처음부터 모든 상황을 빈칸으로 마주하지 않게 하는 추천 매핑이다.
+ */
+export function buildRecommendedScenarioMap(source: {
+  expressionMap: Partial<Record<CharacterEmotion, string | null>>;
+  motionMap: Partial<Record<CharacterActionKey, MotionRef | null>>;
+}): Partial<Record<CharacterScenarioKey, CharacterScenarioMapping>> {
+  const exp = (...keys: CharacterEmotion[]) =>
+    firstDefined(...keys.map((key) => source.expressionMap[key]));
+  const motion = (...keys: CharacterActionKey[]) =>
+    firstDefined(...keys.map((key) => source.motionMap[key]));
+
+  return {
+    login: {
+      expressionId: exp("happy", "idle"),
+      motion: motion("greet", "attention", "tap_head", "idle"),
+    },
+    logout: {
+      expressionId: exp("sad", "idle"),
+      motion: motion("greet", "attention", "idle"),
+    },
+    notification: {
+      expressionId: exp("happy", "surprised", "idle"),
+      motion: motion("attention", "idle"),
+    },
+    writing: {
+      expressionId: exp("idle", "happy"),
+      motion: motion("typing", "attention", "idle"),
+    },
+    idle_return: {
+      expressionId: exp("idle"),
+      motion: motion("idle"),
+    },
+  };
+}
+
+export function withRecommendedScenarioMap(profile: CharacterProfile): CharacterProfile {
+  const recommended = buildRecommendedScenarioMap(profile);
+  const current = profile.scenarioMap ?? {};
+  const legacyScenarioMap = current as Partial<Record<string, CharacterScenarioMapping>>;
+  const legacyNotification =
+    legacyScenarioMap.notification ??
+    legacyScenarioMap.new_comment ??
+    legacyScenarioMap.new_reply ??
+    legacyScenarioMap.reaction ??
+    legacyScenarioMap.follow ??
+    legacyScenarioMap.hot_promoted ??
+    legacyScenarioMap.system_notice;
+  const scenarioMap: CharacterProfile["scenarioMap"] = {};
+
+  for (const scenario of CHARACTER_SCENARIOS) {
+    scenarioMap[scenario.key] =
+      scenario.key === "notification"
+        ? legacyNotification ?? recommended.notification
+        : current[scenario.key] ?? recommended[scenario.key];
+  }
+
+  return {
+    ...profile,
+    scenarioMap,
+  };
+}
+
+interface SupportedEmotionOptions {
+  includeOptional?: boolean;
+  requireExpression?: boolean;
+}
+
+export function isCharacterEmotionSupported(
+  profile: CharacterProfile | null | undefined,
+  emotion: CharacterEmotion,
+  options: SupportedEmotionOptions = {}
+): boolean {
+  if (!profile) return emotion === "idle";
+  if (emotion === "idle") return true;
+
+  const hasExpression = Boolean(profile.expressionMap[emotion]);
+  if (options.requireExpression) return hasExpression;
+
+  return (
+    hasExpression ||
+    Boolean(profile.sounds.emotions[emotion]) ||
+    Boolean(profile.dialogues.emotions[emotion]?.length)
+  );
+}
+
+export function getCharacterSupportedEmotions(
+  profile: CharacterProfile | null | undefined,
+  options: SupportedEmotionOptions = {}
+): CharacterEmotion[] {
+  const includeOptional = options.includeOptional ?? true;
+  const candidates = includeOptional
+    ? [...CORE_EMOTIONS, ...OPTIONAL_EMOTIONS]
+    : CORE_EMOTIONS;
+  return candidates.filter((emotion) =>
+    isCharacterEmotionSupported(profile, emotion, options)
+  );
+}
+
+const EMOTION_FALLBACKS: Record<CharacterEmotion, CharacterEmotion[]> = {
+  idle: ["idle"],
+  happy: ["idle"],
+  sad: ["idle"],
+  angry: ["idle"],
+  surprised: ["happy", "idle"],
+  shy: ["idle"],
+  love: ["happy", "idle"],
+  wink: ["happy", "idle"],
+};
+
+export function resolveSupportedEmotion(
+  profile: CharacterProfile | null | undefined,
+  emotion: CharacterEmotion
+): CharacterEmotion {
+  if (isCharacterEmotionSupported(profile, emotion)) return emotion;
+  return (
+    EMOTION_FALLBACKS[emotion].find((candidate) =>
+      isCharacterEmotionSupported(profile, candidate)
+    ) ?? "idle"
+  );
 }

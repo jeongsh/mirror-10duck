@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { upsertCharacterProfile, deleteCharacterProfileById } from "@/lib/supabase/characters";
 import { deleteCharacterAssets } from "@/lib/supabase/characterStorage";
 import type { CharacterProfile } from "@/types/character";
+import { withRecommendedScenarioMap } from "@/types/character";
 
 /**
  * 업로드/내장된 캐릭터 프로필의 라이브러리.
@@ -24,19 +25,20 @@ interface CharacterLibraryState {
 export const useCharacterLibraryStore = create<CharacterLibraryState>((set) => ({
   profiles: [],
   activeId: null,
-  setProfiles: (profiles) => set({ profiles }),
+  setProfiles: (profiles) => set({ profiles: profiles.map(withRecommendedScenarioMap) }),
 
   register: (profile) => {
+    const normalizedProfile = withRecommendedScenarioMap(profile);
     set((s) => {
-      const existing = s.profiles.findIndex((p) => p.id === profile.id);
+      const existing = s.profiles.findIndex((p) => p.id === normalizedProfile.id);
       if (existing >= 0) {
         const next = [...s.profiles];
-        next[existing] = profile;
+        next[existing] = normalizedProfile;
         return { profiles: next };
       }
-      return { profiles: [...s.profiles, profile] };
+      return { profiles: [...s.profiles, normalizedProfile] };
     });
-    void upsertCharacterProfile(profile);
+    void upsertCharacterProfile(normalizedProfile);
   },
 
   unregister: (id) => {
@@ -71,7 +73,7 @@ export const useCharacterLibraryStore = create<CharacterLibraryState>((set) => (
     set((s) => ({
       profiles: s.profiles.map((p) => {
         if (p.id !== id) return p;
-        updated = { ...p, ...patch };
+        updated = withRecommendedScenarioMap({ ...p, ...patch });
         return updated;
       }),
     }));

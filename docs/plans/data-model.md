@@ -27,8 +27,8 @@
 - [ ] `moderation_results`: target_type, target_id, image_sha256, image_phash, status, nsfw_score, minor_signal_score, risk_score, tags, matched_rules, model_version, policy_version, reviewed_by
 - [ ] `moderation_queue`: target_type, target_id, moderation_result_id, priority, reason, status, assigned_to, due_at
 - [ ] `blocked_image_hashes`: image_sha256, image_phash, reason, source_moderation_result_id, policy_version
-- [ ] `stickers`: owner_user_id, character_id, name, visibility, created_at
-- [ ] `sticker_assets`: sticker_id, emotion, storage_key, width, height
+- [ ] `stickers`: owner_user_id, character_id nullable, name, visibility, source_type, created_at
+- [ ] `sticker_assets`: sticker_id, label, storage_key, width, height, source_type, created_at
 - [ ] `board_moderators`: board_id, user_id, role, created_at
 - [ ] `board_tabs`: board_id, key, label, sort_order
 - [ ] `external_sources`: source_type, name, url, reliability, enabled, created_at
@@ -77,6 +77,7 @@
 - 집계 컬럼을 둘 경우 insert/delete/update 트리거나 RPC로 정합성을 유지한다.
 - 사용자가 삭제되어도 게시글 표시가 깨지지 않도록 작성 시점 닉네임/아바타/캐릭터 스냅샷을 보존한다.
 - 캐릭터가 삭제되어도 과거 리액션/스티커가 깨지지 않도록 썸네일 또는 스티커 에셋 스냅샷을 보존한다.
+- 스티커는 Live2D 캐릭터 표정 매핑과 별개다. 직접 등록/AI 생성으로 만들어진 `sticker_assets`가 커뮤니티 노출의 기준이고, 캐릭터는 출처 또는 참조 대상일 뿐 필수 연결 대상이 아니다.
 
 ## 5. RLS 원칙
 

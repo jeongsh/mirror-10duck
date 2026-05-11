@@ -30,6 +30,7 @@ import type {
   CharacterProfile,
   CharacterViewConfig,
 } from "@/types/character";
+import { withRecommendedScenarioMap } from "@/types/character";
 
 interface CharacterUploaderProps {
   onCommitted?: (profile: CharacterProfile) => void;
@@ -39,6 +40,12 @@ interface CharacterUploaderProps {
   onPreviewModelChange?: (modelUrl: string | null) => void;
   onPreviewViewChange?: (view: CharacterViewConfig) => void;
   createThumbnailBlob?: () => Promise<Blob | null>;
+}
+
+export interface MotionPreviewRequest {
+  group: string;
+  index: number;
+  nonce: number;
 }
 
 export const INITIAL_UPLOAD_VIEW: CharacterViewConfig = { scale: 0.05, x: 0, y: 20 };
@@ -106,14 +113,16 @@ export default function CharacterUploader({
       thumbnailUrl?: string
     ): CharacterProfile => {
       const morphSliders = guessMorphSliders(installed);
-      return {
+      const expressionMap = guessExpressionMap(installed);
+      const motionMap = guessMotionMap(installed);
+      return withRecommendedScenarioMap({
         id: characterId,
         name: name || "이름 없는 캐릭터",
         description: description || undefined,
         modelPath,
         thumbnailUrl,
-        expressionMap: guessExpressionMap(installed),
-        motionMap: guessMotionMap(installed),
+        expressionMap,
+        motionMap,
         hitAreaMap: guessHitAreaMap(installed),
         outfits: guessOutfits(installed),
         morphSliders,
@@ -124,7 +133,7 @@ export default function CharacterUploader({
         blobUrls,
         isBuiltIn: false,
         createdAt: Date.now(),
-      };
+      });
     },
     [description, name]
   );
@@ -347,6 +356,10 @@ export function CharacterUploadPreview({
   onCaptureReady,
   profile,
   emotion,
+  previewExpressionId,
+  previewExpressionNonce,
+  motionPreviewRequest,
+  onHitAreas,
   message,
   viewCommitMode = "live",
 }: {
@@ -356,6 +369,10 @@ export function CharacterUploadPreview({
   onCaptureReady?: (capture: (() => Promise<Blob | null>) | null) => void;
   profile?: CharacterProfile;
   emotion?: CharacterEmotion;
+  previewExpressionId?: string | null;
+  previewExpressionNonce?: number;
+  motionPreviewRequest?: MotionPreviewRequest | null;
+  onHitAreas?: (hitAreas: string[]) => void;
   message?: string | null;
   viewCommitMode?: "live" | "end";
 }) {
@@ -366,6 +383,7 @@ export function CharacterUploadPreview({
   const neutralParametersRef = useRef<number[] | null>(null);
   const dragData = useRef({ isDragging: false, lastX: 0, lastY: 0 });
   const onViewChangeRef = useRef(onViewChange);
+  const onHitAreasRef = useRef(onHitAreas);
   const viewRef = useRef(view);
   const viewCommitModeRef = useRef(viewCommitMode);
   const wheelCommitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -375,6 +393,10 @@ export function CharacterUploadPreview({
   useEffect(() => {
     onViewChangeRef.current = onViewChange;
   }, [onViewChange]);
+
+  useEffect(() => {
+    onHitAreasRef.current = onHitAreas;
+  }, [onHitAreas]);
 
   useEffect(() => {
     viewRef.current = view;
@@ -485,7 +507,7 @@ export function CharacterUploadPreview({
         appRef.current = app;
 
         const model = await Live2DModel.from(modelUrl, {
-          autoHitTest: false,
+          autoHitTest: true,
           autoFocus: false,
         });
         if (cancelled) {
@@ -524,6 +546,9 @@ export function CharacterUploadPreview({
         model.x = latestView.x;
         model.y = latestView.y;
         app.stage.addChild(model);
+        model.on?.("hit", (hitAreas: string[]) => {
+          onHitAreasRef.current?.(hitAreas);
+        });
         modelRef.current = model;
         captureNeutralParameters(model);
         setPreviewReadySeq((seq) => seq + 1);
@@ -592,7 +617,7 @@ export function CharacterUploadPreview({
 
     restoreNeutralParameters(model);
 
-    const targetExp = profile.expressionMap[emotion];
+    const targetExp = previewExpressionId ?? profile.expressionMap[emotion];
     if (!targetExp) return;
 
     try {
@@ -600,7 +625,25 @@ export function CharacterUploadPreview({
     } catch (e) {
       console.warn("[CharacterUploadPreview] expression apply warning:", e);
     }
-  }, [emotion, previewReadySeq, profile, restoreNeutralParameters]);
+  }, [
+    emotion,
+    previewExpressionId,
+    previewExpressionNonce,
+    previewReadySeq,
+    profile,
+    restoreNeutralParameters,
+  ]);
+
+  useEffect(() => {
+    const model = modelRef.current;
+    if (!model || !motionPreviewRequest) return;
+
+    try {
+      void model.motion(motionPreviewRequest.group, motionPreviewRequest.index, 3);
+    } catch (e) {
+      console.warn("[CharacterUploadPreview] motion preview warning:", e);
+    }
+  }, [motionPreviewRequest, previewReadySeq]);
 
   useEffect(() => {
     const model = modelRef.current;
