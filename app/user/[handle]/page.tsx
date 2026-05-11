@@ -12,33 +12,13 @@ import ReactionBar from "@/components/community/ReactionBar";
 import RichContent from "@/components/stickers/RichContent";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
-import { splitContentSegments } from "@/lib/stickers/token";
 import { formatCommunityDate } from "@/lib/utils/formatDate";
 import { CommunityPost, UserProfile, postAggregateDefaults } from "@/types/community";
 import { createNotification } from "@/lib/community/notifications";
+import { enrichPostsSharedFrom } from "@/lib/community/enrichPostsSharedFrom";
+import { splitFeedBodyForDisplay } from "@/lib/community/feedContentDisplay";
 import { blockUser, unblockUser, checkIsBlocked } from "@/lib/supabase/profiles";
-
-function splitFeedBody(content: string) {
-  const trimmed = content.trim();
-  const isJson = trimmed.startsWith("{") && trimmed.endsWith("}");
-
-  if (isJson) return { body: content, imageUrls: [] };
-
-  const imageUrls: string[] = [];
-  const body = splitContentSegments(content)
-    .map((segment) => {
-      if (segment.type === "image") {
-        imageUrls.push(segment.url);
-        return "";
-      }
-      if (segment.type === "sticker") return segment.token.raw;
-      return segment.value;
-    })
-    .join("")
-    .trim();
-
-  return { body, imageUrls };
-}
+import SharedPostOriginCard from "@/components/community/SharedPostOriginCard";
 
 function profileName(profile: UserProfile) {
   return profile.display_name || profile.nickname || "사용자";
@@ -88,21 +68,25 @@ export default function UserFeedPage() {
 
     setTargetProfile(profile);
 
-    // 2. 작성글 가져오기
-    const { data: postsData } = await supabase
+    // 2. 작성글 가져오기 (타인 프로필은 숨김 글 제외, 본인은 전체)
+    let postsQuery = supabase
       .from("posts")
       .select("*, profiles(*)")
       .eq("author_id", profile.user_id)
       .order("created_at", { ascending: false })
       .limit(30);
+    if (authUser?.id !== profile.user_id) {
+      postsQuery = postsQuery.eq("status", "NORMAL");
+    }
+    const { data: postsData } = await postsQuery;
 
     // enrich profiles with target profile
-    const enrichedPosts = ((postsData as CommunityPost[] | null) ?? []).map(post => ({
+    const enrichedPosts = ((postsData as CommunityPost[] | null) ?? []).map((post) => ({
       ...post,
-      profiles: post.profiles ?? profile
+      profiles: post.profiles ?? profile,
     }));
-    
-    setPosts(enrichedPosts);
+
+    setPosts(await enrichPostsSharedFrom(enrichedPosts));
 
     // 3. 팔로우 여부 확인 (현재 로그인 사용자가 있는 경우)
     if (authUser?.id) {
@@ -305,9 +289,10 @@ export default function UserFeedPage() {
         ) : (
           posts.map((post) => {
             const stats = postAggregateDefaults(post);
-            const { body, imageUrls } = splitFeedBody(post.content);
+            const { body, imageUrls, shareHeaderLine } = splitFeedBodyForDisplay(post.content);
             const authorHandle =
               post.profiles?.handle || post.profiles?.nickname || post.author_email?.split("@")[0] || "익명";
+            const isBoardShareFeed = post.source_type === "FEED" && !!post.origin_post_id;
 
             return (
               <article
@@ -343,26 +328,43 @@ export default function UserFeedPage() {
                       </button>
                     </div>
 
-                    {post.source_type === "BOARD" ? (
-                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
-                        <span className="border border-dashed border-gray-300 px-1.5 py-0.5">게시판</span>
-                        {post.is_hot && (
-                          <span className="border border-dashed border-gray-300 bg-white px-1.5 py-0.5 text-gray-700">인기</span>
+                    {isBoardShareFeed ? (
+                      <div className="mt-2 rounded border border-dashed border-gray-200 bg-gray-50/80 px-3 py-2.5">
+                        <SharedPostOriginCard
+                          post={post}
+                          shareHeaderFallback={post.shared_from ? null : shareHeaderLine}
+                          variant="unified"
+                        />
+                        {body || imageUrls.length > 0 ? (
+                          <div className="mt-2 border-t border-dashed border-gray-200 pt-2.5">
+                            {body ? <RichContent content={body} /> : null}
+                            <FeedMediaGrid imageUrls={imageUrls} />
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <>
+                        {post.source_type === "BOARD" ? (
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+                            <span className="border border-dashed border-gray-300 px-1.5 py-0.5">게시판</span>
+                            {post.is_hot && (
+                              <span className="border border-dashed border-gray-300 bg-white px-1.5 py-0.5 text-gray-700">인기</span>
+                            )}
+                          </div>
+                        ) : null}
+
+                        {post.title && post.source_type === "BOARD" && (
+                          <h2 className="mt-2 font-bold text-gray-950">{post.title}</h2>
                         )}
-                      </div>
-                    ) : null}
 
-                    {post.title && post.source_type === "BOARD" && (
-                      <h2 className="mt-2 font-bold text-gray-950">{post.title}</h2>
+                        {body || imageUrls.length > 0 ? (
+                          <div className="mt-2 rounded border border-dashed border-gray-200 bg-gray-50/80 px-3 py-2.5">
+                            {body ? <RichContent content={body} /> : null}
+                            <FeedMediaGrid imageUrls={imageUrls} />
+                          </div>
+                        ) : null}
+                      </>
                     )}
-
-                    {body && (
-                      <div className="mt-2">
-                        <RichContent content={body} />
-                      </div>
-                    )}
-
-                    <FeedMediaGrid imageUrls={imageUrls} />
 
                     <div className="mt-3 flex items-center justify-between gap-2 text-xs text-gray-500">
                       <button className="flex items-center gap-1 hover:text-gray-900">

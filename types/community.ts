@@ -41,6 +41,17 @@ export type UserProfile = {
 
 export type PostSourceType = "FEED" | "BOARD";
 
+/** 피드 공유 등으로 조회한 원본 게시글 스냅샷 (`origin_post_id` 조인) */
+export type PostSharedFrom = {
+  id: string;
+  title: string | null;
+  author_id: string | null;
+  board_id: string | null;
+  source_type: PostSourceType;
+  profiles?: UserProfile | null;
+  boards?: { slug: string; name: string } | null;
+};
+
 export type CommunityPost = {
   id: string;
   created_at: string;
@@ -61,6 +72,8 @@ export type CommunityPost = {
   board_id: string | null;
   source_type: PostSourceType;
   origin_post_id: string | null;
+  /** `enrichPostsSharedFrom` 로 채움 */
+  shared_from?: PostSharedFrom | null;
   is_hot: boolean;
   hot_promoted_at: string | null;
 
@@ -69,6 +82,9 @@ export type CommunityPost = {
   comment_count?: number;
   upvote_count?: number;
   downvote_count?: number;
+
+  /** 게시글 공개 상태 (`NORMAL`, `HIDDEN` 등). 관리자 숨김·원본 숨김 전파에 사용 */
+  status?: string;
 };
 
 /** 클라이언트 표시용 기본값 */

@@ -14,6 +14,8 @@ import IdentityBadge from "@/components/community/IdentityBadge";
 import { createNotification } from "@/lib/community/notifications";
 import { formatIp } from "@/lib/utils/formatIp";
 import AuthorProfileCard from "@/components/community/AuthorProfileCard";
+import { isAdminUser } from "@/lib/supabase/admin";
+import { splitFeedShareHeader } from "@/lib/community/feedContentDisplay";
 
 export default function BoardPostDetailPage() {
   const router = useRouter();
@@ -38,8 +40,14 @@ export default function BoardPostDetailPage() {
       setPost(null);
       return;
     }
-    setPost(data as CommunityPost);
-  }, [postId]);
+    const next = data as CommunityPost;
+    if ((next.status ?? "NORMAL") === "HIDDEN" && !isAdminUser(authUser ?? undefined)) {
+      setPost(null);
+      setMessage("이 글은 숨김 처리되었거나 존재하지 않습니다.");
+      return;
+    }
+    setPost(next);
+  }, [postId, authUser]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -64,6 +72,14 @@ export default function BoardPostDetailPage() {
         setPost(null);
       } else {
         const postData = postResponse.data as CommunityPost;
+        const hidden =
+          (postData.status ?? "NORMAL") === "HIDDEN" && !isAdminUser(authUser ?? undefined);
+        if (hidden) {
+          setPost(null);
+          setMessage("이 글은 숨김 처리되었거나 존재하지 않습니다.");
+          setLoading(false);
+          return;
+        }
         setPost(postData);
 
         // 작성자 팔로우 여부 확인
@@ -113,6 +129,12 @@ export default function BoardPostDetailPage() {
     if (!post || !userId) return false;
     return post.author_id === userId;
   }, [post, userId]);
+
+  const renderedPostContent = useMemo(() => {
+    if (!post) return "";
+    if (post.source_type !== "FEED") return post.content;
+    return splitFeedShareHeader(post.content).rawBody;
+  }, [post]);
 
   const toggleFollowUser = async () => {
     if (!userId) {
@@ -165,7 +187,21 @@ export default function BoardPostDetailPage() {
     if (!post) return;
     
     setShareLoading(true);
-    
+
+    const { data: dup } = await supabase
+      .from("posts")
+      .select("id")
+      .eq("origin_post_id", post.id)
+      .eq("author_id", userId)
+      .eq("source_type", "FEED")
+      .maybeSingle();
+
+    if (dup) {
+      setShareLoading(false);
+      alert("이미 이 글을 피드에 공유했습니다.");
+      return;
+    }
+
     // 피드에 맞게 제목과 본문을 조합하여 새 글 생성
     const feedContent = `[${board?.name}에서 공유됨] ${post.title}\n\n${post.content}`;
 
@@ -184,7 +220,9 @@ export default function BoardPostDetailPage() {
     if (!error) {
       alert("내 피드에 성공적으로 공유되었습니다!");
     } else {
-      alert("공유 실패: " + error.message);
+      const msg =
+        error.code === "23505" ? "이미 이 글을 피드에 공유했습니다." : error.message;
+      alert("공유 실패: " + msg);
     }
   };
 
@@ -306,7 +344,7 @@ export default function BoardPostDetailPage() {
           </div>
         ) : null}
         {post ? (
-          <RichContent content={post.content} />
+          <RichContent content={renderedPostContent} />
         ) : (
           <p className="text-gray-500">게시글을 찾을 수 없습니다.</p>
         )}

@@ -14,6 +14,9 @@ import { checkAndGrantActivityBadges } from "@/lib/supabase/badges";
 import { getClientIp } from "@/lib/community/actions";
 import { formatIp } from "@/lib/utils/formatIp";
 
+const BLOCKED_COMMENT_TOGGLE_CLASS =
+  "text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-gray-800 hover:underline";
+
 /**
  * 게시글 한 개의 댓글 섹션.
  *
@@ -51,6 +54,10 @@ export default function CommentSection({
   const [editText, setEditText] = useState("");
   const [anonymousNickname, setAnonymousNickname] = useState("");
   const [anonymousPassword, setAnonymousPassword] = useState("");
+  const [blockedAuthorIds, setBlockedAuthorIds] = useState<Set<string>>(() => new Set());
+  const [revealedBlockedCommentIds, setRevealedBlockedCommentIds] = useState<Set<string>>(
+    () => new Set()
+  );
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
 
@@ -78,6 +85,48 @@ export default function CommentSection({
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!viewerId) {
+      setBlockedAuthorIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from("blocked_users")
+        .select("blocked_id")
+        .eq("blocker_id", viewerId);
+      if (cancelled) return;
+      if (error) {
+        console.warn("[CommentSection] blocked_users fetch:", error.message);
+        setBlockedAuthorIds(new Set());
+        return;
+      }
+      setBlockedAuthorIds(new Set((data ?? []).map((r) => r.blocked_id as string)));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [viewerId]);
+
+  const isCommentFromBlockedUser = useCallback(
+    (c: Comment) => {
+      if (!viewerId || !c.author_id) return false;
+      if (c.author_id === viewerId) return false;
+      return blockedAuthorIds.has(c.author_id);
+    },
+    [viewerId, blockedAuthorIds]
+  );
+
+  const toggleRevealBlockedComment = useCallback((commentId: string) => {
+    setRevealedBlockedCommentIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(commentId)) next.delete(commentId);
+      else next.add(commentId);
+      return next;
+    });
+  }, []);
 
   const handleInsertSticker = (token: string) => {
     const { next, cursor } = insertAtTextarea(textareaRef.current, text, token);
@@ -307,11 +356,26 @@ export default function CommentSection({
             const stickerToken = c.sticker_token ? parseStickerToken(c.sticker_token) : null;
             const canDelete = viewerId === c.author_id && viewerId !== null;
             const commentReplies = replies.filter(r => r.parent_comment_id === c.id);
+            const blockedFolded =
+              isCommentFromBlockedUser(c) && !revealedBlockedCommentIds.has(c.id);
 
             return (
               <div key={c.id} className="flex flex-col gap-2">
                 <li id={`comment-${c.id}`} className="scroll-mt-24 flex items-start gap-3 border border-dashed border-gray-300 bg-white p-3">
                   <div className="min-w-0 flex-1">
+                    {blockedFolded ? (
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                        <span>차단한 사용자의 댓글입니다.</span>
+                        <button
+                          type="button"
+                          className={BLOCKED_COMMENT_TOGGLE_CLASS}
+                          onClick={() => toggleRevealBlockedComment(c.id)}
+                        >
+                          [보기]
+                        </button>
+                      </div>
+                    ) : (
+                      <>
                     <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
                       <IdentityBadge 
                         profile={c.profiles} 
@@ -325,6 +389,15 @@ export default function CommentSection({
                       <span className="text-[10px] text-gray-400">
                         {new Date(c.created_at).toLocaleString("ko-KR")}
                       </span>
+                      {isCommentFromBlockedUser(c) && revealedBlockedCommentIds.has(c.id) ? (
+                        <button
+                          type="button"
+                          className={BLOCKED_COMMENT_TOGGLE_CLASS}
+                          onClick={() => toggleRevealBlockedComment(c.id)}
+                        >
+                          [접기]
+                        </button>
+                      ) : null}
                       {c.sticker_token ? (
                         <span className="rounded border border-dashed border-gray-300 px-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">
                           Sticker
@@ -403,6 +476,8 @@ export default function CommentSection({
                         </button>
                       )}
                     </div>
+                      </>
+                    )}
                   </div>
                 </li>
 
@@ -412,9 +487,24 @@ export default function CommentSection({
                     {commentReplies.map(r => {
                       const rStickerToken = r.sticker_token ? parseStickerToken(r.sticker_token) : null;
                       const canDeleteReply = viewerId === r.author_id && viewerId !== null;
+                      const replyBlockedFolded =
+                        isCommentFromBlockedUser(r) && !revealedBlockedCommentIds.has(r.id);
                       return (
                         <li id={`comment-${r.id}`} key={r.id} className="scroll-mt-24 flex items-start gap-3 border border-dashed border-gray-200 bg-gray-50/50 p-3">
                           <div className="min-w-0 flex-1">
+                            {replyBlockedFolded ? (
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                                <span>차단한 사용자의 답글입니다.</span>
+                                <button
+                                  type="button"
+                                  className={BLOCKED_COMMENT_TOGGLE_CLASS}
+                                  onClick={() => toggleRevealBlockedComment(r.id)}
+                                >
+                                  [보기]
+                                </button>
+                              </div>
+                            ) : (
+                              <>
                             <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
                               <IdentityBadge 
                                 profile={r.profiles} 
@@ -428,6 +518,15 @@ export default function CommentSection({
                               <span className="text-[10px] text-gray-400">
                                 {new Date(r.created_at).toLocaleString("ko-KR")}
                               </span>
+                              {isCommentFromBlockedUser(r) && revealedBlockedCommentIds.has(r.id) ? (
+                                <button
+                                  type="button"
+                                  className={BLOCKED_COMMENT_TOGGLE_CLASS}
+                                  onClick={() => toggleRevealBlockedComment(r.id)}
+                                >
+                                  [접기]
+                                </button>
+                              ) : null}
                             </div>
                             {rStickerToken ? (
                               <div className="mt-1">
@@ -471,6 +570,8 @@ export default function CommentSection({
                                   [신고]
                                 </button>
                               </div>
+                            )}
+                              </>
                             )}
                           </div>
                         </li>

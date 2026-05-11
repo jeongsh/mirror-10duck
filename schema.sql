@@ -193,6 +193,9 @@ CREATE TABLE public.posts (
   CONSTRAINT posts_origin_post_id_fkey FOREIGN KEY (origin_post_id) REFERENCES public.posts(id),
   CONSTRAINT fk_posts_profiles FOREIGN KEY (author_id) REFERENCES public.profiles(user_id)
 );
+
+-- 크로스포스트 유니크·트리거(원본 숨김 전파, 삭제 시 origin 정리): db/2026-05-11-crosspost-dedup-propagate.sql
+
 CREATE TABLE public.profiles (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL UNIQUE,
@@ -238,7 +241,7 @@ CREATE TABLE public.release_items (
   season text,
   episode_count integer CHECK (episode_count IS NULL OR episode_count > 0),
   status USER-DEFINED NOT NULL DEFAULT 'DRAFT'::news_status,
-  last_checked_at timestamp with time zone,
+  release_date date,
   created_by uuid,
   updated_by uuid,
   created_at timestamp with time zone NOT NULL DEFAULT now(),

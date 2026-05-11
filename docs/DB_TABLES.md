@@ -49,7 +49,14 @@ Supabase Auth가 자동으로 관리하는 사용자 테이블입니다.
 - `upvote_count` `integer` NOT NULL 기본값 `0` (추천 수; `post_votes` 트리거로 유지)
 - `downvote_count` `integer` NOT NULL 기본값 `0` (비추천 수; `post_votes` 트리거로 유지)
 - `profiles` (Virtual Join 대상) → `author_id`를 통한 `public.profiles(user_id)` FK 참조
+- `status` `text` NOT NULL, 기본값 `NORMAL` (관리자 숨김 등 `HIDDEN`)
 *참고: 과거 사용되던 `category` 컬럼은 폐기(비활성화)되었습니다.*
+
+### 크로스포스트 정합성 (`db/2026-05-11-crosspost-dedup-propagate.sql`)
+- 부분 유니크 인덱스: `source_type = FEED`일 때 `(origin_post_id, author_id)` 중복 불가(같은 원본을 피드에 두 번 공유 불가).
+- 부분 유니크 인덱스: `source_type = BOARD`이고 `origin_post_id`가 있을 때 `(origin_post_id, board_id, author_id)` 중복 불가.
+- 트리거: 원본 글 `status`가 `HIDDEN`으로 바뀌면 `origin_post_id` 체인으로 이어지는 모든 파생 글도 `HIDDEN`.
+- 트리거: 원본 글 삭제 전에 `origin_post_id = 삭제 대상 id`인 글들의 `origin_post_id`를 `NULL`로 정리(FK 때문에 삭제가 막히지 않도록).
 
 마이그레이션: `docs/migrations/2026-05-04-post-aggregates-and-votes.sql`
 

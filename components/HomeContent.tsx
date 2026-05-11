@@ -30,6 +30,7 @@ export default function HomeContent() {
         supabase
           .from("posts")
           .select("*")
+          .eq("status", "NORMAL")
           .order("created_at", { ascending: false })
           .limit(10),
       ]);

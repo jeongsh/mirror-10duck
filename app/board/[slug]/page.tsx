@@ -109,6 +109,7 @@ export default function BoardPage() {
         .from("posts")
         .select("*, profiles(*)")
         .eq("board_id", board.id)
+        .eq("status", "NORMAL")
         .ilike("title", "[공지]%")
         .order("created_at", { ascending: false })
         .limit(5);
@@ -121,6 +122,7 @@ export default function BoardPage() {
         .from("posts")
         .select("*, profiles(*)")
         .eq("board_id", board.id)
+        .eq("status", "NORMAL")
         .not("title", "ilike", "[공지]%"); // 공지는 위에서 따로 보여주므로 제외
 
       if (activeTab === "hot") query = query.eq("is_hot", true);
