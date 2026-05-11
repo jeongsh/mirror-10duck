@@ -7,6 +7,7 @@ import {
   MoreHorizontal,
   Search,
   Share,
+  Trash2,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -325,6 +326,24 @@ export default function FeedPage() {
     setShareLoading(false);
   };
 
+  const handleDeletePost = async (post: CommunityPost) => {
+    if (!currentUser?.id || post.author_id !== currentUser.id) {
+      return;
+    }
+
+    const isConfirmed = window.confirm("이 피드를 삭제할까요?");
+    if (!isConfirmed) return;
+
+    const { error } = await supabase.from("posts").delete().eq("id", post.id);
+    if (error) {
+      alert(`삭제 실패: ${error.message}`);
+      return;
+    }
+
+    setPosts((prev) => prev.filter((item) => item.id !== post.id));
+    setOpenPostMenuId(null);
+  };
+
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col border-x border-dashed border-gray-500 bg-white/40">
       <header className="border-b border-dashed border-gray-500 bg-white/90">
@@ -590,6 +609,18 @@ export default function FeedPage() {
                             >
                               게시판에 공유
                             </button>
+                            {currentUser?.id === post.author_id ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void handleDeletePost(post);
+                                }}
+                                className="flex w-full items-center gap-1 px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50"
+                              >
+                                <Trash2 size={14} />
+                                삭제
+                              </button>
+                            ) : null}
                           </div>
                         ) : null}
                       </div>
