@@ -4,7 +4,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Color } from "@tiptap/extension-color";
 import { TextStyle } from "@tiptap/extension-text-style";
-import { Highlight } from "@tiptap/extension-highlight";
+import Highlight from "@tiptap/extension-highlight";
 import { Youtube } from "@tiptap/extension-youtube";
 import { StickerExtension } from "./extensions/StickerExtension";
 import { FontSize } from "./extensions/FontSize";
@@ -12,6 +12,31 @@ import { EmbedExtension } from "./extensions/EmbedExtension";
 import ResizeImage from "tiptap-extension-resize-image";
 import Toolbar from "./Toolbar";
 import { useEffect, useRef, useState } from "react";
+
+/** multicolor 기본값이 mark에 `color: inherit`를 넣어 textStyle 색이 에디터에서 가려지는 경우가 있어 배경만 둔다. */
+const HighlightNoTextInherit = Highlight.extend({
+  addAttributes() {
+    if (!this.options.multicolor) {
+      return {};
+    }
+    return {
+      color: {
+        default: null,
+        parseHTML: (element) =>
+          element.getAttribute("data-color") || element.style.backgroundColor,
+        renderHTML: (attributes) => {
+          if (!attributes.color) {
+            return {};
+          }
+          return {
+            "data-color": attributes.color,
+            style: `background-color: ${attributes.color}`,
+          };
+        },
+      },
+    };
+  },
+});
 
 interface Props {
   content: string;
@@ -38,7 +63,7 @@ export default function CommunityEditor({ content, onChange, userId, allowMedia 
       StarterKit,
       TextStyle,
       Color,
-      Highlight.configure({ multicolor: true }),
+      HighlightNoTextInherit.configure({ multicolor: true }),
       FontSize,
       ResizeImage.configure({
         inline: false,
@@ -244,6 +269,10 @@ export default function CommunityEditor({ content, onChange, userId, allowMedia 
           margin-top: 0.25rem !important;
           margin-bottom: 0.25rem !important;
           min-height: 1.2em;
+        }
+        /* UA styles often set mark text color; inherit so outer textStyle span can apply */
+        .tiptap-container .ProseMirror mark {
+          color: inherit;
         }
         .tiptap-container .ProseMirror img {
             display: block;

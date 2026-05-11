@@ -13,6 +13,7 @@ import {
   Underline as UnderlineIcon,
   Type,
   Highlighter,
+  Eraser,
   Video,
   Share2,
   Undo,
@@ -242,14 +243,30 @@ export default function Toolbar({ editor, userId, allowMedia = true }: Props) {
       </div>
 
       {/* 하이라이트 색상 */}
-      <div className="relative flex items-center">
-        <input 
-          type="color" 
-          onInput={e => editor.chain().focus().toggleHighlight({ color: (e.target as HTMLInputElement).value }).run()}
-          className="h-7 w-7 cursor-pointer border-none bg-transparent p-0"
-          value={editor.getAttributes('highlight').color || '#ffff00'}
-        />
-        <Highlighter size={14} className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 mix-blend-difference invert" />
+      <div className="relative flex items-center gap-0.5">
+        <div className="relative flex items-center">
+          <input
+            type="color"
+            onInput={(e) =>
+              editor.chain().focus().setHighlight({ color: (e.target as HTMLInputElement).value }).run()
+            }
+            className="h-7 w-7 cursor-pointer border-none bg-transparent p-0"
+            value={editor.getAttributes("highlight").color || "#ffff00"}
+          />
+          <Highlighter
+            size={14}
+            className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 mix-blend-difference invert"
+          />
+        </div>
+        <button
+          type="button"
+          title="배경색(형광펜) 제거"
+          onClick={() => editor.chain().focus().unsetHighlight().run()}
+          disabled={!editor.isActive("highlight")}
+          className="p-1.5 hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-30"
+        >
+          <Eraser size={18} />
+        </button>
       </div>
 
       {/* 폰트 크기 */}

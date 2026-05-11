@@ -358,7 +358,7 @@ export default function UserFeedPage() {
                         )}
 
                         {body || imageUrls.length > 0 ? (
-                          <div className="mt-2 rounded border border-dashed border-gray-200 bg-gray-50/80 px-3 py-2.5">
+                          <div className="mt-2">
                             {body ? <RichContent content={body} /> : null}
                             <FeedMediaGrid imageUrls={imageUrls} />
                           </div>
