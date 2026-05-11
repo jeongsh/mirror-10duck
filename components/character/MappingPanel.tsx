@@ -226,16 +226,21 @@ export default function MappingPanel({
                   motion: { group: v.split("::")[0], index: parseInt(v.split("::")[1], 10) },
                 });
               }}
-              className="flex-1 border border-dashed border-gray-500 bg-white/80 px-2 py-1 text-xs"
+              disabled={scenarioMotionOptions.length === 0}
+              className="flex-1 border border-dashed border-gray-500 bg-white/80 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
             >
-              {scenarioMotionOptions.map((motion) => (
-                <option
-                  key={`${motion.group}::${motion.index}`}
-                  value={`${motion.group}::${motion.index}`}
-                >
-                  {motion.group || "(default)"} #{motion.index}
-                </option>
-              ))}
+              {scenarioMotionOptions.length === 0 ? (
+                <option value="">(액션 없음)</option>
+              ) : (
+                scenarioMotionOptions.map((motion) => (
+                  <option
+                    key={`${motion.group}::${motion.index}`}
+                    value={`${motion.group}::${motion.index}`}
+                  >
+                    {motion.group || "(default)"} #{motion.index}
+                  </option>
+                ))
+              )}
             </select>
             <button
               type="button"
@@ -334,9 +339,10 @@ export default function MappingPanel({
                   motionMap: { ...profile.motionMap, [action]: nextRef },
                 });
               }}
-              className="flex-1 border border-dashed border-gray-500 bg-white/80 px-2 py-1 text-xs"
+              disabled={allMotionRefs.length === 0}
+              className="flex-1 border border-dashed border-gray-500 bg-white/80 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
             >
-              <option value="">(없음)</option>
+              <option value="">{allMotionRefs.length === 0 ? "(액션 없음)" : "(없음)"}</option>
               {allMotionRefs.map((r) => (
                 <option
                   key={`${r.group}::${r.index}`}
