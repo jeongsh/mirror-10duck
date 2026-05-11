@@ -168,6 +168,10 @@ export default function Live2DWrapper() {
   const setReady = useCharacterStore((s) => s.setReady);
   const setError = useCharacterStore((s) => s.setError);
   const setModelConfig = useCharacterStore((s) => s.setModelConfig);
+  // 캐릭터 모델이 실제로 그려지기 전엔 말풍선/페이지 인사를 띄우지 않는다.
+  // (홈 진입/채널 이동 직후 모델보다 말풍선이 먼저 뜨는 문제 방지)
+  const isReady = useCharacterStore((s) => s.isReady);
+  const isLoading = useCharacterStore((s) => s.isLoading);
 
   function clearMessageTimeout() {
     if (messageTimeoutRef.current) {
@@ -410,6 +414,10 @@ export default function Live2DWrapper() {
 
   useEffect(() => {
     if (!pathname) return;
+    // 캐릭터 모델 로딩이 끝나기 전에는 페이지 인사 말풍선을 띄우지 않는다.
+    // pathname 이 먼저 정해지고 isReady 가 나중에 true 가 되어도, deps 에 isReady 가
+    // 포함돼 있으니 준비된 시점에 한 번 트리거되어 자연스럽게 인사가 뜬다.
+    if (!isReady) return;
     if (assistantOpen || assistantBusy) return;
 
     const preset = PAGE_DIALOGUE_PRESETS.find((item) => item.match(pathname));
@@ -417,7 +425,7 @@ export default function Live2DWrapper() {
 
     const line = preset.lines[Math.floor(Math.random() * preset.lines.length)];
     setTemporaryMessage(line, PAGE_DIALOGUE_DURATION_MS);
-  }, [pathname]);
+  }, [pathname, isReady]);
 
   // --------------------------------------------------------------------
   // Effect 1 · Pixi Application 생성 (1회)
@@ -531,6 +539,11 @@ export default function Live2DWrapper() {
     let localModel: Live2DModel | null = null;
 
     const swap = async () => {
+      // 새 모델이 화면에 뜰 때까지는 ready 가 아니라고 명시한다.
+      // (이전 모델이 ready 상태로 남아있으면 말풍선이 잘못된 위치/타이밍에 뜬다.)
+      setReady(false);
+      setSpeechAnchor(null);
+
       // 이전 모델 정리
       if (modelRef.current) {
         try {
@@ -547,8 +560,6 @@ export default function Live2DWrapper() {
       }
 
       if (!modelPath) {
-        setReady(false);
-        setSpeechAnchor(null);
         return;
       }
 
@@ -792,7 +803,6 @@ export default function Live2DWrapper() {
   //   연결되지 않는다. Effect 2 가 모델 로드 성공 시 `setReady(true)` 를 호출하는
   //   것을 트리거로 삼아 재실행한다. (Effect 5/6/7 도 동일)
   // --------------------------------------------------------------------
-  const isReady = useCharacterStore((s) => s.isReady);
   useEffect(() => {
     if (!appReady || !modelRef.current) return;
 
@@ -1283,17 +1293,41 @@ export default function Live2DWrapper() {
           }}
         />
 
-        <SpeechBubble anchor={speechAnchor} bubbleRef={speechBubbleRef}>
-          {assistantOpen && (
-            <AssistantQuickActions
-              busyAction={assistantBusy}
-              onAction={runAssistantAction}
-              onClose={closeAssistantMenu}
-            />
-          )}
-        </SpeechBubble>
+        {!isReady && (isLoading || modelPath) && (
+          <CharacterLoadingIndicator />
+        )}
+
+        {isReady && (
+          <SpeechBubble anchor={speechAnchor} bubbleRef={speechBubbleRef}>
+            {assistantOpen && (
+              <AssistantQuickActions
+                busyAction={assistantBusy}
+                onAction={runAssistantAction}
+                onClose={closeAssistantMenu}
+              />
+            )}
+          </SpeechBubble>
+        )}
       </div>
     </aside>
+  );
+}
+
+function CharacterLoadingIndicator() {
+  return (
+    <div
+      className="pointer-events-none absolute inset-0 flex items-end justify-center pb-8"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <div className="flex items-center gap-2 rounded-full border-2 border-pink-200 bg-white/85 px-3 py-1 text-xs font-semibold text-pink-700 shadow-sm backdrop-blur-sm">
+        <span
+          className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-pink-300 border-t-transparent"
+          aria-hidden
+        />
+        {"\uce90\ub9ad\ud130\ub97c \ubd88\ub7ec\uc624\uace0 \uc788\uc5b4\uc694..."}
+      </div>
+    </div>
   );
 }
 
