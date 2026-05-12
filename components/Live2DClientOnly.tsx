@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Script from "next/script";
 import { usePathname } from "next/navigation";
@@ -28,7 +28,7 @@ export default function Live2DClientOnly() {
   const pathname = usePathname();
   const authUser = useAuthUser();
   const [coreReady, setCoreReady] = useState(false);
-  const lastSyncedUserId = useRef<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   const setProfiles = useCharacterLibraryStore((s) => s.setProfiles);
   const setActive = useCharacterLibraryStore((s) => s.setActive);
@@ -51,16 +51,7 @@ export default function Live2DClientOnly() {
       setActive(null);
       setProfile(null);
       setTracking(true);
-      lastSyncedUserId.current = null;
-      return;
-    }
-
-    const libraryState = useCharacterLibraryStore.getState();
-    const characterState = useCharacterStore.getState();
-    const hasSelectedCharacter =
-      libraryState.activeId !== null || characterState.profile !== null;
-
-    if (lastSyncedUserId.current === authUser.id && hasSelectedCharacter) {
+      setIsInitializing(false);
       return;
     }
 
@@ -77,9 +68,17 @@ export default function Live2DClientOnly() {
           : undefined;
 
       const preferredProfile = resolvePreferredProfile(allProfiles, preferredId);
-      if (!preferredProfile) return;
+      if (!preferredProfile) {
+        setIsInitializing(false);
+        return;
+      }
 
-      if (!hasSelectedCharacter) {
+      const libraryState = useCharacterLibraryStore.getState();
+      const characterState = useCharacterStore.getState();
+
+      // 초기화 시에만 DB 값으로 설정 (페이지 새로고침 후)
+      // 이미 로컬에 profile이 있으면 그것을 유지
+      if (isInitializing) {
         if (libraryState.activeId !== preferredProfile.id) {
           setActive(preferredProfile.id);
         }
@@ -87,14 +86,15 @@ export default function Live2DClientOnly() {
           setProfile(preferredProfile);
         }
       }
+
       setTracking(getTrackingPreference(authUser.user_metadata, preferredProfile.id, true));
-      lastSyncedUserId.current = authUser.id;
+      setIsInitializing(false);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [authUser, setActive, setProfile, setProfiles, setTracking]);
+  }, [authUser, setActive, setProfile, setProfiles, setTracking, isInitializing]);
 
   const isCharacterManagePage = pathname.startsWith("/library/");
 

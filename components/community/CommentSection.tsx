@@ -9,6 +9,7 @@ import StickerPicker from "@/components/stickers/StickerPicker";
 import CharacterSticker from "@/components/stickers/CharacterSticker";
 import { insertAtTextarea } from "@/lib/stickers/insertAtCursor";
 import IdentityBadge from "@/components/community/IdentityBadge";
+import CommentVoteBar from "@/components/community/CommentVoteBar";
 import { createNotification } from "@/lib/community/notifications";
 import { checkAndGrantActivityBadges } from "@/lib/supabase/badges";
 import { getClientIp } from "@/lib/community/actions";
@@ -448,43 +449,61 @@ export default function CommentSection({
                       <p className="text-xs italic text-gray-400">(빈 댓글)</p>
                     )}
 
-                    <div className="mt-3 flex items-center gap-3">
-                      <button 
-                        onClick={() => setReplyTo(replyTo === c.id ? null : c.id)}
-                        className={`text-[10px] font-bold uppercase tracking-widest ${replyTo === c.id ? "text-red-500" : "text-blue-500 hover:underline"}`}
-                      >
-                        {replyTo === c.id ? "[취소]" : "[답글 달기]"}
-                      </button>
-                      {canDelete && (
-                        <>
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <CommentVoteBar
+                        commentId={c.id}
+                        viewerId={viewerId}
+                        upvoteCount={c.upvote_count ?? 0}
+                        downvoteCount={c.downvote_count ?? 0}
+                        isNews={isNews}
+                        onCountsSynced={(next) => {
+                          setComments((prev) =>
+                            prev.map((comment) =>
+                              comment.id === c.id
+                                ? { ...comment, upvote_count: next.upvote_count, downvote_count: next.downvote_count }
+                                : comment
+                            )
+                          );
+                        }}
+                      />
+                      <div className="flex items-center gap-3">
+                        <button 
+                          onClick={() => setReplyTo(replyTo === c.id ? null : c.id)}
+                          className={`text-[10px] font-bold uppercase tracking-widest ${replyTo === c.id ? "text-red-500" : "text-blue-500 hover:underline"}`}
+                        >
+                          {replyTo === c.id ? "[취소]" : "[답글 달기]"}
+                        </button>
+                        {canDelete && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingCommentId(c.id);
+                                setEditText(c.content || "");
+                              }}
+                              className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:underline"
+                            >
+                              [수정]
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(c.id)}
+                              className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:underline"
+                            >
+                              [삭제]
+                            </button>
+                          </>
+                        )}
+                        {!canDelete && (
                           <button
                             type="button"
-                            onClick={() => {
-                              setEditingCommentId(c.id);
-                              setEditText(c.content || "");
-                            }}
+                            onClick={() => handleReport(c.id)}
                             className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:underline"
                           >
-                            [수정]
+                            [신고]
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(c.id)}
-                            className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:underline"
-                          >
-                            [삭제]
-                          </button>
-                        </>
-                      )}
-                      {!canDelete && (
-                        <button
-                          type="button"
-                          onClick={() => handleReport(c.id)}
-                          className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:underline"
-                        >
-                          [신고]
-                        </button>
-                      )}
+                        )}
+                      </div>
                     </div>
                       </>
                     )}
@@ -557,38 +576,56 @@ export default function CommentSection({
                             ) : (
                               <p className="text-xs italic text-gray-400">(빈 답글)</p>
                             )}
-                            {canDeleteReply && (
-                              <div className="mt-2 flex items-center gap-3">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingCommentId(r.id);
-                                    setEditText(r.content || "");
-                                  }}
-                                  className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:underline"
-                                >
-                                  [수정]
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDelete(r.id)}
-                                  className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:underline"
-                                >
-                                  [삭제]
-                                </button>
+                            <div className="mt-3 flex items-center justify-between gap-3">
+                              <CommentVoteBar
+                                commentId={r.id}
+                                viewerId={viewerId}
+                                upvoteCount={r.upvote_count ?? 0}
+                                downvoteCount={r.downvote_count ?? 0}
+                                isNews={isNews}
+                                onCountsSynced={(next) => {
+                                  setComments((prev) =>
+                                    prev.map((comment) =>
+                                      comment.id === r.id
+                                        ? { ...comment, upvote_count: next.upvote_count, downvote_count: next.downvote_count }
+                                        : comment
+                                    )
+                                  );
+                                }}
+                              />
+                              <div className="flex items-center gap-3">
+                                {canDeleteReply && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingCommentId(r.id);
+                                        setEditText(r.content || "");
+                                      }}
+                                      className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:underline"
+                                    >
+                                      [수정]
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDelete(r.id)}
+                                      className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:underline"
+                                    >
+                                      [삭제]
+                                    </button>
+                                  </>
+                                )}
+                                {!canDeleteReply && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleReport(r.id)}
+                                    className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:underline"
+                                  >
+                                    [신고]
+                                  </button>
+                                )}
                               </div>
-                            )}
-                            {!canDeleteReply && (
-                              <div className="mt-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handleReport(r.id)}
-                                  className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:underline"
-                                >
-                                  [신고]
-                                </button>
-                              </div>
-                            )}
+                            </div>
                               </>
                             )}
                           </div>

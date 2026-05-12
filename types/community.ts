@@ -235,6 +235,10 @@ export type Comment = {
   content: string | null;
   sticker_token: string | null;
   created_at: string;
+  
+  /** 댓글 추천/비추천 집계 */
+  upvote_count?: number;
+  downvote_count?: number;
 };
 
 // =============================================
