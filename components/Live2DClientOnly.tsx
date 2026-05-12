@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Script from "next/script";
 import { usePathname } from "next/navigation";
@@ -28,6 +28,7 @@ export default function Live2DClientOnly() {
   const pathname = usePathname();
   const authUser = useAuthUser();
   const [coreReady, setCoreReady] = useState(false);
+  const lastSyncedUserId = useRef<string | null>(null);
 
   const setProfiles = useCharacterLibraryStore((s) => s.setProfiles);
   const setActive = useCharacterLibraryStore((s) => s.setActive);
@@ -50,6 +51,16 @@ export default function Live2DClientOnly() {
       setActive(null);
       setProfile(null);
       setTracking(true);
+      lastSyncedUserId.current = null;
+      return;
+    }
+
+    const libraryState = useCharacterLibraryStore.getState();
+    const characterState = useCharacterStore.getState();
+    const hasSelectedCharacter =
+      libraryState.activeId !== null || characterState.profile !== null;
+
+    if (lastSyncedUserId.current === authUser.id && hasSelectedCharacter) {
       return;
     }
 
@@ -68,16 +79,16 @@ export default function Live2DClientOnly() {
       const preferredProfile = resolvePreferredProfile(allProfiles, preferredId);
       if (!preferredProfile) return;
 
-      const libraryState = useCharacterLibraryStore.getState();
-      const characterState = useCharacterStore.getState();
-
-      if (libraryState.activeId !== preferredProfile.id) {
-        setActive(preferredProfile.id);
-      }
-      if (characterState.profile?.id !== preferredProfile.id) {
-        setProfile(preferredProfile);
+      if (!hasSelectedCharacter) {
+        if (libraryState.activeId !== preferredProfile.id) {
+          setActive(preferredProfile.id);
+        }
+        if (characterState.profile?.id !== preferredProfile.id) {
+          setProfile(preferredProfile);
+        }
       }
       setTracking(getTrackingPreference(authUser.user_metadata, preferredProfile.id, true));
+      lastSyncedUserId.current = authUser.id;
     })();
 
     return () => {

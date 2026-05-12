@@ -14,6 +14,12 @@ interface IdentityBadgeProps {
   showName?: boolean;
   ip?: string | null;
   isAnonymous?: boolean;
+  maxNameLength?: number;
+}
+
+function truncateName(name: string, maxLength?: number) {
+  if (!maxLength || name.length <= maxLength) return name;
+  return name.slice(0, maxLength) + "...";
 }
 
 export default function IdentityBadge({ 
@@ -23,9 +29,11 @@ export default function IdentityBadge({
   showAvatar = true,
   showName = true,
   ip,
-  isAnonymous = false
+  isAnonymous = false,
+  maxNameLength,
 }: IdentityBadgeProps) {
   const displayName = profile?.display_name || profile?.nickname || fallback?.nickname || "Anonymous";
+  const truncatedName = truncateName(displayName, maxNameLength);
   const avatarUrl = profile?.avatar_url || fallback?.avatar_url;
   const isFixed = (profile?.nickname_type || fallback?.nickname_type) === "FIXED";
 
@@ -56,8 +64,11 @@ export default function IdentityBadge({
       )}
       {showName && (
         <div className="flex items-center gap-1.5">
-          <span className={`font-bold tracking-tight ${isFixed ? "text-gray-900" : "text-gray-500 italic"}`}>
-            {displayName}
+          <span
+            className={`font-bold tracking-tight ${isFixed ? "text-gray-900" : "text-gray-500 italic"}`}
+            title={displayName !== truncatedName ? displayName : undefined}
+          >
+            {truncatedName}
             {isAnonymous && ip && (
               <span className="ml-1 text-[10px] font-normal text-gray-400 not-italic">
                 ({ip})

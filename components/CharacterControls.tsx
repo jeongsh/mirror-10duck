@@ -67,12 +67,15 @@ export default function CharacterControls() {
           ? (authUser.user_metadata.activeCharacterId as string)
           : undefined;
       const preferredProfile = resolvePreferredProfile(allProfiles, preferredId);
+      const hasSelectedCharacter = activeId !== null || profile !== null;
       
-      if (preferredProfile && activeId !== preferredProfile.id) {
-        setActive(preferredProfile.id);
-      }
-      if (preferredProfile && profile?.id !== preferredProfile.id) {
-        setProfile(preferredProfile);
+      if (preferredProfile && !hasSelectedCharacter) {
+        if (activeId !== preferredProfile.id) {
+          setActive(preferredProfile.id);
+        }
+        if (profile?.id !== preferredProfile.id) {
+          setProfile(preferredProfile);
+        }
       }
     })();
   }, [authUser]);
