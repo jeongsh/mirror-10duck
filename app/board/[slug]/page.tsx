@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { MouseEvent, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { Board, CommunityPost, postAggregateDefaults } from "@/types/community";
 import IdentityBadge from "@/components/community/IdentityBadge";
 import { formatCommunityDate } from "@/lib/utils/formatDate";
 import { formatIp } from "@/lib/utils/formatIp";
+import UserActionModal from "@/components/community/UserActionModal";
 
 function useDebouncedValue(value: string, delayMs: number) {
   const [debounced, setDebounced] = useState(value);
@@ -39,6 +40,7 @@ export default function BoardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchMode, setSearchMode] = useState<"title" | "content" | "author" | "all">("title");
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 250);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   const userId = authUser?.id ?? null;
 
@@ -215,6 +217,13 @@ export default function BoardPage() {
     }
   };
 
+  const openUserAction = (event: MouseEvent, authorId: string | null) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!authorId) return;
+    setSelectedUserId(authorId);
+  };
+
   if (boardLoading) {
     return <main className="p-6 text-center text-gray-500">로딩 중...</main>;
   }
@@ -255,6 +264,12 @@ export default function BoardPage() {
       </header>
 
       <section className="flex flex-col gap-4 border border-dashed border-gray-500 bg-white/70 p-4">
+        <UserActionModal
+          open={Boolean(selectedUserId)}
+          onClose={() => setSelectedUserId(null)}
+          viewerId={userId}
+          targetUserId={selectedUserId}
+        />
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-dashed border-gray-300 pb-4">
           <div className="flex flex-wrap items-center gap-1">
             <button
@@ -405,13 +420,15 @@ export default function BoardPage() {
                       )}
                     </div>
                     <div className="flex items-center overflow-hidden">
-                      <IdentityBadge
-                        profile={post.profiles}
-                        fallback={{ nickname: post.anonymous_nickname || post.author_email?.split("@")[0] || "익명" }}
-                        isAnonymous={post.is_anonymous || !post.author_id}
-                        ip={formatIp(post.author_ip)}
-                        size="sm"
-                      />
+                      <button type="button" onClick={(event) => openUserAction(event, post.author_id)}>
+                        <IdentityBadge
+                          profile={post.profiles}
+                          fallback={{ nickname: post.anonymous_nickname || post.author_email?.split("@")[0] || "익명" }}
+                          isAnonymous={post.is_anonymous || !post.author_id}
+                          ip={formatIp(post.author_ip)}
+                          size="sm"
+                        />
+                      </button>
                     </div>
                     <span className="text-center text-[11px] text-gray-500 tabular-nums">
                       {formatCommunityDate(post.created_at)}
@@ -502,13 +519,15 @@ export default function BoardPage() {
                       )}
                     </div>
                     <div className="flex items-center overflow-hidden">
-                      <IdentityBadge
-                        profile={post.profiles}
-                        fallback={{ nickname: post.anonymous_nickname || post.author_email?.split("@")[0] || "익명" }}
-                        isAnonymous={post.is_anonymous || !post.author_id}
-                        ip={formatIp(post.author_ip)}
-                        size="sm"
-                      />
+                      <button type="button" onClick={(event) => openUserAction(event, post.author_id)}>
+                        <IdentityBadge
+                          profile={post.profiles}
+                          fallback={{ nickname: post.anonymous_nickname || post.author_email?.split("@")[0] || "익명" }}
+                          isAnonymous={post.is_anonymous || !post.author_id}
+                          ip={formatIp(post.author_ip)}
+                          size="sm"
+                        />
+                      </button>
                     </div>
                     <span className="text-center text-[11px] text-gray-500 tabular-nums">
                       {formatCommunityDate(post.created_at)}

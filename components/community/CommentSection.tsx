@@ -34,6 +34,7 @@ interface Props {
   isNews?: boolean; // 뉴스 댓글 여부
   /** 댓글 스레드가 바뀐 뒤(등록/삭제) 상위에서 글 집계를 다시 읽을 때 */
   onThreadChanged?: () => void;
+  onOpenUserAction?: (authorId: string) => void;
 }
 
 export default function CommentSection({ 
@@ -43,7 +44,8 @@ export default function CommentSection({
   viewerEmail, 
   allowAnonymous = false, 
   isNews = false,
-  onThreadChanged 
+  onThreadChanged,
+  onOpenUserAction
 }: Props) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -377,15 +379,23 @@ export default function CommentSection({
                     ) : (
                       <>
                     <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <IdentityBadge 
-                        profile={c.profiles} 
-                        fallback={{ 
-                          nickname: c.anonymous_nickname || c.author_email?.split('@')[0] || "익명" 
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!c.author_id || !onOpenUserAction) return;
+                          onOpenUserAction(c.author_id);
                         }}
-                        isAnonymous={c.is_anonymous || !c.author_id}
-                        ip={formatIp(c.author_ip)}
-                        size="sm"
-                      />
+                      >
+                        <IdentityBadge 
+                          profile={c.profiles} 
+                          fallback={{ 
+                            nickname: c.anonymous_nickname || c.author_email?.split('@')[0] || "익명" 
+                          }}
+                          isAnonymous={c.is_anonymous || !c.author_id}
+                          ip={formatIp(c.author_ip)}
+                          size="sm"
+                        />
+                      </button>
                       <span className="text-[10px] text-gray-400">
                         {new Date(c.created_at).toLocaleString("ko-KR")}
                       </span>
@@ -506,15 +516,23 @@ export default function CommentSection({
                             ) : (
                               <>
                             <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                              <IdentityBadge 
-                                profile={r.profiles} 
-                                fallback={{ 
-                                  nickname: r.anonymous_nickname || r.author_email?.split('@')[0] || "익명" 
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (!r.author_id || !onOpenUserAction) return;
+                                  onOpenUserAction(r.author_id);
                                 }}
-                                isAnonymous={r.is_anonymous || !r.author_id}
-                                ip={formatIp(r.author_ip)}
-                                size="sm"
-                              />
+                              >
+                                <IdentityBadge 
+                                  profile={r.profiles} 
+                                  fallback={{ 
+                                    nickname: r.anonymous_nickname || r.author_email?.split('@')[0] || "익명" 
+                                  }}
+                                  isAnonymous={r.is_anonymous || !r.author_id}
+                                  ip={formatIp(r.author_ip)}
+                                  size="sm"
+                                />
+                              </button>
                               <span className="text-[10px] text-gray-400">
                                 {new Date(r.created_at).toLocaleString("ko-KR")}
                               </span>

@@ -16,6 +16,7 @@ import { formatIp } from "@/lib/utils/formatIp";
 import AuthorProfileCard from "@/components/community/AuthorProfileCard";
 import { isAdminUser } from "@/lib/supabase/admin";
 import { splitFeedShareHeader } from "@/lib/community/feedContentDisplay";
+import UserActionModal from "@/components/community/UserActionModal";
 
 export default function BoardPostDetailPage() {
   const router = useRouter();
@@ -32,6 +33,7 @@ export default function BoardPostDetailPage() {
   const [loading, setLoading] = useState(true);
   const [shareLoading, setShareLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   const refetchPost = useCallback(async () => {
     const { data, error } = await supabase.from("posts").select("*, profiles(*)").eq("id", postId).single();
@@ -313,13 +315,21 @@ export default function BoardPostDetailPage() {
         </h1>
         <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-gray-600">
           <div className="flex items-center gap-1.5 min-w-0 text-sm text-gray-500 flex-wrap">
-            <IdentityBadge 
-              profile={post?.profiles} 
-              fallback={{ nickname: post?.anonymous_nickname || post?.author_email?.split('@')[0] || "익명" }}
-              isAnonymous={post?.is_anonymous || !post?.author_id}
-              ip={formatIp(post?.author_ip)}
-              size="md"
-            />
+            <button
+              type="button"
+              onClick={() => {
+                if (!post?.author_id) return;
+                setSelectedUserId(post.author_id);
+              }}
+            >
+              <IdentityBadge 
+                profile={post?.profiles} 
+                fallback={{ nickname: post?.anonymous_nickname || post?.author_email?.split('@')[0] || "익명" }}
+                isAnonymous={post?.is_anonymous || !post?.author_id}
+                ip={formatIp(post?.author_ip)}
+                size="md"
+              />
+            </button>
           </div>
           <span>|</span>
           <span>{post ? new Date(post.created_at).toLocaleString("ko-KR") : "-"}</span>
@@ -441,8 +451,16 @@ export default function BoardPostDetailPage() {
           viewerEmail={userEmail || null}
           allowAnonymous={board?.allow_anonymous ?? false}
           onThreadChanged={refetchPost}
+          onOpenUserAction={(authorId) => setSelectedUserId(authorId)}
         />
       ) : null}
+
+      <UserActionModal
+        open={Boolean(selectedUserId)}
+        onClose={() => setSelectedUserId(null)}
+        viewerId={userId || null}
+        targetUserId={selectedUserId}
+      />
 
       {message ? (
         <p className="border border-dashed border-red-500 bg-red-50 p-3 text-sm text-red-700">{message}</p>
