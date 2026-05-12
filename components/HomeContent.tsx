@@ -13,6 +13,10 @@ function buildPostHref(post: CommunityPost, boardSlugById: Map<string, string>):
   return "/feed";
 }
 
+function truncateNickname(nickname: string, maxLength: number = 6): string {
+  return nickname.length > maxLength ? nickname.substring(0, maxLength) + "..." : nickname;
+}
+
 export default function HomeContent() {
   const [boards, setBoards] = useState<Board[]>([]);
   const [hotPosts, setHotPosts] = useState<CommunityPost[]>([]);
@@ -29,7 +33,7 @@ export default function HomeContent() {
         supabase.from("boards").select("*").limit(6),
         supabase
           .from("posts")
-          .select("*")
+          .select("*, profiles(id, nickname, display_name)")
           .eq("status", "NORMAL")
           .order("created_at", { ascending: false })
           .limit(10),
@@ -116,7 +120,7 @@ export default function HomeContent() {
                       {post.title || "제목 없음"}
                     </span>
                     <span className="w-24 shrink-0 truncate text-right text-xs text-gray-500">
-                      {post.author_email?.split("@")[0] ?? "익명"}
+                      {(post.profiles?.nickname || post.profiles?.display_name || post.author_email?.split("@")[0]) ?? "익명"}
                     </span>
                     <span className="w-28 shrink-0 text-right text-[10px] text-gray-400 tabular-nums">
                       조회 {postAggregateDefaults(post).view_count} · 댓글{" "}
