@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { Board } from "@/types/community";
+import { boardCategoryLabel, normalizeBoardCategory } from "@/lib/community/boardCategories";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -51,6 +52,7 @@ export default function AdminBoardsPage() {
               <thead className="border-b">
                 <tr>
                   <th className="p-3 font-semibold">이름</th>
+                  <th className="p-3 font-semibold">카테고리</th>
                   <th className="p-3 font-semibold">슬러그</th>
                   <th className="p-3 font-semibold">개념글 컷</th>
                   <th className="p-3 font-semibold text-right">관리</th>
@@ -64,6 +66,9 @@ export default function AdminBoardsPage() {
                     onClick={() => router.push(`/admin/boards/${board.id}`)}
                   >
                     <td className="p-3 font-medium">{board.name}</td>
+                    <td className="p-3 text-gray-600">
+                      {boardCategoryLabel(normalizeBoardCategory(board.category))}
+                    </td>
                     <td className="p-3 text-gray-600">/{board.slug}</td>
                     <td className="p-3 text-gray-600">{board.hot_threshold}</td>
                     <td className="p-3 text-right">

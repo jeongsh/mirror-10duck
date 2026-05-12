@@ -5,6 +5,11 @@ import { supabase } from "@/lib/supabase/client";
 import { Board } from "@/types/community";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import {
+  BOARD_CATEGORY_OPTIONS,
+  type BoardCategory,
+  normalizeBoardCategory,
+} from "@/lib/community/boardCategories";
 
 export default function BoardManagementPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -15,6 +20,7 @@ export default function BoardManagementPage({ params }: { params: Promise<{ id: 
 
   const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
+  const [category, setCategory] = useState<BoardCategory>("general");
   const [description, setDescription] = useState("");
   const [hotThreshold, setHotThreshold] = useState<number>(5);
   const [allowAnonymous, setAllowAnonymous] = useState(true);
@@ -34,6 +40,7 @@ export default function BoardManagementPage({ params }: { params: Promise<{ id: 
         setBoard(data);
         setSlug(data.slug);
         setName(data.name);
+        setCategory(normalizeBoardCategory((data as Board).category));
         setDescription(data.description || "");
         setHotThreshold(data.hot_threshold);
         setAllowAnonymous(data.allow_anonymous);
@@ -58,6 +65,7 @@ export default function BoardManagementPage({ params }: { params: Promise<{ id: 
       .update({ 
         slug, 
         name, 
+        category,
         description, 
         hot_threshold: hotThreshold,
         allow_anonymous: allowAnonymous,
@@ -122,6 +130,22 @@ export default function BoardManagementPage({ params }: { params: Promise<{ id: 
             className="rounded border p-2 focus:border-black focus:outline-none"
             required
           />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-sm font-semibold">카테고리 *</span>
+          <p className="text-xs text-gray-500">채널 목록에서 분류별로 묶여 표시됩니다.</p>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value as BoardCategory)}
+            className="rounded border border-gray-300 bg-white p-2 focus:border-black focus:outline-none"
+          >
+            {BOARD_CATEGORY_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
         </label>
         
         <label className="flex flex-col gap-1">

@@ -1,8 +1,14 @@
+import type { BoardCategory } from "@/lib/community/boardCategories";
+
+export type { BoardCategory } from "@/lib/community/boardCategories";
+
 export type Board = {
   id: string;
   slug: string;
   name: string;
   description: string | null;
+  /** 분류: 애니, 게임, 취미 등 (`lib/community/boardCategories`) */
+  category: BoardCategory;
   created_at: string;
   hot_threshold: number;
   allow_anonymous: boolean;

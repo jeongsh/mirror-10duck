@@ -3,11 +3,16 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import {
+  BOARD_CATEGORY_OPTIONS,
+  type BoardCategory,
+} from "@/lib/community/boardCategories";
 
 export default function CreateBoardPage() {
   const router = useRouter();
   const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
+  const [category, setCategory] = useState<BoardCategory>("general");
   const [description, setDescription] = useState("");
   const [hotThreshold, setHotThreshold] = useState<number>(5);
   const [allowAnonymous, setAllowAnonymous] = useState(true);
@@ -23,6 +28,7 @@ export default function CreateBoardPage() {
       .insert([{ 
         slug, 
         name, 
+        category,
         description, 
         hot_threshold: hotThreshold,
         allow_anonymous: allowAnonymous,
@@ -67,6 +73,21 @@ export default function CreateBoardPage() {
             className="rounded border p-2 focus:border-black focus:outline-none"
             required
           />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-sm font-semibold">카테고리 *</span>
+          <p className="text-xs text-gray-500">채널 목록에서 애니, 게임, 취미 등으로 묶여 표시됩니다.</p>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value as BoardCategory)}
+            className="rounded border border-gray-300 bg-white p-2 focus:border-black focus:outline-none"
+          >
+            {BOARD_CATEGORY_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-sm font-semibold">설명</span>
