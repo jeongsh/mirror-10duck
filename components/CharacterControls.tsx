@@ -21,6 +21,8 @@ import {
   mergeProfiles,
   resolvePreferredProfile,
 } from "@/lib/live2d/profileSync";
+import { getPreferredCharacterId } from "@/lib/supabase/characterPreferences";
+import { supabase } from "@/lib/supabase/client";
 
 type Tab = "basic" | "library" | "upload";
 
@@ -55,6 +57,10 @@ export default function CharacterControls() {
     if (authUser === undefined || !authUser) return;
 
     void (async () => {
+      // DB에서 최신 auth metadata 가져오기 (캐시 아닌 최신 값)
+      const { data: { user: freshUser } } = await supabase.auth.getUser();
+      if (!freshUser) return;
+
       const savedProfiles = await listCharacterProfiles();
       const allProfiles = mergeProfiles(BASE_PROFILES, savedProfiles);
       
@@ -62,10 +68,8 @@ export default function CharacterControls() {
         setProfiles(allProfiles);
       }
 
-      const preferredId =
-        typeof authUser.user_metadata?.activeCharacterId === "string"
-          ? (authUser.user_metadata.activeCharacterId as string)
-          : undefined;
+      // freshUser의 최신 metadata 사용
+      const preferredId = getPreferredCharacterId(freshUser.user_metadata);
       const preferredProfile = resolvePreferredProfile(allProfiles, preferredId);
       const hasSelectedCharacter = activeId !== null || profile !== null;
       
@@ -73,9 +77,7 @@ export default function CharacterControls() {
         if (activeId !== preferredProfile.id) {
           setActive(preferredProfile.id);
         }
-        if (profile?.id !== preferredProfile.id) {
-          setProfile(preferredProfile);
-        }
+        setProfile(preferredProfile);
       }
     })();
   }, [authUser]);

@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Script from "next/script";
 import { usePathname } from "next/navigation";
-import { getTrackingPreference } from "@/lib/supabase/characterPreferences";
+import { getTrackingPreference, getPreferredCharacterId } from "@/lib/supabase/characterPreferences";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
+import { supabase } from "@/lib/supabase/client";
 import { useCharacterLibraryStore } from "@/store/useCharacterLibraryStore";
 import { useCharacterStore } from "@/store/useCharacterStore";
 import { listCharacterProfiles } from "@/lib/supabase/characters";
@@ -56,17 +57,18 @@ export default function Live2DClientOnly() {
     }
 
     void (async () => {
+      // DB에서 최신 auth metadata 가져오기 (캐시 아닌 최신 값)
+      const { data: { user: freshUser }, error: authError } = await supabase.auth.getUser();
+      if (cancelled || authError) return;
+      
       const savedProfiles = await listCharacterProfiles();
       if (cancelled) return;
 
       const allProfiles = mergeProfiles(BASE_PROFILES, savedProfiles);
       setProfiles(allProfiles);
 
-      const preferredId =
-        typeof authUser.user_metadata?.activeCharacterId === "string"
-          ? (authUser.user_metadata.activeCharacterId as string)
-          : undefined;
-
+      // freshUser의 최신 metadata 사용
+      const preferredId = getPreferredCharacterId(freshUser?.user_metadata);
       const preferredProfile = resolvePreferredProfile(allProfiles, preferredId);
       if (!preferredProfile) {
         setIsInitializing(false);
@@ -75,10 +77,11 @@ export default function Live2DClientOnly() {
 
       const libraryState = useCharacterLibraryStore.getState();
       const characterState = useCharacterStore.getState();
+      const hasSelectedCharacter =
+        libraryState.activeId !== null || characterState.profile !== null;
 
-      // 초기화 시에만 DB 값으로 설정 (페이지 새로고침 후)
-      // 이미 로컬에 profile이 있으면 그것을 유지
-      if (isInitializing) {
+      // 페이지 새로고침 시 로컬 스토어가 비어 있으면 회원 설정으로 복원.
+      if (!hasSelectedCharacter) {
         if (libraryState.activeId !== preferredProfile.id) {
           setActive(preferredProfile.id);
         }
@@ -87,14 +90,14 @@ export default function Live2DClientOnly() {
         }
       }
 
-      setTracking(getTrackingPreference(authUser.user_metadata, preferredProfile.id, true));
+      setTracking(getTrackingPreference(freshUser?.user_metadata, preferredProfile.id, true));
       setIsInitializing(false);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [authUser, setActive, setProfile, setProfiles, setTracking, isInitializing]);
+  }, [authUser, setActive, setProfile, setProfiles, setTracking]);
 
   const isCharacterManagePage = pathname.startsWith("/library/");
 

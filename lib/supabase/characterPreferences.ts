@@ -2,6 +2,8 @@ import { supabase } from "@/lib/supabase/client";
 
 type GenericMetadata = Record<string, unknown>;
 
+const PREFERRED_CHARACTER_ID_STORAGE_KEY = "10duck:preferred-character-id";
+
 function toMetadata(value: unknown): GenericMetadata {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return value as GenericMetadata;
@@ -14,6 +16,24 @@ function toTrackingMap(value: unknown): Record<string, boolean> {
     if (typeof mapValue === "boolean") out[key] = mapValue;
   }
   return out;
+}
+
+function savePreferredCharacterIdLocally(characterId: string | null): void {
+  if (typeof window === "undefined") return;
+  if (characterId) {
+    window.localStorage.setItem(PREFERRED_CHARACTER_ID_STORAGE_KEY, characterId);
+  } else {
+    window.localStorage.removeItem(PREFERRED_CHARACTER_ID_STORAGE_KEY);
+  }
+}
+
+export function getPreferredCharacterId(userMetadata: unknown): string | undefined {
+  const metadata = toMetadata(userMetadata);
+  if (typeof metadata.activeCharacterId === "string") {
+    return metadata.activeCharacterId;
+  }
+  if (typeof window === "undefined") return undefined;
+  return window.localStorage.getItem(PREFERRED_CHARACTER_ID_STORAGE_KEY) ?? undefined;
 }
 
 let authMutationQueue: Promise<void> = Promise.resolve();
@@ -38,6 +58,7 @@ async function runQueuedAuthMutation(task: () => Promise<void>): Promise<void> {
 }
 
 export async function savePreferredCharacter(characterId: string | null): Promise<void> {
+  savePreferredCharacterIdLocally(characterId);
   await runQueuedAuthMutation(async () => {
     const { data, error: userError } = await supabase.auth.getUser();
     if (userError) throw userError;
