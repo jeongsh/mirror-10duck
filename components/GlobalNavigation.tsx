@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { getUnreadNotificationCount } from "@/lib/community/notifications";
@@ -18,8 +18,10 @@ const NAV_ITEMS = [
 
 export default function GlobalNavigation() {
   const pathname = usePathname();
+  const router = useRouter();
   const authUser = useAuthUser();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showMenu, setShowMenu] = useState(false);
 
   const userId = authUser?.id ?? null;
   const nickname = useMemo(() => {
@@ -91,6 +93,12 @@ export default function GlobalNavigation() {
     };
   }, [pathname, userId]);
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setShowMenu(false);
+    router.push("/");
+  };
+
   return (
     <nav className="sticky top-0 z-40 border-b border-dashed border-gray-500 bg-white/85 backdrop-blur">
       <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-2 px-4 py-3">
@@ -135,12 +143,40 @@ export default function GlobalNavigation() {
               )}
             </Link>
           )}
-          <Link
-            href={authUser ? "/profile" : "/auth"}
-            className="border border-dashed border-gray-500 bg-white px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-100"
-          >
-            {authUser ? nickname || "프로필" : "로그인"}
-          </Link>
+          {authUser ? (
+            <div className="relative">
+              <button
+                onClick={() => setShowMenu(!showMenu)}
+                className="border border-dashed border-gray-500 bg-white px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-100"
+              >
+                {nickname || "프로필"}
+              </button>
+              {showMenu && (
+                <div className="absolute right-0 mt-1 w-40 border border-dashed border-gray-500 bg-white shadow-lg z-50">
+                  <Link
+                    href="/profile"
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 border-b border-dashed border-gray-300"
+                    onClick={() => setShowMenu(false)}
+                  >
+                    프로필 설정
+                  </Link>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                  >
+                    로그아웃
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Link
+              href="/auth"
+              className="border border-dashed border-gray-500 bg-white px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-100"
+            >
+              로그인
+            </Link>
+          )}
         </div>
       </div>
     </nav>
