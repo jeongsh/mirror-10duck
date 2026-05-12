@@ -17,11 +17,15 @@ import AuthorProfileCard from "@/components/community/AuthorProfileCard";
 import { isAdminUser } from "@/lib/supabase/admin";
 import { splitFeedShareHeader } from "@/lib/community/feedContentDisplay";
 import UserActionModal from "@/components/community/UserActionModal";
+import { normalizeBoardSlug } from "@/lib/community/boardSlug";
 
 export default function BoardPostDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const slug = params.slug as string;
+  const rawSlug = params.slug;
+  const rawSlugParam =
+    typeof rawSlug === "string" ? rawSlug : Array.isArray(rawSlug) ? (rawSlug[0] ?? "") : "";
+  const slug = normalizeBoardSlug(rawSlugParam);
   const postId = params.id as string;
   const authUser = useAuthUser();
 
@@ -58,16 +62,23 @@ export default function BoardPostDetailPage() {
       setLoading(true);
       setMessage("");
 
-      const [postResponse, boardResponse] = await Promise.all([
+      const [postResponse, boardFirst] = await Promise.all([
         supabase.from("posts").select("*, profiles(*)").eq("id", postId).single(),
-        supabase.from("boards").select("*").eq("slug", slug).single()
+        supabase.from("boards").select("*").eq("slug", slug).maybeSingle(),
       ]);
 
       setUserId(authUser?.id ?? "");
       setUserEmail(authUser?.email ?? "");
       setIsFollowingAuthor(false);
 
-      if (boardResponse.data) setBoard(boardResponse.data);
+      let boardRow = !boardFirst.error ? ((boardFirst.data as Board | null) ?? null) : null;
+      const trimmedRaw = rawSlugParam.trim();
+      if (!boardFirst.error && !boardRow && trimmedRaw !== slug) {
+        const boardSecond = await supabase.from("boards").select("*").eq("slug", trimmedRaw).maybeSingle();
+        if (!boardSecond.error) boardRow = (boardSecond.data as Board | null) ?? null;
+      }
+      if (boardRow) setBoard(boardRow);
+      else setBoard(null);
 
       if (postResponse.error) {
         setMessage(postResponse.error.message);
@@ -124,8 +135,8 @@ export default function BoardPostDetailPage() {
       setLoading(false);
     };
 
-    if (postId && slug) fetchData();
-  }, [authUser, postId, slug]);
+    if (postId && (slug || rawSlugParam.trim())) fetchData();
+  }, [authUser, postId, slug, rawSlugParam]);
 
   const canEdit = useMemo(() => {
     if (!post || !userId) return false;
@@ -177,7 +188,7 @@ export default function BoardPostDetailPage() {
         alert(error.message);
         return;
       }
-      router.push(`/board/${slug}`);
+      router.push(`/board/${board?.slug ?? slug}`);
     }
   };
 
@@ -294,7 +305,7 @@ export default function BoardPostDetailPage() {
       <header className="border border-dashed border-gray-500 bg-white/70 p-4">
         <div className="mb-2 text-sm text-gray-500">
           <Link href="/board" className="hover:underline">게시판</Link> &gt;{" "}
-          <Link href={`/board/${slug}`} className="hover:underline">{board?.name ?? slug}</Link>
+          <Link href={`/board/${board?.slug ?? slug}`} className="hover:underline">{board?.name ?? slug}</Link>
         </div>
         <h1 className="flex items-center gap-2 text-xl font-bold">
           {post?.is_hot && <span className="text-red-500">🔥</span>}
@@ -384,16 +395,16 @@ export default function BoardPostDetailPage() {
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        <Link href={`/board/${slug}`} className="border border-dashed border-gray-500 bg-white px-3 py-2 text-sm">
+        <Link href={`/board/${board?.slug ?? slug}`} className="border border-dashed border-gray-500 bg-white px-3 py-2 text-sm">
           목록
         </Link>
-        <Link href={`/board/${slug}/write`} className="border border-dashed border-gray-500 bg-white px-3 py-2 text-sm">
+        <Link href={`/board/${board?.slug ?? slug}/write`} className="border border-dashed border-gray-500 bg-white px-3 py-2 text-sm">
           새 글
         </Link>
         {canEdit && post ? (
           <>
             <Link
-              href={`/board/${slug}/write?edit=${post.id}`}
+              href={`/board/${board?.slug ?? slug}/write?edit=${post.id}`}
               className="border border-dashed border-gray-500 bg-white px-3 py-2 text-sm"
             >
               수정

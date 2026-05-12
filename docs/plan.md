@@ -10,6 +10,7 @@
 - 기존 상세 내용을 요약 삭제하지 않는다. 정리가 필요하면 도메인 문서로 이동하고, 이 허브에는 링크만 남긴다.
 - 커뮤니티 기본 기능을 누락하지 않는다. 게시판, 댓글, 대댓글, 추천/비추천, 개념글, 검색, 신고/차단, 알림, 프로필, 익명/닉네임 정책, 운영자 도구, 미디어 첨부는 핵심 범위로 본다.
 - 코드 구현 현황과 플랜이 어긋나면 "현재 상태"와 "목표 상태"를 함께 기록한다. 이미 임시 구현된 기능은 "완료"로 뭉개지 말고, 제품 기준 대비 남은 일을 적는다.
+- **Supabase 원격 DB 반영:** `docs/migrations/*.sql`을 단일 진실원으로 두고, Cursor **Supabase MCP**로 적용한다. **DDL**(테이블·컬럼·RLS·함수·정책)은 `apply_migration`(이름은 `snake_case`)을 우선 사용하고, 임시 점검·소량 수정은 `execute_sql`을 쓴다. MCP 인증이 끊기면 Supabase MCP에 대해 `mcp_auth`로 다시 연결한다. (대시보드 SQL Editor에만 의존하지 않아도 된다.)
 
 ## 1. 작업별 참조 지도
 
@@ -18,7 +19,7 @@
 | 전체 진행 현황, 완료/미완료 체크 | [checklist.md](./plans/checklist.md) | 관련 도메인 문서 |
 | 게시판, 글 목록, 글 상세, 댓글, 대댓글, 추천, 개념글, 피드, 검색 | [community.md](./plans/community.md) | [data-model.md](./plans/data-model.md), [screen-acceptance.md](./plans/screen-acceptance.md) |
 | 글쓰기, 본문 에디터, 이미지/영상 업로드, 스티커 삽입 | [editor-media-stickers.md](./plans/editor-media-stickers.md) | [data-model.md](./plans/data-model.md), [character-community.md](./plans/character-community.md) |
-| DB 마이그레이션, Supabase 테이블, RLS, 집계 컬럼 | [data-model.md](./plans/data-model.md) | [DB_TABLES.md](./DB_TABLES.md), [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) |
+| DB 마이그레이션, Supabase 테이블, RLS, 집계 컬럼 | [data-model.md](./plans/data-model.md) | [DB_TABLES.md](./DB_TABLES.md), [SUPABASE_SETUP.md](./SUPABASE_SETUP.md), Cursor **Supabase MCP** (`apply_migration` / `execute_sql`, 인증 `mcp_auth`) |
 | 신고, 차단, 운영자 도구, 알림, 레이트 리밋 | [moderation-notifications.md](./plans/moderation-notifications.md) | [data-model.md](./plans/data-model.md), [community.md](./plans/community.md) |
 | NSFW 이미지, 성인 게시판, 아청법 위험 대응, AI 검수, 자동 블라인드 | [nsfw-csam-moderation.md](./plans/nsfw-csam-moderation.md) | [moderation-notifications.md](./plans/moderation-notifications.md), [editor-media-stickers.md](./plans/editor-media-stickers.md), [data-model.md](./plans/data-model.md) |
 | 애니·만화·게임 뉴스, 신작 알림, 방영/연재/출시 일정, 덕질 캘린더 | [news-release-calendar.md](./plans/news-release-calendar.md) | [moderation-notifications.md](./plans/moderation-notifications.md), [data-model.md](./plans/data-model.md), [character-community.md](./plans/character-community.md) |
@@ -97,3 +98,8 @@
 - 작품 DB 직접 운영 방향을 폐기하고, 뉴스·신작 알림·덕질 캘린더 중심의 커뮤니티 허브 방향을 추가했다.
 - 애니, 만화, 게임은 상위 입구에서는 함께 제공하되 내부 데이터와 UX는 분리하는 원칙을 세웠다.
 - 오시(推し) 등록과 활동 배지 시스템 기획 추가 ([oshi-badges.md](./plans/oshi-badges.md)). 프로필에 "내 최애" 공개와 커뮤니티 활동 기반 배지 9종을 Phase 3 초기 작업으로 확정.
+
+### 2026-05-12
+
+- 게시판 카테고리·RLS·표시 순서 관련 마이그레이션을 Cursor **Supabase MCP** `apply_migration`으로 원격 프로젝트 `10duck`에 반영했다 (`boards_category`, `boards_rls_admin`, `board_display_order`).
+- 플랜 허브에 **MCP로 마이그레이션 적용**을 문서 운영 원칙으로 명시했다.

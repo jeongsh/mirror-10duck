@@ -7,6 +7,7 @@ CREATE TABLE public.boards (
   name character varying NOT NULL,
   description text,
   category text NOT NULL DEFAULT 'general'::text,
+  sort_order integer NOT NULL DEFAULT 0,
   created_at timestamp with time zone DEFAULT now(),
   hot_threshold integer NOT NULL DEFAULT 10,
   allow_anonymous boolean NOT NULL DEFAULT false,
@@ -14,6 +15,24 @@ CREATE TABLE public.boards (
   is_nsfw boolean NOT NULL DEFAULT false,
   CONSTRAINT boards_pkey PRIMARY KEY (id),
   CONSTRAINT boards_category_check CHECK (
+    category = ANY (
+      ARRAY[
+        'general'::text,
+        'anime'::text,
+        'game'::text,
+        'hobby'::text,
+        'life'::text,
+        'media'::text,
+        'other'::text
+      ]
+    )
+  )
+);
+CREATE TABLE public.board_category_order (
+  category text NOT NULL,
+  position integer NOT NULL,
+  CONSTRAINT board_category_order_pkey PRIMARY KEY (category),
+  CONSTRAINT board_category_order_category_check CHECK (
     category = ANY (
       ARRAY[
         'general'::text,

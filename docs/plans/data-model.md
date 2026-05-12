@@ -2,6 +2,13 @@
 
 이 문서는 DB 마이그레이션, Supabase 테이블, RLS, 집계 컬럼 작업을 할 때 참고한다. 현재 실제 DB 설명은 [../DB_TABLES.md](../DB_TABLES.md), 초기 SQL은 [../SUPABASE_SETUP.md](../SUPABASE_SETUP.md)를 함께 본다.
 
+## 0. Supabase MCP로 원격 DB 반영
+
+- Cursor **Supabase MCP**(`plugin-supabase-supabase`)를 켜 두고, 세션마다 필요하면 **`mcp_auth`** 로 인증한다.
+- **DDL**(테이블·컬럼·인덱스·RLS·정책·함수)은 MCP **`apply_migration`** 을 우선한다. 인자 `name`은 `snake_case`, `query`에는 `docs/migrations/`에 적어 둔 SQL과 **동일 본문**을 넣어 Git 기록과 Supabase 마이그레이션 히스토리를 맞춘다.
+- 임시 조회·소량 데이터 수정·검증은 **`execute_sql`** 을 써도 된다. 스키마 변경은 가능하면 항상 마이그레이션 파일 + `apply_migration`으로 남긴다.
+- 로컬 **Supabase CLI**(`supabase db push` 등)를 쓰는 팀은 그 흐름으로 통일해도 되며, 이 저장소에서는 **원격 프로젝트 반영 시 MCP를 기본 권장**으로 둔다.
+
 ## 1. 현재 주요 테이블
 
 - `boards`: 게시판/채널 메타데이터

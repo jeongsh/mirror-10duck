@@ -28,17 +28,25 @@ export default function AdminBoardsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between border-b border-dashed border-gray-500 pb-4">
+      <div className="flex flex-col gap-3 border-b border-dashed border-gray-500 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-bold">게시판 관리</h2>
           <p className="mt-1 text-sm text-gray-600">게시판을 선택하여 상세 설정을 관리하세요.</p>
         </div>
-        <Link
-          href="/admin/boards/create"
-          className="rounded bg-black px-4 py-2 text-sm text-white transition-opacity hover:opacity-80"
-        >
-          새 게시판 추가
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/admin/boards/order"
+            className="rounded border border-gray-300 bg-white px-4 py-2 text-sm transition-colors hover:bg-gray-100"
+          >
+            표시 순서
+          </Link>
+          <Link
+            href="/admin/boards/create"
+            className="rounded bg-black px-4 py-2 text-sm text-white transition-opacity hover:opacity-80"
+          >
+            새 게시판 추가
+          </Link>
+        </div>
       </div>
 
       <section className="rounded border border-dashed border-gray-500 bg-white/70 p-6">

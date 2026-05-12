@@ -8,12 +8,16 @@ import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { Board } from "@/types/community";
 import CommunityEditor from "@/components/community/editor/CommunityEditor";
 import { getClientIp } from "@/lib/community/actions";
+import { normalizeBoardSlug } from "@/lib/community/boardSlug";
 
 function WritePostContent() {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
-  const slug = params.slug as string;
+  const rawSlug = params.slug;
+  const rawSlugParam =
+    typeof rawSlug === "string" ? rawSlug : Array.isArray(rawSlug) ? (rawSlug[0] ?? "") : "";
+  const slug = normalizeBoardSlug(rawSlugParam);
   const editId = searchParams.get("edit");
   const authUser = useAuthUser();
 
@@ -52,13 +56,21 @@ function WritePostContent() {
     let cancelled = false;
 
     const fetchBoard = async () => {
-      if (!slug) return;
-      const { data } = await supabase
-        .from("boards")
-        .select("*")
-        .eq("slug", slug)
-        .single();
-      if (!cancelled) setBoard((data as Board | null) ?? null);
+      const trimmedRaw = rawSlugParam.trim();
+      if (!slug && !trimmedRaw) {
+        if (!cancelled) setBoard(null);
+        return;
+      }
+
+      const first = await supabase.from("boards").select("*").eq("slug", slug).maybeSingle();
+      let row = !first.error ? ((first.data as Board | null) ?? null) : null;
+
+      if (!first.error && !row && trimmedRaw !== slug) {
+        const second = await supabase.from("boards").select("*").eq("slug", trimmedRaw).maybeSingle();
+        if (!second.error) row = (second.data as Board | null) ?? null;
+      }
+
+      if (!cancelled) setBoard(row);
     };
 
     void fetchBoard();
@@ -66,7 +78,7 @@ function WritePostContent() {
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [slug, rawSlugParam]);
 
   // 수정 모드인 경우 데이터 불러오기
   useEffect(() => {
@@ -156,7 +168,7 @@ function WritePostContent() {
         return;
       }
 
-      router.push(`/board/${slug}/${editId}`);
+      router.push(`/board/${board.slug}/${editId}`);
     } else {
       // 생성 모드
       const ip = await getClientIp();
@@ -185,9 +197,11 @@ function WritePostContent() {
         return;
       }
 
-      router.push(`/board/${slug}/${data.id}`);
+      router.push(`/board/${board.slug}/${data.id}`);
     }
   };
+
+  const pathSlug = board?.slug ?? slug;
 
   if (fetching) {
     return (
@@ -289,7 +303,7 @@ function WritePostContent() {
             {loading ? (editId ? "수정 중..." : "등록 중...") : (editId ? "수정 완료" : "등록")}
           </button>
           <Link
-            href={editId ? `/board/${slug}/${editId}` : `/board/${slug}`}
+            href={editId ? `/board/${pathSlug}/${editId}` : `/board/${pathSlug}`}
             className="border border-dashed border-gray-500 bg-white px-3 py-2 text-sm"
           >
             취소

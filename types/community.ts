@@ -9,6 +9,8 @@ export type Board = {
   description: string | null;
   /** 분류: 애니, 게임, 취미 등 (`lib/community/boardCategories`) */
   category: BoardCategory;
+  /** 같은 category 안 목록 정렬 (오름차순) */
+  sort_order: number;
   created_at: string;
   hot_threshold: number;
   allow_anonymous: boolean;

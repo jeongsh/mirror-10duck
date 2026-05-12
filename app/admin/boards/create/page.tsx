@@ -7,6 +7,7 @@ import {
   BOARD_CATEGORY_OPTIONS,
   type BoardCategory,
 } from "@/lib/community/boardCategories";
+import { normalizeBoardSlug } from "@/lib/community/boardSlug";
 
 export default function CreateBoardPage() {
   const router = useRouter();
@@ -21,13 +22,14 @@ export default function CreateBoardPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!slug || !name) return alert("슬러그와 이름은 필수입니다.");
+    const nextSlug = normalizeBoardSlug(slug);
+    if (!nextSlug || !name.trim()) return alert("슬러그와 이름은 필수입니다.");
 
     const { error } = await supabase
       .from("boards")
       .insert([{ 
-        slug, 
-        name, 
+        slug: nextSlug, 
+        name: name.trim(), 
         category,
         description, 
         hot_threshold: hotThreshold,
@@ -54,6 +56,9 @@ export default function CreateBoardPage() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 rounded border border-dashed border-gray-500 bg-white/70 p-6">
         <label className="flex flex-col gap-1">
           <span className="text-sm font-semibold">슬러그 (URL 경로) *</span>
+          <p className="text-xs text-gray-500">
+            주소는 <span className="font-mono">/board/슬러그</span>와 같아야 합니다. 저장 시 앞뒤 공백 제거·영문 소문자로 맞춥니다.
+          </p>
           <input
             type="text"
             value={slug}
@@ -62,6 +67,12 @@ export default function CreateBoardPage() {
             className="rounded border p-2 focus:border-black focus:outline-none"
             required
           />
+          {normalizeBoardSlug(slug) ? (
+            <p className="text-xs text-gray-600">
+              미리보기:{" "}
+              <span className="font-mono">/board/{normalizeBoardSlug(slug)}</span>
+            </p>
+          ) : null}
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-sm font-semibold">게시판 이름 *</span>

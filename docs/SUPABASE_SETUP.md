@@ -5,6 +5,7 @@
 아래는 이 프로젝트에서 DB 변경 시 반드시 지켜야 하는 규칙입니다.
 
 - `schema.sql`은 참고용 덤프다. 실행/배포 기준은 항상 `docs/migrations/*.sql`이다.
+- **Cursor Supabase MCP**가 연결되어 있으면, 원격 프로젝트 DDL은 MCP `apply_migration`(권장) 또는 `execute_sql`로 적용하고, SQL 본문은 저장소 마이그레이션 파일과 동일하게 맞춘다. 자세한 절차는 [plans/data-model.md](./plans/data-model.md) §0.
 - 권한 검사는 UI가 아니라 DB(RLS)가 최종 기준이다. 클라이언트 체크만으로 권한을 보장하지 않는다.
 - 관리자 권한 기준은 단일화한다.
   - 기본 기준: JWT role(`app_metadata.role` 또는 `user_metadata.role`)이 `ADMIN`

@@ -10,6 +10,7 @@ import {
   type BoardCategory,
   normalizeBoardCategory,
 } from "@/lib/community/boardCategories";
+import { normalizeBoardSlug } from "@/lib/community/boardSlug";
 
 export default function BoardManagementPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -58,13 +59,14 @@ export default function BoardManagementPage({ params }: { params: Promise<{ id: 
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!slug || !name) return alert("슬러그와 이름은 필수입니다.");
+    const nextSlug = normalizeBoardSlug(slug);
+    if (!nextSlug || !name.trim()) return alert("슬러그와 이름은 필수입니다.");
 
     const { error } = await supabase
       .from("boards")
       .update({ 
-        slug, 
-        name, 
+        slug: nextSlug, 
+        name: name.trim(), 
         category,
         description, 
         hot_threshold: hotThreshold,
@@ -77,8 +79,8 @@ export default function BoardManagementPage({ params }: { params: Promise<{ id: 
     if (error) {
       alert("수정 실패: " + error.message);
     } else {
+      setSlug(nextSlug);
       alert("게시판 설정이 저장되었습니다.");
-      // optionally refresh data
     }
   };
 

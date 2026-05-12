@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { MouseEvent, useEffect, useState } from "react";
+import { MouseEvent, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { Board, CommunityPost, postAggregateDefaults } from "@/types/community";
@@ -10,6 +10,8 @@ import IdentityBadge from "@/components/community/IdentityBadge";
 import { formatCommunityDate } from "@/lib/utils/formatDate";
 import { formatIp } from "@/lib/utils/formatIp";
 import UserActionModal from "@/components/community/UserActionModal";
+import { normalizeBoardSlug } from "@/lib/community/boardSlug";
+import { recordBoardVisit } from "@/lib/community/recentBoards";
 
 function useDebouncedValue(value: string, delayMs: number) {
   const [debounced, setDebounced] = useState(value);
@@ -24,7 +26,13 @@ function useDebouncedValue(value: string, delayMs: number) {
 
 export default function BoardPage() {
   const params = useParams();
-  const slug = params.slug as string;
+  const rawSlug = params.slug;
+  const rawSlugSegment = useMemo(
+    () =>
+      typeof rawSlug === "string" ? rawSlug : Array.isArray(rawSlug) ? (rawSlug[0] ?? "") : "",
+    [rawSlug],
+  );
+  const slug = normalizeBoardSlug(rawSlugSegment);
   const authUser = useAuthUser();
 
   const [board, setBoard] = useState<Board | null>(null);
@@ -41,6 +49,7 @@ export default function BoardPage() {
   const [searchMode, setSearchMode] = useState<"title" | "content" | "author" | "all">("title");
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 250);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [boardFetchError, setBoardFetchError] = useState<string | null>(null);
 
   const userId = authUser?.id ?? null;
 
@@ -51,23 +60,57 @@ export default function BoardPage() {
 
     const fetchBoard = async () => {
       setBoardLoading(true);
-      const { data } = await supabase
-        .from("boards")
-        .select("*")
-        .eq("slug", slug)
-        .single();
+      setBoardFetchError(null);
+
+      const trimmedRaw = rawSlugSegment.trim();
+      let row: Board | null = null;
+      let errMsg: string | null = null;
+
+      const first = await supabase.from("boards").select("*").eq("slug", slug).maybeSingle();
+
+      if (!cancelled) {
+        if (first.error) {
+          errMsg = first.error.message;
+        } else {
+          row = (first.data as Board | null) ?? null;
+          if (!row && trimmedRaw !== slug) {
+            const second = await supabase.from("boards").select("*").eq("slug", trimmedRaw).maybeSingle();
+            if (!cancelled) {
+              if (second.error) errMsg = second.error.message;
+              else row = (second.data as Board | null) ?? null;
+            }
+          }
+        }
+      }
 
       if (cancelled) return;
-      setBoard((data as Board | null) ?? null);
+
+      if (errMsg) {
+        setBoardFetchError(errMsg);
+        setBoard(null);
+      } else {
+        setBoardFetchError(null);
+        setBoard(row);
+      }
       setBoardLoading(false);
     };
 
-    if (slug) void fetchBoard();
+    if (slug || rawSlugSegment.trim()) void fetchBoard();
+    else {
+      setBoardLoading(false);
+      setBoard(null);
+      setBoardFetchError(null);
+    }
 
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [slug, rawSlugSegment]);
+
+  useEffect(() => {
+    if (!board?.slug) return;
+    recordBoardVisit(board.slug, board.name);
+  }, [board?.id, board?.slug, board?.name]);
 
   useEffect(() => {
     let cancelled = false;
@@ -229,7 +272,24 @@ export default function BoardPage() {
   }
 
   if (!board) {
-    return <main className="p-6 text-center text-red-500">게시판을 찾을 수 없습니다.</main>;
+    return (
+      <main className="mx-auto max-w-md p-6 text-center">
+        <p className="text-red-600 font-medium">
+          {boardFetchError ? "게시판 정보를 불러오지 못했습니다." : "게시판을 찾을 수 없습니다."}
+        </p>
+        {boardFetchError ? (
+          <p className="mt-2 font-mono text-xs text-gray-700 break-all">{boardFetchError}</p>
+        ) : (
+          <p className="mt-3 text-sm text-gray-600">
+            채널 목록에 보여도, 주소창에 직접 입력한 경로와 DB에 저장된 슬러그 문자가 조금만 달라도(다른 종류의 하이픈·공백 등) 조회가 되지 않을 수 있습니다.{" "}
+            <span className="font-mono">/board</span>에서 해당 채널 이름을 눌러 들어가 보거나, 관리자 화면에서 슬러그를 한 번 저장해 ASCII 하이픈(-)만 쓰도록 맞춰 주세요.
+          </p>
+        )}
+        <Link href="/board" className="mt-4 inline-block text-sm font-semibold underline">
+          채널 목록으로 이동
+        </Link>
+      </main>
+    );
   }
 
   return (
@@ -255,7 +315,7 @@ export default function BoardPage() {
             채널 목록
           </Link>
           <Link
-            href={`/board/${slug}/write`}
+            href={`/board/${board.slug}/write`}
             className="border border-dashed border-gray-500 bg-gray-200 px-3 py-2 text-sm"
           >
             글쓰기
@@ -384,7 +444,7 @@ export default function BoardPage() {
                 return (
                   <Link
                     key={post.id}
-                    href={`/board/${slug}/${post.id}`}
+                    href={`/board/${board.slug}/${post.id}`}
                     className="grid min-w-[800px] grid-cols-[60px_1fr_140px_80px_60px_60px] items-center border-t border-dashed border-gray-300 bg-yellow-50/50 px-3 py-2 text-sm transition-colors hover:bg-yellow-50"
                   >
                     <span className="text-center">
@@ -450,7 +510,7 @@ export default function BoardPage() {
                 return (
                   <Link
                     key={post.id}
-                    href={`/board/${slug}/${post.id}`}
+                    href={`/board/${board.slug}/${post.id}`}
                     className={`grid min-w-[800px] grid-cols-[60px_1fr_140px_80px_60px_60px] items-center border-t border-dashed border-gray-300 px-3 py-2 text-sm transition-colors hover:bg-white ${
                       post.is_hot ? "bg-red-50/30" : ""
                     }`}

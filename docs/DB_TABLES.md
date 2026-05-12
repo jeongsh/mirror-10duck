@@ -30,13 +30,23 @@ Supabase Auth가 자동으로 관리하는 사용자 테이블입니다.
 - `allow_anonymous` `boolean` NOT NULL
 - `allow_media` `boolean` NOT NULL
 - `is_nsfw` `boolean` NOT NULL
+- `sort_order` `integer` NOT NULL 기본값 `0` — 같은 `category` 안에서 채널 목록 정렬. 인덱스 `(category, sort_order)` (`docs/migrations/2026-05-13-board-display-order.sql`)
 
-마이그레이션: `docs/migrations/2026-05-12-boards-category.sql`
+마이그레이션: `docs/migrations/2026-05-12-boards-category.sql` (category 등), `docs/migrations/2026-05-13-board-display-order.sql` (sort_order·`board_category_order`)
 
 ### RLS 정책
 - `select`: 누구나 (`using (true)`)
 - `insert` / `update` / `delete`: 로그인 사용자 중 JWT 역할이 `ADMIN`인 경우만 (`public.is_admin()` — `lib/supabase/admin.ts` 와 동일 기준)
 - 마이그레이션: `docs/migrations/2026-05-12-boards-rls-admin.sql`
+
+---
+
+## 2-1) `public.board_category_order` (채널 목록에서 카테고리 블록 순서)
+
+- `category` `text` PK — `boards.category` 와 동일 허용 집합
+- `position` `integer` NOT NULL — 오름차순으로 앞에 올수록 먼저 표시
+- RLS: 전역 `select`, `insert`/`update`/`delete` 는 `public.is_admin()` 인 경우만
+- 마이그레이션: `docs/migrations/2026-05-13-board-display-order.sql`
 
 ---
 

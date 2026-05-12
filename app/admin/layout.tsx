@@ -36,6 +36,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             게시판 관리
           </Link>
           <Link
+            href="/admin/boards/order"
+            className="rounded border border-transparent p-2 pl-6 text-sm transition-colors hover:border-gray-300 hover:bg-gray-100"
+          >
+            └ 채널 표시 순서
+          </Link>
+          <Link
             href="/admin/reports"
             className="rounded border border-transparent p-2 transition-colors hover:border-gray-300 hover:bg-gray-100"
           >
