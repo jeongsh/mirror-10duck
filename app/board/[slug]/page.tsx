@@ -12,6 +12,7 @@ import { formatIp } from "@/lib/utils/formatIp";
 import UserActionModal from "@/components/community/UserActionModal";
 import { normalizeBoardSlug } from "@/lib/community/boardSlug";
 import { recordBoardVisit } from "@/lib/community/recentBoards";
+import { splitBoardTitle } from "@/lib/community/boardTitlePrefix";
 
 function useDebouncedValue(value: string, delayMs: number) {
   const [debounced, setDebounced] = useState(value);
@@ -438,9 +439,7 @@ export default function BoardPage() {
                 const hasStickers = post.content.includes(":sticker/");
                 const hasImages = post.content.includes("!image[") || post.content.includes("\"type\":\"image\"");
                 const hasYoutube = post.content.includes("youtube.com") || post.content.includes("youtu.be");
-                
-                const titleMatch = post.title?.match(/^\[([^\]]+)\]\s*(.*)$/);
-                const titleText = titleMatch ? titleMatch[2] : (post.title || "제목 없음");
+                const titleInfo = splitBoardTitle(post.title);
 
                 return (
                   <Link
@@ -453,7 +452,9 @@ export default function BoardPage() {
                     </span>
                     <div className="flex min-w-0 flex-col overflow-hidden">
                       <div className="flex items-center gap-1.5 overflow-hidden">
-                        <span className="truncate font-bold text-gray-900">{titleText}</span>
+                        <span className="truncate font-bold text-gray-900">
+                          {titleInfo.body || "제목 없음"}
+                        </span>
 
                         <div className="flex items-center gap-1 opacity-60">
                           {hasImages && (
@@ -516,13 +517,14 @@ export default function BoardPage() {
                 const hasStickers = post.content.includes(":sticker/");
                 const hasImages = post.content.includes("!image[") || post.content.includes("\"type\":\"image\"");
                 const hasYoutube = post.content.includes("youtube.com") || post.content.includes("youtu.be");
+                const titleInfo = splitBoardTitle(post.title);
 
                 return (
                   <Link
                     key={post.id}
                     href={`/board/${board.slug}/${post.id}`}
-                    className={`grid min-w-[800px] grid-cols-[60px_1fr_140px_80px_60px_60px] items-center border-t border-dashed border-gray-300 px-3 py-2 text-sm transition-colors hover:bg-white ${
-                      post.is_hot ? "bg-red-50/30" : ""
+                    className={`grid min-w-[800px] grid-cols-[60px_1fr_140px_80px_60px_60px] items-center border-t border-dashed border-gray-300 px-3 py-2 text-sm transition-colors ${
+                      post.is_hot ? "bg-red-50/30 hover:bg-white" : "hover:bg-white"
                     }`}
                   >
                     <span className="text-center text-[11px] text-gray-400 tabular-nums">
@@ -544,24 +546,14 @@ export default function BoardPage() {
                         </div>
 
                         {/* 말머리 파싱 및 렌더링 */}
-                        {(() => {
-                          const titleMatch = post.title?.match(/^\[([^\]]+)\]\s*(.*)$/);
-                          if (titleMatch) {
-                            return (
-                              <>
-                                <span className="flex-shrink-0 text-[11px] font-bold text-gray-500">
-                                  [{titleMatch[1]}]
-                                </span>
-                                <span className="truncate font-medium text-gray-800">{titleMatch[2]}</span>
-                              </>
-                            );
-                          }
-                          return (
-                            <span className="truncate font-medium text-gray-800">
-                              {post.source_type === "FEED" ? "피드에서 공유된 포스트" : post.title || "제목 없음"}
-                            </span>
-                          );
-                        })()}
+                        {titleInfo.prefix ? (
+                          <span className="flex-shrink-0 text-[11px] font-bold text-gray-500">[{titleInfo.prefix}]</span>
+                        ) : null}
+                        <span className="truncate font-medium text-gray-800">
+                          {post.source_type === "FEED"
+                            ? "피드에서 공유된 포스트"
+                            : titleInfo.body || post.title || "제목 없음"}
+                        </span>
 
                         <div className="flex items-center gap-1 opacity-60">
                           {hasImages && (

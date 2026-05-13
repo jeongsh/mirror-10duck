@@ -18,7 +18,7 @@ import { isAdminUser } from "@/lib/supabase/admin";
 import { splitFeedShareHeader } from "@/lib/community/feedContentDisplay";
 import UserActionModal from "@/components/community/UserActionModal";
 import { normalizeBoardSlug } from "@/lib/community/boardSlug";
-import { postHasSpoilerTitlePrefix } from "@/lib/community/boardTitlePrefix";
+import { postHasSpoilerTitlePrefix, splitBoardTitle } from "@/lib/community/boardTitlePrefix";
 
 export default function BoardPostDetailPage() {
   const router = useRouter();
@@ -39,6 +39,8 @@ export default function BoardPostDetailPage() {
   const [shareLoading, setShareLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [isSpoilerBodyCollapsed, setIsSpoilerBodyCollapsed] = useState(false);
+  const [hasSpoilerBodyRevealed, setHasSpoilerBodyRevealed] = useState(false);
 
   const refetchPost = useCallback(async () => {
     const { data, error } = await supabase.from("posts").select("*, profiles(*)").eq("id", postId).single();
@@ -149,6 +151,12 @@ export default function BoardPostDetailPage() {
     if (post.source_type !== "FEED") return post.content;
     return splitFeedShareHeader(post.content).rawBody;
   }, [post]);
+  const isSpoilerPost = useMemo(() => postHasSpoilerTitlePrefix(post), [post]);
+
+  useEffect(() => {
+    setIsSpoilerBodyCollapsed(isSpoilerPost);
+    setHasSpoilerBodyRevealed(false);
+  }, [postId, isSpoilerPost]);
 
   const toggleFollowUser = async () => {
     if (!userId) {
@@ -247,14 +255,20 @@ export default function BoardPostDetailPage() {
     }
     if (!post) return;
     
-    const reason = window.prompt("게시글 신고 사유를 입력해주세요 (예: 욕설, 광고, 부적절한 이미지 등)");
+    const categoryInput = window.prompt(
+      "신고 유형을 선택하세요: 1) 일반 신고  2) 스포일러 미표기",
+      "1",
+    );
+    if (!categoryInput) return;
+    const reasonCategory = categoryInput.trim() === "2" ? "스포일러 미표기" : "기타";
+    const reason = window.prompt("게시글 신고 사유를 입력해주세요 (상세 설명)");
     if (!reason) return;
 
     const { error } = await supabase.from("reports").insert({
       reporter_id: userId,
       target_type: "POST",
       target_id: post.id,
-      reason_category: "기타",
+      reason_category: reasonCategory,
       reason_detail: reason
     });
 
@@ -311,25 +325,20 @@ export default function BoardPostDetailPage() {
         <h1 className="flex items-center gap-2 text-xl font-bold">
           {post?.is_hot && <span className="text-red-500">🔥</span>}
           {(() => {
-            const titleMatch = post?.title?.match(/^\[([^\]]+)\]\s*(.*)$/);
-            if (titleMatch) {
+            const titleInfo = splitBoardTitle(post?.title);
+            if (titleInfo.prefix) {
               return (
                 <>
                   <span className="flex-shrink-0 text-sm font-bold text-gray-500">
-                    [{titleMatch[1]}]
+                    [{titleInfo.prefix}]
                   </span>
-                  <span>{titleMatch[2]}</span>
+                  <span>{titleInfo.body}</span>
                 </>
               );
             }
             return <span>{post?.title ?? "게시글 없음"}</span>;
           })()}
         </h1>
-        {post && postHasSpoilerTitlePrefix(post) ? (
-          <p className="mt-2 rounded border border-red-300 bg-red-50 px-2 py-1 text-xs font-medium text-red-900">
-            말머리에 스포일러가 표시된 글입니다.
-          </p>
-        ) : null}
         <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-gray-600">
           <div className="flex items-center gap-1.5 min-w-0 text-sm text-gray-500 flex-wrap">
             <button
@@ -370,8 +379,25 @@ export default function BoardPostDetailPage() {
             ℹ️ 이 글은 피드에서 공유된 글의 스냅샷입니다.
           </div>
         ) : null}
+        {isSpoilerPost && !hasSpoilerBodyRevealed ? (
+          <div className="mb-4 flex items-center justify-between rounded border border-red-200 bg-red-50 px-3 py-2">
+            <p className="text-xs text-red-900">
+              스포일러 글입니다. 본문을 펼치면 스포일러 내용이 표시됩니다.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setIsSpoilerBodyCollapsed(false);
+                setHasSpoilerBodyRevealed(true);
+              }}
+              className="rounded border border-red-300 bg-white px-2 py-1 text-xs font-medium text-red-800"
+            >
+              본문 펼치기
+            </button>
+          </div>
+        ) : null}
         {post ? (
-          <RichContent content={renderedPostContent} />
+          isSpoilerPost && isSpoilerBodyCollapsed ? null : <RichContent content={renderedPostContent} />
         ) : (
           <p className="text-gray-500">게시글을 찾을 수 없습니다.</p>
         )}

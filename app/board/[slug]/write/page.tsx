@@ -9,6 +9,7 @@ import { Board } from "@/types/community";
 import CommunityEditor from "@/components/community/editor/CommunityEditor";
 import { getClientIp } from "@/lib/community/actions";
 import { normalizeBoardSlug } from "@/lib/community/boardSlug";
+import { isSpoilerPrefix } from "@/lib/community/boardTitlePrefix";
 
 function WritePostContent() {
   const router = useRouter();
@@ -25,6 +26,7 @@ function WritePostContent() {
   const [title, setTitle] = useState("");
   const [prefix, setPrefix] = useState("");
   const [content, setContent] = useState("");
+  const [containsSpoiler, setContainsSpoiler] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [message, setMessage] = useState("");
@@ -109,10 +111,13 @@ function WritePostContent() {
         // 제목에서 말머리 추출 ([말머리] 제목 형식 가정)
         const titleMatch = data.title?.match(/^\[([^\]]+)\]\s*(.*)$/);
         if (titleMatch) {
-          setPrefix(titleMatch[1]);
+          const loadedPrefix = titleMatch[1];
+          setPrefix(loadedPrefix);
+          setContainsSpoiler(isSpoilerPrefix(loadedPrefix));
           setTitle(titleMatch[2]);
         } else {
           setTitle(data.title || "");
+          setContainsSpoiler(false);
         }
         
         setContent(data.content || "");
@@ -144,7 +149,8 @@ function WritePostContent() {
       return;
     }
 
-    const finalTitle = prefix ? `[${prefix}] ${title}` : title;
+    const effectivePrefix = prefix || (containsSpoiler ? "스포" : "");
+    const finalTitle = effectivePrefix ? `[${effectivePrefix}] ${title}` : title;
     
     // 등록/수정 성공 시 이탈 방지 해제를 위해 상태 변경
     setLoading(true);
@@ -267,7 +273,12 @@ function WritePostContent() {
           <div className="flex gap-2">
             <select
               value={prefix}
-              onChange={(e) => setPrefix(e.target.value)}
+              onChange={(e) => {
+                const nextPrefix = e.target.value;
+                setPrefix(nextPrefix);
+                if (!nextPrefix) return;
+                setContainsSpoiler(isSpoilerPrefix(nextPrefix));
+              }}
               className="border border-dashed border-gray-500 bg-white px-2 py-2 text-sm focus:outline-none"
             >
               <option value="">말머리 선택</option>
@@ -283,6 +294,21 @@ function WritePostContent() {
               placeholder="제목을 입력해 주세요"
             />
           </div>
+          <label className="mt-2 inline-flex items-center gap-2 text-xs text-gray-700">
+            <input
+              type="checkbox"
+              checked={containsSpoiler}
+              onChange={(event) => {
+                const checked = event.target.checked;
+                setContainsSpoiler(checked);
+                if (!checked && isSpoilerPrefix(prefix)) {
+                  setPrefix("");
+                }
+              }}
+              className="h-4 w-4"
+            />
+            스포일러 포함 (체크 시 말머리가 없으면 `[스포]`로 자동 저장됩니다)
+          </label>
         </div>
 
         <div className="flex flex-col gap-1">
