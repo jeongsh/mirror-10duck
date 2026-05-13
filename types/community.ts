@@ -16,6 +16,34 @@ export type Board = {
   allow_anonymous: boolean;
   allow_media: boolean;
   is_nsfw: boolean;
+  /** 실험 A3: 게시판별 태그 정책(JSON). 마이그레이션 전에는 없을 수 있음 */
+  tag_policy?: Record<string, unknown> | null;
+};
+
+/** `public.tag_kind` / `tags.kind` */
+export type TagKind =
+  | "work"
+  | "character"
+  | "pair"
+  | "spoiler"
+  | "content_warning"
+  | "genre"
+  | "meta";
+
+export type TagRow = {
+  id: string;
+  slug: string;
+  kind: TagKind;
+  display_name: string;
+  official: boolean;
+};
+
+  /** `posts` 조회 시 `post_tags` + `tags` 조인(별도 쿼리로 채움) */
+export type PostTagJoin = {
+  post_id?: string;
+  tag_id: string;
+  weight?: number;
+  tags: TagRow | null;
 };
 
 export type NicknameType = "FIXED" | "TEMPORARY";
@@ -78,6 +106,8 @@ export type CommunityPost = {
 
   // 하이브리드 게시판-피드용 필드
   board_id: string | null;
+  /** 일부 목록 쿼리에서 `boards(...)` 조인 */
+  boards?: { slug: string; name?: string } | null;
   source_type: PostSourceType;
   origin_post_id: string | null;
   /** `enrichPostsSharedFrom` 로 채움 */
@@ -93,6 +123,9 @@ export type CommunityPost = {
 
   /** 게시글 공개 상태 (`NORMAL`, `HIDDEN` 등). 관리자 숨김·원본 숨김 전파에 사용 */
   status?: string;
+
+  /** `post_tags`+`tags` 조인 (게시판 목록에서는 비사용·DB·추후 검색·교차축용) */
+  post_tags?: PostTagJoin[] | null;
 };
 
 /** 클라이언트 표시용 기본값 */

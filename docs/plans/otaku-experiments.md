@@ -67,6 +67,7 @@
 
 ### A3. 통합 태그 시스템 — 최우선
 
+- **게시판과의 역할 분담:** 채널·작품별 게시판에서는 주제가 게시판에 고정되므로 **게시판 글쓰기 UI에는 태그를 두지 않고 말머리로 분류**한다. 통합 태그 DB(`tags`, `post_tags`, `tag_aliases`)는 **검색 별칭·캐릭터·CP·교차 검색** 등 게시판 단위를 넘는 축에 쓴다.
 - **가설:** 말머리·주제 태그·스티커 라벨·관심 태그가 표준 없이 흩어져 있어, 작품/캐릭터/CP/스포일러 분류가 일관되지 않다. 이 한 축이 정리되어야 검색·갤러리·분기 라인업·자기소개 카드 모두 자연스러워진다.
 - **데이터:**
   - `tags(id, slug, kind in ('work','character','pair','spoiler','content_warning','genre','meta'), parent_tag_id, display_name, official boolean, created_by, created_at)`

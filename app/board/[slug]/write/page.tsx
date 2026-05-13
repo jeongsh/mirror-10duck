@@ -34,7 +34,7 @@ function WritePostContent() {
   const userId = authUser?.id ?? "";
   const userEmail = authUser?.email ?? "";
 
-  const PREFIXES = ["잡담", "정보", "질문", "창작", "공지"];
+  const PREFIXES = ["잡담", "정보", "질문", "창작", "공지", "공략", "스포일러", "스포", "이벤트"];
 
   // 이탈 방지 (Exit Guard)
   useEffect(() => {
@@ -197,7 +197,9 @@ function WritePostContent() {
         return;
       }
 
-      router.push(`/board/${board.slug}/${data.id}`);
+      const newId = data.id as string;
+
+      router.push(`/board/${board.slug}/${newId}`);
     }
   };
 

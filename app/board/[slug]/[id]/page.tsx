@@ -18,6 +18,7 @@ import { isAdminUser } from "@/lib/supabase/admin";
 import { splitFeedShareHeader } from "@/lib/community/feedContentDisplay";
 import UserActionModal from "@/components/community/UserActionModal";
 import { normalizeBoardSlug } from "@/lib/community/boardSlug";
+import { postHasSpoilerTitlePrefix } from "@/lib/community/boardTitlePrefix";
 
 export default function BoardPostDetailPage() {
   const router = useRouter();
@@ -93,7 +94,7 @@ export default function BoardPostDetailPage() {
           setLoading(false);
           return;
         }
-        setPost(postData);
+        setPost(postData as CommunityPost);
 
         // 작성자 팔로우 여부 확인
         if (authUser?.id && postData.author_id) {
@@ -324,6 +325,11 @@ export default function BoardPostDetailPage() {
             return <span>{post?.title ?? "게시글 없음"}</span>;
           })()}
         </h1>
+        {post && postHasSpoilerTitlePrefix(post) ? (
+          <p className="mt-2 rounded border border-red-300 bg-red-50 px-2 py-1 text-xs font-medium text-red-900">
+            말머리에 스포일러가 표시된 글입니다.
+          </p>
+        ) : null}
         <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-gray-600">
           <div className="flex items-center gap-1.5 min-w-0 text-sm text-gray-500 flex-wrap">
             <button

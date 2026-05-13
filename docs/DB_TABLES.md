@@ -31,6 +31,7 @@ Supabase Auth가 자동으로 관리하는 사용자 테이블입니다.
 - `allow_media` `boolean` NOT NULL
 - `is_nsfw` `boolean` NOT NULL
 - `sort_order` `integer` NOT NULL 기본값 `0` — 같은 `category` 안에서 채널 목록 정렬. 인덱스 `(category, sort_order)` (`docs/migrations/2026-05-13-board-display-order.sql`)
+- `tag_policy` `jsonb` NOT NULL 기본값 `{}` — 실험 A3 통합 태그용 게시판별 정책(허용 종류·최소 개수 등). MCP 마이그레이션 `experiment_a3_tag_system`, 파일 `docs/migrations/2026-05-13_experiment_a3_tag_system.sql`
 
 마이그레이션: `docs/migrations/2026-05-12-boards-category.sql` (category 등), `docs/migrations/2026-05-13-board-display-order.sql` (sort_order·`board_category_order`)
 
@@ -87,6 +88,54 @@ Supabase Auth가 자동으로 관리하는 사용자 테이블입니다.
 - `insert`: 인증 사용자만 가능, `auth.uid() = author_id` 조건
 - `update`: 작성자 본인만 가능
 - `delete`: 작성자 본인만 가능
+
+---
+
+## 3-1) 통합 태그 (실험 A3, `experiment_a3_tag_system`)
+
+말머리·주제 태그를 공통 모델로 묶는 실험 트랙이다. **게시판 글쓰기·목록에는 태그 UI를 두지 않고** 말머리로 분류한다. `post_tags` 등은 검색 별칭·캐릭터·CP·교차 검색 등 후속 기능에서 활용할 수 있다.
+
+### `public.tag_kind` (ENUM)
+
+`work`, `character`, `pair`, `spoiler`, `content_warning`, `genre`, `meta`
+
+### `public.tags`
+
+- `id` `uuid` PK
+- `slug` `text` UNIQUE NOT NULL
+- `kind` `tag_kind` NOT NULL
+- `parent_tag_id` `uuid` NULL → `tags(id)`
+- `display_name` `text` NOT NULL
+- `official` `boolean` NOT NULL DEFAULT false
+- `created_by` `uuid` NULL → `auth.users(id)`
+- `created_at` `timestamptz` NOT NULL DEFAULT now()
+
+RLS: 전역 조회; 일반 사용자는 비공식 태그만 본인 소유로 생성·수정·삭제; 공식 태그·전역 편집은 `public.jwt_is_admin()` (JWT `ADMIN` 역할).
+
+### `public.tag_aliases`
+
+- `id` `uuid` PK
+- `tag_id` `uuid` NOT NULL → `tags(id)` ON DELETE CASCADE
+- `alias` `text` NOT NULL
+- `lang` `text` NOT NULL (`ko`/`ja`/`en`/`romaji`), UNIQUE `(tag_id, alias, lang)`
+
+RLS: 전역 조회; 삽입·수정·삭제는 관리자 또는 해당 비공식 태그 소유자.
+
+### `public.post_tags`
+
+- `post_id` `uuid` NOT NULL → `posts(id)` ON DELETE CASCADE
+- `tag_id` `uuid` NOT NULL → `tags(id)` ON DELETE CASCADE
+- `weight` `real` NOT NULL DEFAULT 1
+- `created_at` `timestamptz` NOT NULL DEFAULT now()
+- PK `(post_id, tag_id)`
+
+RLS: 전역 조회; 글 작성자(`posts.author_id = auth.uid()`) 또는 관리자만 행 삽입·수정·삭제. **익명 글**은 클라이언트에서 태그를 붙이지 않음(작성자 ID 없음으로 RLS 불가).
+
+### `public.jwt_is_admin()`
+
+JWT 메타데이터 역할이 `ADMIN`인지 여부. 태그 RLS에서 사용.
+
+마이그레이션 파일: `docs/migrations/2026-05-13_experiment_a3_tag_system.sql` (동일 본문 `db/experiment/a3-tag-system.sql`).
 
 ---
 

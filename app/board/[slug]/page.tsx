@@ -53,7 +53,7 @@ export default function BoardPage() {
 
   const userId = authUser?.id ?? null;
 
-  const PREFIXES = ["전체", "잡담", "정보", "질문", "창작", "공지"];
+  const PREFIXES = ["전체", "잡담", "정보", "질문", "창작", "공지", "공략", "스포일러", "스포", "이벤트"];
 
   useEffect(() => {
     let cancelled = false;
@@ -149,7 +149,6 @@ export default function BoardPage() {
 
       setPostsLoading(true);
 
-      // 공지사항 가져오기 (항상 최신순 5개)
       const { data: noticeData } = await supabase
         .from("posts")
         .select("*, profiles(*)")
@@ -160,7 +159,7 @@ export default function BoardPage() {
         .limit(5);
 
       if (cancelled) return;
-      setNotices((noticeData as CommunityPost[] | null) ?? []);
+      const noticeList = (noticeData as CommunityPost[] | null) ?? [];
 
       // 일반 게시글 쿼리
       let query = supabase
@@ -215,6 +214,8 @@ export default function BoardPage() {
       if (cancelled) return;
       
       let finalPosts = (data as CommunityPost[] | null) ?? [];
+
+      setNotices(noticeList);
 
       // 차단 유저 필터링 (로그인한 경우)
       if (userId) {
@@ -450,34 +451,43 @@ export default function BoardPage() {
                     <span className="text-center">
                       <span className="bg-gray-800 px-1 py-0.5 text-[10px] font-bold text-white">공지</span>
                     </span>
-                    <div className="flex items-center gap-1.5 overflow-hidden">
-                      <span className="truncate font-bold text-gray-900">
-                        {titleText}
-                      </span>
-                      
-                      <div className="flex items-center gap-1 opacity-60">
-                        {hasImages && (
-                          <span title="이미지 포함" className="text-[10px] bg-green-100 text-green-700 px-1 rounded border border-green-200">
-                            IMG
-                          </span>
-                        )}
-                        {hasStickers && (
-                          <span title="스티커 포함" className="text-[10px] bg-purple-100 text-purple-700 px-1 rounded border border-purple-200">
-                            ST
-                          </span>
-                        )}
-                        {hasYoutube && (
-                          <span title="유튜브 포함" className="text-[10px] bg-red-100 text-red-700 px-1 rounded border border-red-200">
-                            YT
+                    <div className="flex min-w-0 flex-col overflow-hidden">
+                      <div className="flex items-center gap-1.5 overflow-hidden">
+                        <span className="truncate font-bold text-gray-900">{titleText}</span>
+
+                        <div className="flex items-center gap-1 opacity-60">
+                          {hasImages && (
+                            <span
+                              title="이미지 포함"
+                              className="rounded border border-green-200 bg-green-100 px-1 text-[10px] text-green-700"
+                            >
+                              IMG
+                            </span>
+                          )}
+                          {hasStickers && (
+                            <span
+                              title="스티커 포함"
+                              className="rounded border border-purple-200 bg-purple-100 px-1 text-[10px] text-purple-700"
+                            >
+                              ST
+                            </span>
+                          )}
+                          {hasYoutube && (
+                            <span
+                              title="유튜브 포함"
+                              className="rounded border border-red-200 bg-red-100 px-1 text-[10px] text-red-700"
+                            >
+                              YT
+                            </span>
+                          )}
+                        </div>
+
+                        {postAggregateDefaults(post).comment_count > 0 && (
+                          <span className="text-[11px] font-bold text-orange-600 tabular-nums">
+                            [{postAggregateDefaults(post).comment_count}]
                           </span>
                         )}
                       </div>
-
-                      {postAggregateDefaults(post).comment_count > 0 && (
-                        <span className="text-[11px] font-bold text-orange-600 tabular-nums">
-                          [{postAggregateDefaults(post).comment_count}]
-                        </span>
-                      )}
                     </div>
                     <div className="flex items-center overflow-hidden">
                       <button type="button" onClick={(event) => openUserAction(event, post.author_id)}>
@@ -518,65 +528,74 @@ export default function BoardPage() {
                     <span className="text-center text-[11px] text-gray-400 tabular-nums">
                       {post.id.slice(0, 4)}
                     </span>
-                    <div className="flex items-center gap-1.5 overflow-hidden">
-                      <div className="flex flex-shrink-0 items-center gap-1">
-                        {post.is_hot && (
-                          <span className="bg-red-600 px-1 py-0.5 text-[10px] font-bold text-white">
-                            HOT
-                          </span>
-                        )}
-                        {post.source_type === "FEED" && (
-                          <span className="bg-blue-500 px-1 py-0.5 text-[10px] font-bold text-white">
-                            FEED
-                          </span>
-                        )}
-                      </div>
-                      
-                      {/* 말머리 파싱 및 렌더링 */}
-                      {(() => {
-                        const titleMatch = post.title?.match(/^\[([^\]]+)\]\s*(.*)$/);
-                        if (titleMatch) {
-                          return (
-                            <>
-                              <span className="flex-shrink-0 text-[11px] font-bold text-gray-500">
-                                [{titleMatch[1]}]
-                              </span>
-                              <span className="truncate font-medium text-gray-800">
-                                {titleMatch[2]}
-                              </span>
-                            </>
-                          );
-                        }
-                        return (
-                          <span className="truncate font-medium text-gray-800">
-                            {post.source_type === "FEED" ? "피드에서 공유된 포스트" : post.title || "제목 없음"}
-                          </span>
-                        );
-                      })()}
-                      
-                      <div className="flex items-center gap-1 opacity-60">
-                        {hasImages && (
-                          <span title="이미지 포함" className="text-[10px] bg-green-100 text-green-700 px-1 rounded border border-green-200">
-                            IMG
-                          </span>
-                        )}
-                        {hasStickers && (
-                          <span title="스티커 포함" className="text-[10px] bg-purple-100 text-purple-700 px-1 rounded border border-purple-200">
-                            ST
-                          </span>
-                        )}
-                        {hasYoutube && (
-                          <span title="유튜브 포함" className="text-[10px] bg-red-100 text-red-700 px-1 rounded border border-red-200">
-                            YT
-                          </span>
-                        )}
-                      </div>
+                    <div className="flex min-w-0 flex-col overflow-hidden">
+                      <div className="flex items-center gap-1.5 overflow-hidden">
+                        <div className="flex flex-shrink-0 items-center gap-1">
+                          {post.is_hot && (
+                            <span className="bg-red-600 px-1 py-0.5 text-[10px] font-bold text-white">
+                              HOT
+                            </span>
+                          )}
+                          {post.source_type === "FEED" && (
+                            <span className="bg-blue-500 px-1 py-0.5 text-[10px] font-bold text-white">
+                              FEED
+                            </span>
+                          )}
+                        </div>
 
-                      {postAggregateDefaults(post).comment_count > 0 && (
-                        <span className="text-[11px] font-bold text-orange-600 tabular-nums">
-                          [{postAggregateDefaults(post).comment_count}]
-                        </span>
-                      )}
+                        {/* 말머리 파싱 및 렌더링 */}
+                        {(() => {
+                          const titleMatch = post.title?.match(/^\[([^\]]+)\]\s*(.*)$/);
+                          if (titleMatch) {
+                            return (
+                              <>
+                                <span className="flex-shrink-0 text-[11px] font-bold text-gray-500">
+                                  [{titleMatch[1]}]
+                                </span>
+                                <span className="truncate font-medium text-gray-800">{titleMatch[2]}</span>
+                              </>
+                            );
+                          }
+                          return (
+                            <span className="truncate font-medium text-gray-800">
+                              {post.source_type === "FEED" ? "피드에서 공유된 포스트" : post.title || "제목 없음"}
+                            </span>
+                          );
+                        })()}
+
+                        <div className="flex items-center gap-1 opacity-60">
+                          {hasImages && (
+                            <span
+                              title="이미지 포함"
+                              className="rounded border border-green-200 bg-green-100 px-1 text-[10px] text-green-700"
+                            >
+                              IMG
+                            </span>
+                          )}
+                          {hasStickers && (
+                            <span
+                              title="스티커 포함"
+                              className="rounded border border-purple-200 bg-purple-100 px-1 text-[10px] text-purple-700"
+                            >
+                              ST
+                            </span>
+                          )}
+                          {hasYoutube && (
+                            <span
+                              title="유튜브 포함"
+                              className="rounded border border-red-200 bg-red-100 px-1 text-[10px] text-red-700"
+                            >
+                              YT
+                            </span>
+                          )}
+                        </div>
+
+                        {postAggregateDefaults(post).comment_count > 0 && (
+                          <span className="text-[11px] font-bold text-orange-600 tabular-nums">
+                            [{postAggregateDefaults(post).comment_count}]
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center overflow-hidden">
                       <button type="button" onClick={(event) => openUserAction(event, post.author_id)}>
