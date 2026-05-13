@@ -26,6 +26,8 @@
 | Live2D, 캐릭터 리액션, 스티커 팩, 대표 캐릭터, 덕질 비서, 후순위 롤플레잉 | [character-community.md](./plans/character-community.md) | [LIVE2D_CHARACTER_GUIDE.md](./LIVE2D_CHARACTER_GUIDE.md), [ARCHITECTURE_OVERVIEW.md](./ARCHITECTURE_OVERVIEW.md) |
 | 오시(推し) 등록, 최애 작품/캐릭터 프로필 표시, 활동 배지 시스템 | [oshi-badges.md](./plans/oshi-badges.md) | [character-community.md](./plans/character-community.md), [data-model.md](./plans/data-model.md) |
 | 화면 완성도, 페이지별 완료 기준, UX 누락 점검 | [screen-acceptance.md](./plans/screen-acceptance.md) | 관련 도메인 문서 |
+| 오타쿠 정체성·커뮤니티 기능 보강을 위한 실험 트랙 (브랜치 단위 시도 → 채택/폐기) | [otaku-experiments.md](./plans/otaku-experiments.md) | [otaku-experiments-checklist.md](./plans/otaku-experiments-checklist.md), 관련 도메인 문서 |
+| 새로운 축(Pillar) 후보 12선 — 동료 공유·결정 전 자료 | [otaku-pillars.md](./plans/otaku-pillars.md) | [otaku-experiments.md](./plans/otaku-experiments.md) |
 
 ## 2. 프로젝트 개요
 
