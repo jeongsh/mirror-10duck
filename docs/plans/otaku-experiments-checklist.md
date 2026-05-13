@@ -10,6 +10,12 @@
 - `[채택]` main 머지 완료, 정식 문서로 내용 이전됨
 - `[폐기]` 시도 후 미머지, 폐기 사유 1~3줄 기록
 
+## 작업 순서 규칙
+
+- A(오타쿠 정체성) 항목을 먼저, B(커뮤니티 기능) 항목을 뒤로.
+- A 항목 진행 중 의존하는 B 항목이 있으면 그 자리에 끼워넣는다 (현재 시점에선 A5 → B5 한 건뿐).
+- 각 헤더 옆 `(P1/P2/P3)`는 우선순위 분류(P1=Phase 2 안, P2=Phase 3 초입, P3=Phase 3 후반~Phase 4).
+
 ## 각 항목 공통 서브태스크
 
 새 실험을 시작할 때 아래 흐름을 따라 체크박스를 채운다.
@@ -26,9 +32,29 @@
 
 ---
 
-## P1 — Phase 2 안에 시도할 실험
+## 1. A 항목 — 오타쿠 정체성 (먼저 진행)
 
-### A3. 통합 태그 시스템  `experiment/a3-tag-system`
+### A1. 쿠르(분기) 라인업  (P2)  `experiment/a1-cours-lineup`  (의존: A3)
+
+- [ ] 상태: `[ ]`
+- [ ] `release_items.cours` 컬럼
+- [ ] `season_lineup_votes` 테이블
+- [ ] `/season/[cours]` 화면
+- [ ] 분기 회고 자동 토픽 개설 배치
+- [ ] GNB "이번 분기" 진입
+- [ ] 채택 기준 측정: 14일 안 관심 등록 200건 또는 재방문률 ≥ 30%
+- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
+
+### A2. 오시 타입 확장  (P2)  `experiment/a2-oshi-types`  (의존: A3)
+
+- [ ] 상태: `[ ]`
+- [ ] `oshi_type` enum 확장 (`voice_actor`, `creator`, `pair`, `idol_group`)
+- [ ] `oshi_pair_members` 보조 테이블
+- [ ] 등록 폼 타입별 입력 분기
+- [ ] 채택 기준 측정: 확장 타입 등록 비중 ≥ 20%
+- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
+
+### A3. 통합 태그 시스템  (P1)  `experiment/a3-tag-system`
 
 - [ ] 상태: `[ ]`
 - [ ] `tags`, `tag_aliases`, `post_tags` 테이블 + RLS
@@ -39,7 +65,7 @@
 - [ ] 채택 기준 측정: 태그 부착률 ≥ 60%, 태그 클릭 전환 ≥ 8%
 - [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
 
-### A4. 스포일러 표시 (작성자 자율 태그/말머리)  `experiment/a4-spoiler-tag`
+### A4. 스포일러 표시 (작성자 자율 태그/말머리)  (P1)  `experiment/a4-spoiler-tag`  (의존: A3 또는 기존 말머리)
 
 > 단순 범위 결정: 작성자가 글쓰기 시 직접 태그/말머리로 표시하는 방식만. 회차 단위 자동 마스킹·인라인 블러·"n화까지 본 사람만"은 도입하지 않음.
 
@@ -53,7 +79,89 @@
 - [ ] 채택 기준 측정: 신작 토론 게시판 사용률 ≥ 50%, 미표기 신고 감소
 - [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
 
-### B1. 개념글 다층 (실/일/주/월/HOF)  `experiment/b1-hot-tiers`
+### B5. 시리즈/연재 묶기  (P2, A5 의존으로 선행)  `experiment/b5-series`
+
+> A5(2차 창작 갤러리)가 시리즈 단위 작품을 다루므로 A5보다 먼저 진행한다.
+
+- [ ] 상태: `[ ]`
+- [ ] `post_series`, `posts.series_id/series_episode`
+- [ ] `series_subscriptions`
+- [ ] 시리즈 페이지 + 회차 네비게이션
+- [ ] 다음화 알림
+- [ ] 채택 기준 측정: SS·창작 게시판 시리즈 비율 ≥ 40%, 다음화 클릭 ≥ 50%
+- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
+
+### A5. 2차 창작 게시판/갤러리 뷰  (P2)  `experiment/a5-fan-content`  (의존: A3, B5)
+
+- [ ] 상태: `[ ]`
+- [ ] `boards.layout`(`list|gallery|hybrid`)
+- [ ] `posts.creative_kind`
+- [ ] 갤러리 뷰 컴포넌트
+- [ ] 작품·캐릭터·CP 태그 필수 검증
+- [ ] AI 생성 표시 (`generation`)
+- [ ] 펌금/2차 사용 금지 표기 옵션
+- [ ] 채택 기준 측정: 갤러리 뷰 작성률 ≥ 1.5배, 작품 태그 부착률 ≥ 90%
+- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
+
+### A6. 동인 행사/굿즈 일정  (P3)  `experiment/a6-events-doujin`  (의존: A3)
+
+- [ ] 상태: `[ ]`
+- [ ] `release_events.event_type` 확장 (`event_doujin`, `event_expo`, `goods_release`, `preorder_open`)
+- [ ] 행사 보조 컬럼 (`venue`, `booth_count`, `applicant_url`)
+- [ ] 캘린더 필터 "행사/굿즈"
+- [ ] 행사별 후기 게시판 연결
+- [ ] 사용자 제보 승인 큐
+- [ ] 채택 기준 측정: 첫 행사 사이클 구독 ≥ 100, 후기 글 ≥ 30
+- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
+
+### A7. 작품명 동의어 매핑  (P2)  `experiment/a7-title-aliases`  (의존: A3)
+
+- [ ] 상태: `[ ]`
+- [ ] `tag_aliases` 시드 (상위 100개 작품)
+- [ ] `release_items.canonical_tag_id` 연결
+- [ ] 검색/태그/관심 등록 자동완성 별칭 연동
+- [ ] 사용자 별칭 제안 큐
+- [ ] 채택 기준 측정: 별칭 검색 적중률 ≥ 90%
+- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
+
+### A8. 호칭/레벨/평판  (P3)  `experiment/a8-reputation`
+
+- [ ] 상태: `[ ]`
+- [ ] `user_levels`, `titles`, `user_titles`
+- [ ] XP 가중 산정 (태그 정확·스포일러 정확·개념글·매니저)
+- [ ] 일일 XP 상한·신고 감점
+- [ ] 닉 옆 호칭 표시
+- [ ] 시즌 호칭(분기 갱신)
+- [ ] 자조적 호칭 옵션
+- [ ] 채택 기준 측정: 호칭 장착 ≥ 30%, 평판 가중 추천 도입 후 신고 처리 시간 단축
+- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
+
+### A9. 오타쿠 자기소개 카드  (P2)  `experiment/a9-intro-card`
+
+- [ ] 상태: `[ ]`
+- [ ] `user_intro_cards` 테이블
+- [ ] `/profile` "자기소개" 탭
+- [ ] 카드 캡처/공유 OG 라우트
+- [ ] Live2D "같이 만들래?" 진입
+- [ ] 채택 기준 측정: 30일 내 작성률 ≥ 25%, 공유 액션 ≥ 5%
+- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
+
+### A10. 스티커 차트/공식 큐레이션 팩  (P3)  `experiment/a10-sticker-chart`  (의존: A3)
+
+- [ ] 상태: `[ ]`
+- [ ] `sticker_assets.tag_ids`
+- [ ] `sticker_usage_daily` 집계
+- [ ] `sticker_packs`(`kind in ('official','user')`)
+- [ ] 피커 차트 탭(일/주/월)
+- [ ] 댓글 스티커 → 내 라이브러리 저장
+- [ ] 채택 기준 측정: 스티커 사용량 ≥ 1.5배, 공식 팩 다운로드 ≥ 1000
+- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
+
+---
+
+## 2. B 항목 — 커뮤니티 기능 (A 이후 진행)
+
+### B1. 개념글 다층 (실/일/주/월/HOF)  (P1)  `experiment/b1-hot-tiers`
 
 - [ ] 상태: `[ ]`
 - [ ] `posts.hot_tier` 컬럼 또는 `post_hot_snapshots` 집계 테이블
@@ -64,7 +172,18 @@
 - [ ] 채택 기준 측정: 비실시간 페이지 PV 비중 ≥ 15%, 등극 알림 클릭률 ≥ 30%
 - [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
 
-### B3. 어뷰징 방지 자동화  `experiment/b3-anti-abuse`
+### B2. 사용자 게시판 신청·매니저  (P3)  `experiment/b2-user-boards`
+
+- [ ] 상태: `[ ]`
+- [ ] `board_requests` 큐
+- [ ] `board_managers` 권한 매트릭스
+- [ ] 신청 폼 + 운영자 승인 큐
+- [ ] 매니저 전용 운영 도구
+- [ ] 활성도 미달 게시판 보관(`archived_at`)
+- [ ] 채택 기준 측정: 신청 게시판 보관율 ≤ 50%, 매니저 자발 액션 ≥ 1/주
+- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
+
+### B3. 어뷰징 방지 자동화  (P1)  `experiment/b3-anti-abuse`
 
 - [ ] 상태: `[ ]`
 - [ ] `account_trust` 산정 로직
@@ -77,7 +196,16 @@
 - [ ] 채택 기준 측정: false positive ≤ 5%, 신규 24h 도배 사고 ≥ 80% 감소
 - [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
 
-### B6. 인용 답글(쿠팅)  `experiment/b6-quote-reply`
+### B4. 검색 깊이/필터/저장 검색  (P2)  `experiment/b4-search-deep`  (의존: A3)
+
+- [ ] 상태: `[ ]`
+- [ ] 고급 필터 UI (게시판·작성자·기간·태그·추천 임계·스포일러 모드)
+- [ ] FTS + trigram + 별칭 인덱스
+- [ ] `saved_searches` + 알림 연동
+- [ ] 채택 기준 측정: 검색→글 전환 ≥ 12%, 저장 검색 사용 ≥ 5%
+- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
+
+### B6. 인용 답글(쿠팅)  (P1)  `experiment/b6-quote-reply`
 
 - [ ] 상태: `[ ]`
 - [ ] 본문/댓글 블록 `quote_post`, `quote_comment` 타입
@@ -88,140 +216,7 @@
 - [ ] 채택 기준 측정: 인용 댓글 ≥ 8%, 인용 클릭률 ≥ 20%
 - [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
 
----
-
-## P2 — Phase 3 초입 실험
-
-### A1. 쿠르(분기) 라인업  `experiment/a1-cours-lineup`
-
-- [ ] 상태: `[ ]`
-- [ ] `release_items.cours` 컬럼
-- [ ] `season_lineup_votes` 테이블
-- [ ] `/season/[cours]` 화면
-- [ ] 분기 회고 자동 토픽 개설 배치
-- [ ] GNB "이번 분기" 진입
-- [ ] 채택 기준 측정: 14일 안 관심 등록 200건 또는 재방문률 ≥ 30%
-- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
-
-### A2. 오시 타입 확장  `experiment/a2-oshi-types`
-
-- [ ] 상태: `[ ]`
-- [ ] `oshi_type` enum 확장 (`voice_actor`, `creator`, `pair`, `idol_group`)
-- [ ] `oshi_pair_members` 보조 테이블
-- [ ] 등록 폼 타입별 입력 분기
-- [ ] 채택 기준 측정: 확장 타입 등록 비중 ≥ 20%
-- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
-
-### A5. 2차 창작 게시판/갤러리 뷰  `experiment/a5-fan-content`  (의존: A3, B5)
-
-- [ ] 상태: `[ ]`
-- [ ] `boards.layout`(`list|gallery|hybrid`)
-- [ ] `posts.creative_kind`
-- [ ] 갤러리 뷰 컴포넌트
-- [ ] 작품·캐릭터·CP 태그 필수 검증
-- [ ] AI 생성 표시 (`generation`)
-- [ ] 펌금/2차 사용 금지 표기 옵션
-- [ ] 채택 기준 측정: 갤러리 뷰 작성률 ≥ 1.5배, 작품 태그 부착률 ≥ 90%
-- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
-
-### A7. 작품명 동의어 매핑  `experiment/a7-title-aliases`  (의존: A3)
-
-- [ ] 상태: `[ ]`
-- [ ] `tag_aliases` 시드 (상위 100개 작품)
-- [ ] `release_items.canonical_tag_id` 연결
-- [ ] 검색/태그/관심 등록 자동완성 별칭 연동
-- [ ] 사용자 별칭 제안 큐
-- [ ] 채택 기준 측정: 별칭 검색 적중률 ≥ 90%
-- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
-
-### A9. 오타쿠 자기소개 카드  `experiment/a9-intro-card`
-
-- [ ] 상태: `[ ]`
-- [ ] `user_intro_cards` 테이블
-- [ ] `/profile` "자기소개" 탭
-- [ ] 카드 캡처/공유 OG 라우트
-- [ ] Live2D "같이 만들래?" 진입
-- [ ] 채택 기준 측정: 30일 내 작성률 ≥ 25%, 공유 액션 ≥ 5%
-- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
-
-### B4. 검색 깊이/필터/저장 검색  `experiment/b4-search-deep`  (의존: A3)
-
-- [ ] 상태: `[ ]`
-- [ ] 고급 필터 UI (게시판·작성자·기간·태그·추천 임계·스포일러 모드)
-- [ ] FTS + trigram + 별칭 인덱스
-- [ ] `saved_searches` + 알림 연동
-- [ ] 채택 기준 측정: 검색→글 전환 ≥ 12%, 저장 검색 사용 ≥ 5%
-- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
-
-### B5. 시리즈/연재 묶기  `experiment/b5-series`
-
-- [ ] 상태: `[ ]`
-- [ ] `post_series`, `posts.series_id/series_episode`
-- [ ] `series_subscriptions`
-- [ ] 시리즈 페이지 + 회차 네비게이션
-- [ ] 다음화 알림
-- [ ] 채택 기준 측정: SS·창작 게시판 시리즈 비율 ≥ 40%, 다음화 클릭 ≥ 50%
-- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
-
-### B8. 스크랩 컬렉션/폴더  `experiment/b8-collections`
-
-- [ ] 상태: `[ ]`
-- [ ] `user_collections`, `collection_items`
-- [ ] 스크랩 시 컬렉션 선택/생성 UI
-- [ ] 프로필 공개 컬렉션 탭
-- [ ] 채택 기준 측정: 스크랩 사용자 중 컬렉션 사용 ≥ 30%
-- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
-
----
-
-## P3 — Phase 3 후반~Phase 4 실험
-
-### A6. 동인 행사/굿즈 일정  `experiment/a6-events-doujin`
-
-- [ ] 상태: `[ ]`
-- [ ] `release_events.event_type` 확장 (`event_doujin`, `event_expo`, `goods_release`, `preorder_open`)
-- [ ] 행사 보조 컬럼 (`venue`, `booth_count`, `applicant_url`)
-- [ ] 캘린더 필터 "행사/굿즈"
-- [ ] 행사별 후기 게시판 연결
-- [ ] 사용자 제보 승인 큐
-- [ ] 채택 기준 측정: 첫 행사 사이클 구독 ≥ 100, 후기 글 ≥ 30
-- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
-
-### A8. 호칭/레벨/평판  `experiment/a8-reputation`
-
-- [ ] 상태: `[ ]`
-- [ ] `user_levels`, `titles`, `user_titles`
-- [ ] XP 가중 산정 (태그 정확·스포일러 정확·개념글·매니저)
-- [ ] 일일 XP 상한·신고 감점
-- [ ] 닉 옆 호칭 표시
-- [ ] 시즌 호칭(분기 갱신)
-- [ ] 자조적 호칭 옵션
-- [ ] 채택 기준 측정: 호칭 장착 ≥ 30%, 평판 가중 추천 도입 후 신고 처리 시간 단축
-- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
-
-### A10. 스티커 차트/공식 큐레이션 팩  `experiment/a10-sticker-chart`  (의존: A3)
-
-- [ ] 상태: `[ ]`
-- [ ] `sticker_assets.tag_ids`
-- [ ] `sticker_usage_daily` 집계
-- [ ] `sticker_packs`(`kind in ('official','user')`)
-- [ ] 피커 차트 탭(일/주/월)
-- [ ] 댓글 스티커 → 내 라이브러리 저장
-- [ ] 채택 기준 측정: 스티커 사용량 ≥ 1.5배, 공식 팩 다운로드 ≥ 1000
-- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
-
-### B2. 사용자 게시판 신청·매니저  `experiment/b2-user-boards`
-
-- [ ] 상태: `[ ]`
-- [ ] `board_requests` 큐
-- [ ] `board_managers` 권한 매트릭스
-- [ ] 신청 폼 + 운영자 승인 큐
-- [ ] 매니저 전용 운영 도구
-- [ ] 활성도 미달 게시판 보관(`archived_at`)
-- [ ] 채택 기준 측정: 신청 게시판 보관율 ≤ 50%, 매니저 자발 액션 ≥ 1/주
-- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
-
-### B7. DM/쪽지 정책  `experiment/b7-dm-policy`  (산출물 = 정책 문서)
+### B7. DM/쪽지 정책  (P3)  `experiment/b7-dm-policy`  (산출물 = 정책 문서)
 
 - [ ] 상태: `[ ]`
 - [ ] 정책 초안 작성 (계정 신뢰도·미성년자 차단·미디어 제한·대화 보존)
@@ -230,7 +225,16 @@
 - [ ] 채택 기준: 정책 문서 리뷰 통과
 - [ ] 결정: 정책 채택 / 보류 (날짜:        / 사유:        )
 
-### B9. 알림 채널·다이제스트  `experiment/b9-digest`
+### B8. 스크랩 컬렉션/폴더  (P2)  `experiment/b8-collections`
+
+- [ ] 상태: `[ ]`
+- [ ] `user_collections`, `collection_items`
+- [ ] 스크랩 시 컬렉션 선택/생성 UI
+- [ ] 프로필 공개 컬렉션 탭
+- [ ] 채택 기준 측정: 스크랩 사용자 중 컬렉션 사용 ≥ 30%
+- [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
+
+### B9. 알림 채널·다이제스트  (P3)  `experiment/b9-digest`
 
 - [ ] 상태: `[ ]`
 - [ ] `notification_preferences` (채널·이벤트·다이제스트)
@@ -240,7 +244,7 @@
 - [ ] 채택 기준 측정: 알림 전체 끄기 비율 감소, 다이제스트 클릭률 동등 이상
 - [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
 
-### B10. SEO/OG 미리보기  `experiment/b10-og`
+### B10. SEO/OG 미리보기  (P3)  `experiment/b10-og`
 
 - [ ] 상태: `[ ]`
 - [ ] `/api/og` 동적 라우트
@@ -249,7 +253,7 @@
 - [ ] 채택 기준 측정: 외부 공유 유입 ≥ 1.3배
 - [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
 
-### B11. 운영 인사이트 대시보드  `experiment/b11-ops-insight`  (의존 권장: B2)
+### B11. 운영 인사이트 대시보드  (P3)  `experiment/b11-ops-insight`  (의존 권장: B2)
 
 - [ ] 상태: `[ ]`
 - [ ] 집계 뷰 (`daily_board_stats`, `daily_signup_stats`, `daily_report_stats`)
@@ -258,7 +262,7 @@
 - [ ] 채택 기준 측정: 운영자 주 1회 이상 사용
 - [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
 
-### B12. 다크 모드/접근성/NSFW 안전 모드  `experiment/b12-a11y`
+### B12. 다크 모드/접근성/NSFW 안전 모드  (P3)  `experiment/b12-a11y`
 
 - [ ] 상태: `[ ]`
 - [ ] `user_preferences` (테마·폰트·NSFW·키워드 mute)
