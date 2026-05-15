@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import Script from "next/script";
 import { usePathname } from "next/navigation";
 import { getTrackingPreference, getPreferredCharacterId } from "@/lib/supabase/characterPreferences";
+import { getLive2DEnabledPreference } from "@/lib/supabase/characterPreferences";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { supabase } from "@/lib/supabase/client";
 import { useCharacterLibraryStore } from "@/store/useCharacterLibraryStore";
@@ -16,9 +17,6 @@ import {
   resolvePreferredProfile,
 } from "@/lib/live2d/profileSync";
 
-const LIVE2D_ENABLED =
-  process.env.NODE_ENV === "production" || process.env.NEXT_PUBLIC_ENABLE_LIVE2D === "1";
-
 const Live2DWrapper = dynamic(() => import("./Live2DWrapper"), {
   ssr: false,
   loading: () => (
@@ -29,10 +27,6 @@ const Live2DWrapper = dynamic(() => import("./Live2DWrapper"), {
 });
 
 export default function Live2DClientOnly() {
-  if (!LIVE2D_ENABLED) {
-    return null;
-  }
-
   return <Live2DClientOnlyEnabled />;
 }
 
@@ -46,6 +40,8 @@ function Live2DClientOnlyEnabled() {
   const setActive = useCharacterLibraryStore((s) => s.setActive);
   const setProfile = useCharacterStore((s) => s.setProfile);
   const setTracking = useCharacterStore((s) => s.setTracking);
+  const setLive2DEnabled = useCharacterStore((s) => s.setLive2DEnabled);
+  const isLive2DEnabled = useCharacterStore((s) => s.isLive2DEnabled);
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.Live2DCubismCore) {
@@ -63,6 +59,7 @@ function Live2DClientOnlyEnabled() {
       setActive(null);
       setProfile(null);
       setTracking(true);
+      setLive2DEnabled(getLive2DEnabledPreference(null, true));
       setIsInitializing(false);
       return;
     }
@@ -81,6 +78,7 @@ function Live2DClientOnlyEnabled() {
       // freshUser의 최신 metadata 사용
       const preferredId = getPreferredCharacterId(freshUser?.user_metadata);
       const preferredProfile = resolvePreferredProfile(allProfiles, preferredId);
+      setLive2DEnabled(getLive2DEnabledPreference(freshUser?.user_metadata, true));
       if (!preferredProfile) {
         setIsInitializing(false);
         return;
@@ -108,7 +106,7 @@ function Live2DClientOnlyEnabled() {
     return () => {
       cancelled = true;
     };
-  }, [authUser, setActive, setProfile, setProfiles, setTracking]);
+  }, [authUser, setActive, setLive2DEnabled, setProfile, setProfiles, setTracking]);
 
   const isCharacterManagePage = pathname.startsWith("/library/");
 
@@ -120,7 +118,9 @@ function Live2DClientOnlyEnabled() {
         onLoad={() => setCoreReady(true)}
         onReady={() => setCoreReady(true)}
       />
-      {authUser && !isCharacterManagePage && coreReady ? <Live2DWrapper /> : null}
+      {authUser && !isCharacterManagePage && coreReady && isLive2DEnabled ? (
+        <Live2DWrapper />
+      ) : null}
     </>
   );
 }

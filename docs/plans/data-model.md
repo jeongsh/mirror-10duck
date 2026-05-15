@@ -38,9 +38,8 @@
 - [ ] `sticker_assets`: sticker_id, label, storage_key, width, height, source_type, created_at
 - [ ] `board_moderators`: board_id, user_id, role, created_at
 - [ ] `board_tabs`: board_id, key, label, sort_order
-- [ ] `external_sources`: source_type, name, url, reliability, enabled, created_at
-- [ ] `news_items`: source_id, category, title, summary, thumbnail_url, original_url, published_at, collected_at, status
-- [ ] `content_items`: external_source_id, external_id, content_type, title, image_url, official_url, tags, status, last_checked_at
+- [ ] `news_items`: category, title, slug, summary, body_json, thumbnail_url, hero_image_url, tags, author_id, editor_note, published_at, updated_at, status
+- [ ] `content_items`: content_type, title, image_url, official_url, tags, status, last_checked_at
 - [ ] `release_events`: content_item_id, event_type, starts_at, timezone, recurrence_rule, platform, episode_label, source_url, status
 - [ ] `user_content_follows`: user_id, content_item_id, notify_enabled, created_at
 - [ ] `user_calendar_events`: user_id, title, event_type, starts_at, timezone, note, linked_content_item_id

@@ -21,7 +21,10 @@ import {
   mergeProfiles,
   resolvePreferredProfile,
 } from "@/lib/live2d/profileSync";
-import { getPreferredCharacterId } from "@/lib/supabase/characterPreferences";
+import {
+  getPreferredCharacterId,
+  saveLive2DEnabledPreference,
+} from "@/lib/supabase/characterPreferences";
 import { supabase } from "@/lib/supabase/client";
 
 type Tab = "basic" | "library" | "upload";
@@ -147,8 +150,11 @@ function BasicPanel() {
   const emotion = useCharacterStore((s) => s.emotion);
   const profile = useCharacterStore((s) => s.profile);
   const isTracking = useCharacterStore((s) => s.isTracking);
+  const isLive2DEnabled = useCharacterStore((s) => s.isLive2DEnabled);
   const setEmotion = useCharacterStore((s) => s.setEmotion);
   const setTracking = useCharacterStore((s) => s.setTracking);
+  const setLive2DEnabled = useCharacterStore((s) => s.setLive2DEnabled);
+  const [live2dSaving, setLive2dSaving] = useState(false);
   const supportedEmotions = getCharacterSupportedEmotions(profile, { includeOptional: true });
 
   const notify = (
@@ -224,6 +230,22 @@ function BasicPanel() {
     }
   };
 
+  const toggleLive2D = async () => {
+    const nextValue = !isLive2DEnabled;
+    setLive2DEnabled(nextValue);
+    setLive2dSaving(true);
+
+    try {
+      await saveLive2DEnabledPreference(nextValue);
+    } catch (error) {
+      setLive2DEnabled(!nextValue);
+      const message = error instanceof Error ? error.message : "알 수 없는 오류";
+      notify(`Live2D 설정 저장 실패: ${message}`, "sad");
+    } finally {
+      setLive2dSaving(false);
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       <div className="border border-dashed border-gray-500 bg-white/40 p-3">
@@ -265,6 +287,19 @@ function BasicPanel() {
             }
           >
             [Tracking: {isTracking ? "ON" : "OFF"}]
+          </button>
+          <button
+            type="button"
+            onClick={() => void toggleLive2D()}
+            disabled={live2dSaving}
+            className={
+              "border border-dashed px-3 py-1 text-xs tracking-widest uppercase disabled:opacity-50 " +
+              (isLive2DEnabled
+                ? "border-pink-600 bg-pink-100/70 text-pink-800"
+                : "border-gray-500 bg-gray-200/70 text-gray-600")
+            }
+          >
+            [Live2D: {live2dSaving ? "..." : isLive2DEnabled ? "ON" : "OFF"}]
           </button>
           <button
             type="button"

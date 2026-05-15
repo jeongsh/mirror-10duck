@@ -2,7 +2,7 @@
 
 이 문서는 "오타쿠적 결"과 "커뮤니티 기능"을 강화하기 위해 검토 중인 기능들의 통합 허브다. 각 항목은 **별도 브랜치로 시도하고 쓸 만하면 머지**하는 실험 트랙으로 운영한다. 정식 도메인 문서(`docs/plans/community.md` 등)에 편입되기 전 단계의 후보군이다.
 
-세부 진행 상태는 [otaku-experiments-checklist.md](./otaku-experiments-checklist.md)에 둔다.
+세부 진행 상태는 별도 체크리스트 파일로 분리하지 않고, 실제 진행이 시작된 항목만 [checklist.md](./checklist.md)와 관련 도메인 문서에 반영한다.
 
 ## 0. 운영 원칙
 
@@ -352,7 +352,7 @@
 
 ## 6. 실험 사이클 권장 흐름
 
-1. 항목 한 개를 고르고 `otaku-experiments-checklist.md`에서 `[ ]` → `[브랜치]`로 표시한다.
+1. 항목 한 개를 고르고 브랜치를 만든 뒤, `docs/plans/checklist.md`와 관련 도메인 문서에 착수 사실을 남긴다.
 2. `experiment/<id>-<slug>` 브랜치를 판다.
 3. 마이그레이션은 `db/experiment/<id>-*.sql`에 둔다.
 4. 가능하면 기능 플래그(`feature_flags`) 뒤로 숨긴다.

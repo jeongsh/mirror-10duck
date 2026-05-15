@@ -17,6 +17,7 @@
 | 작업 영역 | 먼저 읽을 문서 | 함께 보면 좋은 문서 |
 |-----------|----------------|---------------------|
 | 전체 진행 현황, 완료/미완료 체크 | [checklist.md](./plans/checklist.md) | 관련 도메인 문서 |
+| 외부 공유용 제품 설명, 전체 기능/상태 요약 | [planner-brief.md](./planner-brief.md) | [planner-recruitment-screen-board.md](./planner-recruitment-screen-board.md), 관련 도메인 문서 |
 | 게시판, 글 목록, 글 상세, 댓글, 대댓글, 추천, 개념글, 피드, 검색 | [community.md](./plans/community.md) | [data-model.md](./plans/data-model.md), [screen-acceptance.md](./plans/screen-acceptance.md) |
 | 글쓰기, 본문 에디터, 이미지/영상 업로드, 스티커 삽입 | [editor-media-stickers.md](./plans/editor-media-stickers.md) | [data-model.md](./plans/data-model.md), [character-community.md](./plans/character-community.md) |
 | DB 마이그레이션, Supabase 테이블, RLS, 집계 컬럼 | [data-model.md](./plans/data-model.md) | [DB_TABLES.md](./DB_TABLES.md), [SUPABASE_SETUP.md](./SUPABASE_SETUP.md), Cursor **Supabase MCP** (`apply_migration` / `execute_sql`, 인증 `mcp_auth`) |
@@ -26,15 +27,14 @@
 | Live2D, 캐릭터 리액션, 스티커 팩, 대표 캐릭터, 덕질 비서, 후순위 롤플레잉 | [character-community.md](./plans/character-community.md) | [LIVE2D_CHARACTER_GUIDE.md](./LIVE2D_CHARACTER_GUIDE.md), [ARCHITECTURE_OVERVIEW.md](./ARCHITECTURE_OVERVIEW.md) |
 | 오시(推し) 등록, 최애 작품/캐릭터 프로필 표시, 활동 배지 시스템 | [oshi-badges.md](./plans/oshi-badges.md) | [character-community.md](./plans/character-community.md), [data-model.md](./plans/data-model.md) |
 | 화면 완성도, 페이지별 완료 기준, UX 누락 점검 | [screen-acceptance.md](./plans/screen-acceptance.md) | 관련 도메인 문서 |
-| 오타쿠 정체성·커뮤니티 기능 보강을 위한 실험 트랙 (브랜치 단위 시도 → 채택/폐기) | [otaku-experiments.md](./plans/otaku-experiments.md) | [otaku-experiments-checklist.md](./plans/otaku-experiments-checklist.md), 관련 도메인 문서 |
-| 새로운 축(Pillar) 후보 12선 — 동료 공유·결정 전 자료 | [otaku-pillars.md](./plans/otaku-pillars.md) | [otaku-experiments.md](./plans/otaku-experiments.md) |
+| 후순위 실험/확장 후보 백로그 (채택 전 아이디어 포함) | [otaku-experiments.md](./plans/otaku-experiments.md) | [checklist.md](./plans/checklist.md), 관련 도메인 문서 |
 
 ## 2. 프로젝트 개요
 
 - **프로젝트 명:** 씹덕 (가칭)
 - **제품 정체성:** 서브컬처(애니·만화·게임 등)를 즐기는 사람들이 모이는 덕질 커뮤니티 허브. 게시판, 피드, 프로필, 뉴스, 신작 알림, 덕질 캘린더, Live2D 연출을 한 제품 안에서 다룬다.
 - **핵심 가치:** 익숙한 커뮤니티 루프(글·댓글·추천·알림)를 탄탄히 하고, 뉴스·신작 일정·검색·피드·운영 도구로 매일 들어올 이유와 신뢰를 쌓는다.
-- **뉴스/신작의 역할:** 작품 DB를 직접 깊게 운영하지 않는다. 애니·만화·게임 뉴스는 출처 링크와 요약으로 커뮤니티 토론을 유도하고, 신작은 관심 등록과 알림 중심의 얇은 일정 카드로 관리한다.
+- **뉴스/신작의 역할:** 작품 DB를 직접 깊게 운영하지 않는다. 애니·만화·게임 뉴스는 운영자가 직접 작성·편집하는 자체 뉴스 서비스로 운영하고, 신작은 관심 등록과 알림 중심의 얇은 일정 카드로 관리한다.
 - **Live2D의 역할:** 제품의 중심 기능이 아니라 커뮤니티 감정 표현, 알림·리액션 연출, 짧은 안내형 덕질 비서에 쓰는 차별화 요소로 둔다. 일반 사용자에게 캐릭터 제작 부담을 전가하지 않고, 자유 챗봇보다 목적형 상호작용을 우선한다.
 - **최종 목표:** 활발한 게시·토론·팔로우 관계와 알림·운영 품질을 기반으로 장기 체류와 수익화를 구축한다.
 - **플랫폼 전략:** 웹 Next.js 버전에서 커뮤니티 핵심 기능을 먼저 안정화하고, 알림·검색·모바일 확장을 순차적으로 검증한다.
@@ -80,7 +80,7 @@
 6. 에디터 이미지 업로드에 NSFW/아청법 위험 대응 검수 파이프라인을 붙인다.
 7. 알림 테이블과 GNB 알림 카운트를 붙인 뒤 Live2D 말풍선과 연결한다.
 8. `/calendar`를 커뮤니티 일정 더미에서 신작/방영/연재/출시 일정과 관심작 알림 설정 화면으로 재설계한다.
-9. 뉴스와 신작은 작품 DB가 아니라 출처 기반 뉴스 카드, 얇은 일정 카드, 관심 등록, 알림 중심으로 설계한다.
+9. 뉴스와 신작은 작품 DB가 아니라 자체 뉴스 기사, 얇은 일정 카드, 관심 등록, 알림 중심으로 설계한다.
 
 ## 7. 일일 마감 로그
 

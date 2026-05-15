@@ -23,6 +23,7 @@ export interface CharacterState {
   isLoading: boolean;
   isReady: boolean;
   isTracking: boolean;
+  isLive2DEnabled: boolean;
   modelPath: string | null;
   emotion: CharacterEmotion;
   scenarioRequest: { key: CharacterScenarioKey; nonce: number } | null;
@@ -41,6 +42,7 @@ export interface CharacterState {
   setLoading: (loading: boolean) => void;
   setReady: (ready: boolean) => void;
   setTracking: (tracking: boolean) => void;
+  setLive2DEnabled: (isLive2DEnabled: boolean) => void;
   setModelPath: (path: string | null) => void;
   setEmotion: (emotion: CharacterEmotion) => void;
   triggerScenario: (key: CharacterScenarioKey) => void;
@@ -63,6 +65,7 @@ const INITIAL_STATE: Omit<
   | "setLoading"
   | "setReady"
   | "setTracking"
+  | "setLive2DEnabled"
   | "setModelPath"
   | "setEmotion"
   | "triggerScenario"
@@ -80,6 +83,7 @@ const INITIAL_STATE: Omit<
   isLoading: false,
   isReady: false,
   isTracking: true,
+  isLive2DEnabled: true,
   modelPath: null,
   emotion: "idle",
   scenarioRequest: null,
@@ -130,6 +134,7 @@ export const useCharacterStore = create<CharacterState>((set) => ({
   setLoading: (loading) => set({ isLoading: loading }),
   setReady: (ready) => set({ isReady: ready }),
   setTracking: (tracking) => set({ isTracking: tracking }),
+  setLive2DEnabled: (isLive2DEnabled: boolean) => set({ isLive2DEnabled }),
   setModelPath: (path) => set({ modelPath: path }),
   setEmotion: (emotion) =>
     set((state) => ({

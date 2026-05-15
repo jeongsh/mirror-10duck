@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase/client";
 type GenericMetadata = Record<string, unknown>;
 
 const PREFERRED_CHARACTER_ID_STORAGE_KEY = "10duck:preferred-character-id";
+const LIVE2D_ENABLED_STORAGE_KEY = "10duck:live2d-enabled";
 
 function toMetadata(value: unknown): GenericMetadata {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -25,6 +26,11 @@ function savePreferredCharacterIdLocally(characterId: string | null): void {
   } else {
     window.localStorage.removeItem(PREFERRED_CHARACTER_ID_STORAGE_KEY);
   }
+}
+
+function saveLive2DEnabledLocally(enabled: boolean): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LIVE2D_ENABLED_STORAGE_KEY, enabled ? "1" : "0");
 }
 
 export function getPreferredCharacterId(userMetadata: unknown): string | undefined {
@@ -68,6 +74,36 @@ export async function savePreferredCharacter(characterId: string | null): Promis
       data: {
         ...metadata,
         activeCharacterId: characterId,
+      },
+    });
+    if (error) throw error;
+  });
+}
+
+export function getLive2DEnabledPreference(userMetadata: unknown, fallback = true): boolean {
+  const metadata = toMetadata(userMetadata);
+  if (typeof metadata.live2dEnabled === "boolean") {
+    return metadata.live2dEnabled;
+  }
+
+  if (typeof window === "undefined") return fallback;
+  const stored = window.localStorage.getItem(LIVE2D_ENABLED_STORAGE_KEY);
+  if (stored === "1") return true;
+  if (stored === "0") return false;
+  return fallback;
+}
+
+export async function saveLive2DEnabledPreference(enabled: boolean): Promise<void> {
+  saveLive2DEnabledLocally(enabled);
+  await runQueuedAuthMutation(async () => {
+    const { data, error: userError } = await supabase.auth.getUser();
+    if (userError) throw userError;
+    if (!data.user) return;
+    const metadata = toMetadata(data.user.user_metadata);
+    const { error } = await supabase.auth.updateUser({
+      data: {
+        ...metadata,
+        live2dEnabled: enabled,
       },
     });
     if (error) throw error;

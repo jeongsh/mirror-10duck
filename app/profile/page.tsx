@@ -31,6 +31,7 @@ import {
   formatOshiPrimaryTitle,
   formatOshiSubtitle,
 } from "@/lib/supabase/oshi";
+import { saveLive2DEnabledPreference } from "@/lib/supabase/characterPreferences";
 import { getAllBadges, getUserBadges, checkAndGrantOshiBadges } from "@/lib/supabase/badges";
 import AuthorProfileCard from "@/components/community/AuthorProfileCard";
 import { CARD_THEMES, THEME_ORDER } from "@/lib/cardThemes";
@@ -104,6 +105,7 @@ export default function ProfilePage() {
   const [oshiImageUploading, setOshiImageUploading] = useState(false);
   const [cardImageUploading, setCardImageUploading] = useState(false);
   const [cardAvatarUploading, setCardAvatarUploading] = useState(false);
+  const [live2dSaving, setLive2dSaving] = useState(false);
   
   const [activeTab, setActiveTab] = useState<TabId>("profile");
   
@@ -183,6 +185,8 @@ export default function ProfilePage() {
   const setActiveCharacterId = useCharacterLibraryStore((s) => s.setActive);
   const unregister = useCharacterLibraryStore((s) => s.unregister);
   const setProfile = useCharacterStore((s) => s.setProfile);
+  const isLive2DEnabled = useCharacterStore((s) => s.isLive2DEnabled);
+  const setLive2DEnabled = useCharacterStore((s) => s.setLive2DEnabled);
 
   const handlePreviewModelChange = useCallback((modelUrl: string | null) => {
     setPreviewModelUrl(modelUrl);
@@ -191,6 +195,22 @@ export default function ProfilePage() {
       setSavedView(INITIAL_UPLOAD_VIEW);
     }
   }, []);
+
+  const toggleLive2D = useCallback(async () => {
+    const nextValue = !isLive2DEnabled;
+    setLive2DEnabled(nextValue);
+    setLive2dSaving(true);
+
+    try {
+      await saveLive2DEnabledPreference(nextValue);
+    } catch (error) {
+      setLive2DEnabled(!nextValue);
+      const message = error instanceof Error ? error.message : "알 수 없는 오류";
+      setMessage(`Live2D 설정 저장 실패: ${message}`);
+    } finally {
+      setLive2dSaving(false);
+    }
+  }, [isLive2DEnabled, setLive2DEnabled]);
 
   useEffect(() => {
     if (!user) return;
@@ -1483,13 +1503,28 @@ export default function ProfilePage() {
                   ZIP 패키지를 모달에서 등록하고 Live2D 미리보기로 위치를 맞춥니다.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowCharacterUploadModal(true)}
-                className="shrink-0 border border-dashed border-gray-800 bg-white px-4 py-2 text-xs font-bold tracking-widest text-gray-800 transition-colors hover:bg-gray-800 hover:text-white"
-              >
-                [캐릭터 업로드]
-              </button>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <button
+                  type="button"
+                  onClick={() => void toggleLive2D()}
+                  disabled={live2dSaving}
+                  className={
+                    "shrink-0 border border-dashed px-4 py-2 text-xs font-bold tracking-widest transition-colors disabled:opacity-50 " +
+                    (isLive2DEnabled
+                      ? "border-pink-600 bg-pink-100 text-pink-800 hover:bg-pink-200"
+                      : "border-gray-500 bg-gray-200 text-gray-700 hover:bg-gray-300")
+                  }
+                >
+                  [Live2D: {live2dSaving ? "..." : isLive2DEnabled ? "ON" : "OFF"}]
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCharacterUploadModal(true)}
+                  className="shrink-0 border border-dashed border-gray-800 bg-white px-4 py-2 text-xs font-bold tracking-widest text-gray-800 transition-colors hover:bg-gray-800 hover:text-white"
+                >
+                  [캐릭터 업로드]
+                </button>
+              </div>
             </div>
 
             {profiles.length === 0 ? (
