@@ -8,12 +8,12 @@ import { getUnreadNotificationCount } from "@/lib/community/notifications";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 
 const NAV_ITEMS = [
-  { href: "/", label: "홈" },
-  { href: "/board", label: "채널" },
-  { href: "/feed", label: "피드" },
-  { href: "/news", label: "소식" },
-  { href: "/releases", label: "신작/일정" },
-  { href: "/calendar", label: "캘린더" },
+  { href: "/", label: "홈", matchPrefix: null },
+  { href: "/board", label: "채널", matchPrefix: null },
+  { href: "/feed", label: "피드", matchPrefix: null },
+  { href: "/news", label: "소식", matchPrefix: null },
+  { href: "/season/current", label: "이번 분기 신작", matchPrefix: "/season" },
+  { href: "/calendar", label: "캘린더", matchPrefix: null },
 ];
 
 export default function GlobalNavigation() {
@@ -109,7 +109,9 @@ export default function GlobalNavigation() {
           {NAV_ITEMS.map((item) => {
             const isActive =
               pathname === item.href ||
-              (item.href !== "/" && pathname.startsWith(item.href));
+              (item.matchPrefix
+                ? pathname.startsWith(item.matchPrefix)
+                : item.href !== "/" && pathname.startsWith(item.href));
 
             return (
               <Link

@@ -94,7 +94,7 @@ export default function CalendarPage() {
       const { data: releaseItems, error: releaseItemsError } = await supabase
         .from("release_items")
         .select("id, category, title, release_date")
-        .neq("status", "HIDDEN")
+        .eq("status", "PUBLISHED")
         .not("release_date", "is", null);
 
       if (error) {

@@ -59,6 +59,12 @@ export default function ReleaseDetailPage() {
         setItem(fallback ?? null);
         setFollowed(fallback ? persistedFollowedIds.has(fallback.id) || fallback.isFollowing : false);
       } else if (data) {
+        if (data.status !== "PUBLISHED") {
+          setItem(null);
+          setFollowed(false);
+          setLoading(false);
+          return;
+        }
         const mapped = mapReleaseRow(data as ReleaseRow);
         setItem(mapped);
         setFollowed(persistedFollowedIds.has(mapped.id));

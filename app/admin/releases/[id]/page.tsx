@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Loader2, Trash2 } from "lucide-react";
 import {
   ReleaseForm,
   type ReleaseFormState,
@@ -29,6 +30,7 @@ type ReleaseEditRow = {
   genres: string[] | null;
   studios: string[] | null;
   season: string | null;
+  cours: string | null;
   episode_count: number | null;
   details_json: unknown | null;
   release_date: string | null;
@@ -40,6 +42,7 @@ export default function AdminReleaseEditPage({ params }: { params: Promise<{ id:
   const [form, setForm] = useState<ReleaseFormState>(emptyReleaseForm);
   const [title, setTitle] = useState("");
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const fetchRelease = async () => {
@@ -47,7 +50,7 @@ export default function AdminReleaseEditPage({ params }: { params: Promise<{ id:
       const { data, error } = await supabase
         .from("release_items")
         .select(
-          "id, category, status, title, original_title, synopsis, poster_url, banner_url, genres, studios, season, episode_count, details_json, release_date",
+          "id, category, status, title, original_title, synopsis, poster_url, banner_url, genres, studios, season, cours, episode_count, details_json, release_date",
         )
         .eq("id", id)
         .single();
@@ -72,6 +75,7 @@ export default function AdminReleaseEditPage({ params }: { params: Promise<{ id:
         genres: arrayToCsv(item.genres),
         studios: arrayToCsv(item.studios),
         season: item.season ?? "",
+        cours: item.cours ?? "",
         episodeCount: item.episode_count?.toString() ?? "",
         details: formatDetailsForTextarea(item.details_json),
         releaseDate: item.release_date ?? "",
@@ -88,6 +92,10 @@ export default function AdminReleaseEditPage({ params }: { params: Promise<{ id:
       alert("제목과 시놉시스는 필수입니다.");
       return;
     }
+    if (!form.cours) {
+      alert("분기를 선택해 주세요.");
+      return;
+    }
 
     const { error } = await supabase
       .from("release_items")
@@ -102,6 +110,7 @@ export default function AdminReleaseEditPage({ params }: { params: Promise<{ id:
         genres: csvToArray(form.genres),
         studios: csvToArray(form.studios),
         season: emptyToNull(form.season),
+        cours: form.cours,
         episode_count: numberOrNull(form.episodeCount),
         details_json: parseDetails(form.details),
         release_date: emptyToNull(form.releaseDate),
@@ -118,6 +127,27 @@ export default function AdminReleaseEditPage({ params }: { params: Promise<{ id:
   };
 
   if (loading) return <div className="p-6 text-sm text-gray-500">로딩 중...</div>;
+
+  const handleDelete = async () => {
+    if (!confirm(`'${title || form.title}' 작품을 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) {
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      const { error } = await supabase.from("release_items").delete().eq("id", id);
+      if (error) {
+        throw error;
+      }
+      alert("삭제되었습니다.");
+      router.push("/admin/releases");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "알 수 없는 오류";
+      alert(`삭제 실패: ${message}`);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
@@ -146,6 +176,17 @@ export default function AdminReleaseEditPage({ params }: { params: Promise<{ id:
         onSubmit={handleSubmit}
         onCancel={() => router.push("/admin/releases")}
       />
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => void handleDelete()}
+          disabled={deleting}
+          className="inline-flex items-center gap-1 rounded border border-red-300 bg-white px-3 py-2 text-sm text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {deleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+          삭제
+        </button>
+      </div>
     </div>
   );
 }

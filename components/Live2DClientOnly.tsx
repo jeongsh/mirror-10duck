@@ -16,6 +16,9 @@ import {
   resolvePreferredProfile,
 } from "@/lib/live2d/profileSync";
 
+const LIVE2D_ENABLED =
+  process.env.NODE_ENV === "production" || process.env.NEXT_PUBLIC_ENABLE_LIVE2D === "1";
+
 const Live2DWrapper = dynamic(() => import("./Live2DWrapper"), {
   ssr: false,
   loading: () => (
@@ -26,6 +29,14 @@ const Live2DWrapper = dynamic(() => import("./Live2DWrapper"), {
 });
 
 export default function Live2DClientOnly() {
+  if (!LIVE2D_ENABLED) {
+    return null;
+  }
+
+  return <Live2DClientOnlyEnabled />;
+}
+
+function Live2DClientOnlyEnabled() {
   const pathname = usePathname();
   const authUser = useAuthUser();
   const [coreReady, setCoreReady] = useState(false);

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRef, useState } from "react";
 import { ImageIcon, Loader2, Search, Upload, X } from "lucide-react";
@@ -19,6 +19,7 @@ export type ReleaseFormState = {
   genres: string;
   studios: string;
   season: string;
+  cours: string;
   episodeCount: string;
   details: string;
   releaseDate: string;
@@ -35,6 +36,7 @@ export const emptyReleaseForm: ReleaseFormState = {
   genres: "",
   studios: "",
   season: "",
+  cours: "",
   episodeCount: "",
   details: "",
   releaseDate: "",
