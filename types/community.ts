@@ -278,7 +278,27 @@ export type Comment = {
 // 오시(推し) 등록 & 배지
 // =============================================
 
-export type OshiType = "anime" | "manga" | "game" | "character" | "other";
+export type OshiType =
+  | "anime"
+  | "manga"
+  | "game"
+  | "character"
+  | "other"
+  | "voice_actor"
+  | "creator"
+  | "pair"
+  | "idol_group";
+
+/** CP 방향성 (A=member_index 1, B=member_index 2) */
+export type OshiPairDirection = "a_to_b" | "b_to_a" | "reversible" | "unknown";
+
+export type OshiPairMember = {
+  id: string;
+  oshi_id: string;
+  member_index: 1 | 2;
+  character_title: string;
+  direction: OshiPairDirection | null;
+};
 
 export type OshiRegistration = {
   id: string;
@@ -289,8 +309,14 @@ export type OshiRegistration = {
   image_url: string | null;
   description: string | null;
   is_public: boolean;
+  /** 성우·아이돌 그룹 등 소속 */
+  affiliation: string | null;
+  /** 성우 대표 출연작, 크리에이터 대표 작 등 */
+  reference_work: string | null;
   created_at: string;
   updated_at: string;
+  /** oshi_type === "pair" 일 때만 채워짐 */
+  pair_members?: OshiPairMember[];
 };
 
 export type BadgeRarity = "common" | "rare" | "epic" | "legendary";

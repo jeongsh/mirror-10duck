@@ -11,11 +11,26 @@ import CharacterUploader, {
   CharacterUploadPreview,
   INITIAL_UPLOAD_VIEW,
 } from "@/components/character/CharacterUploader";
-import { Board, OshiRegistration, OshiType, Badge, UserBadge, CardTheme, UserProfile } from "@/types/community";
+import {
+  Board,
+  OshiRegistration,
+  OshiType,
+  OshiPairDirection,
+  Badge,
+  UserBadge,
+  CardTheme,
+  UserProfile,
+} from "@/types/community";
 import { listCharacterProfiles } from "@/lib/supabase/characters";
 import { BASE_PROFILES, mergeProfiles } from "@/lib/live2d/profileSync";
 import { getProfile, updateProfile, checkHandleAvailability } from "@/lib/supabase/profiles";
-import { getOshiList, upsertOshi, deleteOshi } from "@/lib/supabase/oshi";
+import {
+  getOshiList,
+  upsertOshi,
+  deleteOshi,
+  formatOshiPrimaryTitle,
+  formatOshiSubtitle,
+} from "@/lib/supabase/oshi";
 import { getAllBadges, getUserBadges, checkAndGrantOshiBadges } from "@/lib/supabase/badges";
 import AuthorProfileCard from "@/components/community/AuthorProfileCard";
 import { CARD_THEMES, THEME_ORDER } from "@/lib/cardThemes";
@@ -38,6 +53,29 @@ const OSHI_TYPE_LABELS: Record<OshiType, string> = {
   game: "게임",
   character: "캐릭터",
   other: "기타",
+  voice_actor: "성우",
+  creator: "크리에이터",
+  pair: "CP(커플링)",
+  idol_group: "아이돌 그룹",
+};
+
+const OSHI_TITLE_FIELD_LABELS: Record<OshiType, string> = {
+  anime: "작품명 *",
+  manga: "작품명 *",
+  game: "작품명 *",
+  character: "캐릭터 이름 *",
+  other: "이름 *",
+  voice_actor: "성우 이름 *",
+  creator: "이름 · 활동명 *",
+  pair: "",
+  idol_group: "그룹명 *",
+};
+
+const PAIR_DIRECTION_LABELS: Record<OshiPairDirection, string> = {
+  a_to_b: "A→B (고정)",
+  b_to_a: "B→A (고정)",
+  reversible: "양방향",
+  unknown: "미정·비밀",
 };
 
 const RARITY_COLORS: Record<string, string> = {
@@ -130,6 +168,12 @@ export default function ProfilePage() {
     image_url: "",
     description: "",
     is_public: true,
+    affiliation: "",
+    reference_work: "",
+    pair_work_title: "",
+    pair_char_a: "",
+    pair_char_b: "",
+    pair_direction: "reversible" as OshiPairDirection,
   });
   const [newBadgeIds, setNewBadgeIds] = useState<string[]>([]);
 
@@ -562,16 +606,40 @@ export default function ProfilePage() {
   const openOshiForm = (existing?: OshiRegistration) => {
     if (existing) {
       setEditingOshi(existing);
+      const members = [...(existing.pair_members ?? [])].sort(
+        (a, b) => a.member_index - b.member_index
+      );
+      const d = (members[0]?.direction as OshiPairDirection | null) ?? "reversible";
       setOshiForm({
-        title: existing.title,
+        title: existing.oshi_type === "pair" ? "" : existing.title,
         oshi_type: existing.oshi_type,
         image_url: existing.image_url ?? "",
         description: existing.description ?? "",
         is_public: existing.is_public,
+        affiliation: existing.affiliation ?? "",
+        reference_work: existing.reference_work ?? "",
+        pair_work_title: existing.oshi_type === "pair" ? existing.title : "",
+        pair_char_a: members[0]?.character_title ?? "",
+        pair_char_b: members[1]?.character_title ?? "",
+        pair_direction: ["a_to_b", "b_to_a", "reversible", "unknown"].includes(d)
+          ? d
+          : "reversible",
       });
     } else {
       setEditingOshi(null);
-      setOshiForm({ title: "", oshi_type: "anime", image_url: "", description: "", is_public: true });
+      setOshiForm({
+        title: "",
+        oshi_type: "anime",
+        image_url: "",
+        description: "",
+        is_public: true,
+        affiliation: "",
+        reference_work: "",
+        pair_work_title: "",
+        pair_char_a: "",
+        pair_char_b: "",
+        pair_direction: "reversible",
+      });
     }
     setShowOshiForm(true);
   };
@@ -579,17 +647,44 @@ export default function ProfilePage() {
   const handleOshiSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    if (!oshiForm.title.trim()) return;
+
+    if (oshiForm.oshi_type === "pair") {
+      const a = oshiForm.pair_char_a.trim();
+      const b = oshiForm.pair_char_b.trim();
+      if (!a || !b) {
+        alert("CP 타입은 캐릭터 A·B 이름을 모두 입력해 주세요.");
+        return;
+      }
+    } else if (!oshiForm.title.trim()) {
+      return;
+    }
 
     setLoading(true);
     try {
       const rank = editingOshi ? editingOshi.rank : (oshiList.length + 1);
+      const isPair = oshiForm.oshi_type === "pair";
+      const titleForDb = isPair
+        ? (oshiForm.pair_work_title.trim() || `${oshiForm.pair_char_a.trim()}×${oshiForm.pair_char_b.trim()}`).slice(
+            0,
+            50
+          )
+        : oshiForm.title.trim();
+
       const saved = await upsertOshi(user.id, rank, {
-        title: oshiForm.title.trim(),
+        title: titleForDb,
         oshi_type: oshiForm.oshi_type,
         image_url: oshiForm.image_url.trim() || undefined,
         description: oshiForm.description.trim() || undefined,
         is_public: oshiForm.is_public,
+        affiliation: oshiForm.affiliation.trim() || null,
+        reference_work: oshiForm.reference_work.trim() || null,
+        pair: isPair
+          ? {
+              charA: oshiForm.pair_char_a.trim(),
+              charB: oshiForm.pair_char_b.trim(),
+              direction: oshiForm.pair_direction,
+            }
+          : null,
       });
 
       setOshiList((prev) => {
@@ -616,7 +711,7 @@ export default function ProfilePage() {
 
   const handleOshiDelete = async (oshi: OshiRegistration) => {
     if (!user) return;
-    if (!confirm(`"${oshi.title}" 오시 등록을 삭제하시겠습니까?`)) return;
+    if (!confirm(`"${formatOshiPrimaryTitle(oshi)}" 오시 등록을 삭제하시겠습니까?`)) return;
     setLoading(true);
     try {
       await deleteOshi(user.id, oshi.id);
@@ -856,7 +951,7 @@ export default function ProfilePage() {
                     <div key={oshi.id} className="flex gap-4 border border-gray-700 bg-gray-50 p-4">
                       <div className="shrink-0 w-16 h-16 border border-dashed border-gray-400 bg-gray-100 overflow-hidden">
                         {oshi.image_url ? (
-                          <img src={oshi.image_url} alt={oshi.title} className="w-full h-full object-cover" />
+                          <img src={oshi.image_url} alt={formatOshiPrimaryTitle(oshi)} className="w-full h-full object-cover" />
                         ) : (
                           <div className="flex h-full items-center justify-center text-lg">💘</div>
                         )}
@@ -867,8 +962,13 @@ export default function ProfilePage() {
                           <span className="text-[9px] border border-dashed border-gray-400 text-gray-500 px-1 font-bold uppercase">{OSHI_TYPE_LABELS[oshi.oshi_type]}</span>
                           {!oshi.is_public && <span className="text-[9px] border border-dashed border-gray-300 text-gray-400 px-1">비공개</span>}
                         </div>
-                        <p className="mt-1 text-sm font-bold text-gray-900 truncate">{oshi.title}</p>
-                        {oshi.description && <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-1 italic">{oshi.description}</p>}
+                        <p className="mt-1 text-sm font-bold text-gray-900 truncate">{formatOshiPrimaryTitle(oshi)}</p>
+                        {formatOshiSubtitle(oshi) && (
+                          <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-1 italic">{formatOshiSubtitle(oshi)}</p>
+                        )}
+                        {!formatOshiSubtitle(oshi) && oshi.description && (
+                          <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-1 italic">{oshi.description}</p>
+                        )}
                       </div>
                       <div className="flex flex-col gap-1 shrink-0">
                         <button onClick={() => openOshiForm(oshi)} className="border border-dashed border-gray-400 px-3 py-1 text-[10px] font-bold text-gray-500 hover:bg-gray-100 transition-colors">[편집]</button>
@@ -883,7 +983,7 @@ export default function ProfilePage() {
                       <div key={oshi.id} className="flex gap-3 border border-dashed border-gray-400 bg-white p-3 group hover:border-gray-700 transition-colors">
                         <div className="shrink-0 w-10 h-10 border border-dashed border-gray-300 bg-gray-50 overflow-hidden">
                           {oshi.image_url ? (
-                            <img src={oshi.image_url} alt={oshi.title} className="w-full h-full object-cover" />
+                            <img src={oshi.image_url} alt={formatOshiPrimaryTitle(oshi)} className="w-full h-full object-cover" />
                           ) : (
                             <div className="flex h-full items-center justify-center text-sm">🎌</div>
                           )}
@@ -893,8 +993,12 @@ export default function ProfilePage() {
                             <span className="text-[9px] font-bold text-gray-400">#{oshi.rank}</span>
                             <span className="text-[9px] border border-dashed border-gray-300 text-gray-400 px-1 uppercase">{OSHI_TYPE_LABELS[oshi.oshi_type]}</span>
                           </div>
-                          <p className="text-xs font-bold text-gray-800 truncate mt-0.5">{oshi.title}</p>
-                          {oshi.description && <p className="text-[10px] text-gray-400 truncate italic">{oshi.description}</p>}
+                          <p className="text-xs font-bold text-gray-800 truncate mt-0.5">{formatOshiPrimaryTitle(oshi)}</p>
+                          {(formatOshiSubtitle(oshi) || oshi.description) && (
+                            <p className="text-[10px] text-gray-400 truncate italic">
+                              {formatOshiSubtitle(oshi) ?? oshi.description}
+                            </p>
+                          )}
                         </div>
                         <div className="flex flex-col gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button onClick={() => openOshiForm(oshi)} className="text-[9px] font-bold text-gray-400 hover:text-gray-700 px-1">[편집]</button>
@@ -1680,20 +1784,7 @@ export default function ProfilePage() {
                 </p>
               )}
             </div>
-            <form onSubmit={handleOshiSubmit} className="p-5 space-y-4">
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold uppercase tracking-widest text-gray-500">작품/캐릭터 이름 *</label>
-                <input
-                  type="text"
-                  required
-                  maxLength={50}
-                  value={oshiForm.title}
-                  onChange={(e) => setOshiForm((f) => ({ ...f, title: e.target.value }))}
-                  placeholder="최대 50자"
-                  className="w-full border border-dashed border-gray-400 px-3 py-2 text-sm outline-none focus:border-gray-700 bg-white"
-                />
-              </div>
-
+            <form onSubmit={handleOshiSubmit} className="p-5 space-y-4 max-h-[85vh] overflow-y-auto">
               <div className="space-y-1">
                 <label className="text-[11px] font-bold uppercase tracking-widest text-gray-500">타입 *</label>
                 <select
@@ -1706,6 +1797,107 @@ export default function ProfilePage() {
                   ))}
                 </select>
               </div>
+
+              {oshiForm.oshi_type === "pair" ? (
+                <>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold uppercase tracking-widest text-gray-500">캐릭터 A *</label>
+                    <input
+                      type="text"
+                      required
+                      maxLength={50}
+                      value={oshiForm.pair_char_a}
+                      onChange={(e) => setOshiForm((f) => ({ ...f, pair_char_a: e.target.value }))}
+                      placeholder="첫 번째 캐릭터"
+                      className="w-full border border-dashed border-gray-400 px-3 py-2 text-sm outline-none focus:border-gray-700 bg-white"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold uppercase tracking-widest text-gray-500">캐릭터 B *</label>
+                    <input
+                      type="text"
+                      required
+                      maxLength={50}
+                      value={oshiForm.pair_char_b}
+                      onChange={(e) => setOshiForm((f) => ({ ...f, pair_char_b: e.target.value }))}
+                      placeholder="두 번째 캐릭터"
+                      className="w-full border border-dashed border-gray-400 px-3 py-2 text-sm outline-none focus:border-gray-700 bg-white"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold uppercase tracking-widest text-gray-500">방향성 *</label>
+                    <select
+                      value={oshiForm.pair_direction}
+                      onChange={(e) =>
+                        setOshiForm((f) => ({ ...f, pair_direction: e.target.value as OshiPairDirection }))
+                      }
+                      className="w-full border border-dashed border-gray-400 px-3 py-2 text-sm outline-none bg-white"
+                    >
+                      {(Object.keys(PAIR_DIRECTION_LABELS) as OshiPairDirection[]).map((d) => (
+                        <option key={d} value={d}>{PAIR_DIRECTION_LABELS[d]}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold uppercase tracking-widest text-gray-500">작품명 (선택)</label>
+                    <input
+                      type="text"
+                      maxLength={50}
+                      value={oshiForm.pair_work_title}
+                      onChange={(e) => setOshiForm((f) => ({ ...f, pair_work_title: e.target.value }))}
+                      placeholder="비우면 A×B 형식으로 저장"
+                      className="w-full border border-dashed border-gray-400 px-3 py-2 text-sm outline-none focus:border-gray-700 bg-white"
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
+                    {OSHI_TITLE_FIELD_LABELS[oshiForm.oshi_type]}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={50}
+                    value={oshiForm.title}
+                    onChange={(e) => setOshiForm((f) => ({ ...f, title: e.target.value }))}
+                    placeholder="최대 50자"
+                    className="w-full border border-dashed border-gray-400 px-3 py-2 text-sm outline-none focus:border-gray-700 bg-white"
+                  />
+                </div>
+              )}
+
+              {(oshiForm.oshi_type === "voice_actor" ||
+                oshiForm.oshi_type === "creator" ||
+                oshiForm.oshi_type === "idol_group") && (
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
+                    {oshiForm.oshi_type === "idol_group" ? "소속사 (선택)" : "소속 (선택)"}
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={80}
+                    value={oshiForm.affiliation}
+                    onChange={(e) => setOshiForm((f) => ({ ...f, affiliation: e.target.value }))}
+                    className="w-full border border-dashed border-gray-400 px-3 py-2 text-sm outline-none focus:border-gray-700 bg-white"
+                  />
+                </div>
+              )}
+
+              {(oshiForm.oshi_type === "voice_actor" || oshiForm.oshi_type === "creator") && (
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
+                    {oshiForm.oshi_type === "voice_actor" ? "대표 출연작 (선택)" : "대표 작 (선택)"}
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={120}
+                    value={oshiForm.reference_work}
+                    onChange={(e) => setOshiForm((f) => ({ ...f, reference_work: e.target.value }))}
+                    className="w-full border border-dashed border-gray-400 px-3 py-2 text-sm outline-none focus:border-gray-700 bg-white"
+                  />
+                </div>
+              )}
 
               <div className="space-y-1">
                 <label className="text-[11px] font-bold uppercase tracking-widest text-gray-500">이미지</label>

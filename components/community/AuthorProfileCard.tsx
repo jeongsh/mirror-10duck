@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { UserProfile, OshiRegistration, UserBadge, Badge } from "@/types/community";
 import { supabase } from "@/lib/supabase/client";
+import { formatOshiPrimaryTitle, formatOshiSubtitle } from "@/lib/supabase/oshi";
 import { CARD_THEMES } from "@/lib/cardThemes";
 
 interface AuthorProfileCardProps {
@@ -50,7 +51,7 @@ export default function AuthorProfileCard({
         showOshi
           ? supabase
               .from("oshi_registrations")
-              .select("*")
+              .select("*, oshi_pair_members(*)")
               .eq("user_id", authorId)
               .eq("rank", 1)
               .eq("is_public", true)
@@ -63,7 +64,17 @@ export default function AuthorProfileCard({
           .order("earned_at", { ascending: false })
           .limit(8),
       ]);
-      if (oshiRes.data) setMainOshi(oshiRes.data);
+      if (oshiRes.data) {
+        const row = oshiRes.data as OshiRegistration & {
+          oshi_pair_members?: OshiRegistration["pair_members"];
+        };
+        const { oshi_pair_members, ...rest } = row;
+        const pair_members =
+          Array.isArray(oshi_pair_members) && oshi_pair_members.length > 0
+            ? [...oshi_pair_members].sort((a, b) => a.member_index - b.member_index)
+            : undefined;
+        setMainOshi({ ...rest, pair_members } as OshiRegistration);
+      }
       if (badgeRes.data) setEarnedBadges(badgeRes.data as (UserBadge & { badge: Badge })[]);
       setLoaded(true);
     };
@@ -164,14 +175,19 @@ export default function AuthorProfileCard({
             <div className={`flex items-center gap-2 border px-2 py-1.5 ${hasCardImage ? "bg-black/40 border-white/20" : theme.oshi}`}>
               {mainOshi.image_url && (
                 <div className={`w-7 h-7 border overflow-hidden shrink-0 ${hasCardImage ? "border-white/20" : theme.border}`}>
-                  <img src={mainOshi.image_url} alt={mainOshi.title} className="w-full h-full object-cover" />
+                  <img src={mainOshi.image_url} alt={formatOshiPrimaryTitle(mainOshi)} className="w-full h-full object-cover" />
                 </div>
               )}
               <div className="min-w-0">
                 <div className={`text-[8px] font-bold uppercase ${hasCardImage ? "text-white/60" : theme.subtext}`}>최애</div>
-                <p className={`text-[10px] font-bold truncate max-w-[80px] ${hasCardImage ? "text-white" : theme.text}`}>
-                  {mainOshi.title}
+                <p className={`text-[10px] font-bold truncate max-w-[100px] ${hasCardImage ? "text-white" : theme.text}`}>
+                  {formatOshiPrimaryTitle(mainOshi)}
                 </p>
+                {formatOshiSubtitle(mainOshi) && (
+                  <p className={`text-[8px] truncate max-w-[100px] ${hasCardImage ? "text-white/70" : theme.subtext}`}>
+                    {formatOshiSubtitle(mainOshi)}
+                  </p>
+                )}
               </div>
             </div>
           )}

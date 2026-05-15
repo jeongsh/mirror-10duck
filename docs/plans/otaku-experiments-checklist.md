@@ -36,21 +36,22 @@
 
 ### A1. 쿠르(분기) 라인업  (P2)  `experiment/a1-cours-lineup`  (의존: A3)
 
-- [ ] 상태: `[ ]`
-- [ ] `release_items.cours` 컬럼
-- [ ] `season_lineup_votes` 테이블
-- [ ] `/season/[cours]` 화면
-- [ ] 분기 회고 자동 토픽 개설 배치
-- [ ] GNB "이번 분기" 진입
+- [x] 상태: 구현 반영 (main, `실험중`에 가까움) — 전용 `experiment/a1-*` 브랜치 미분리 시 생략 가능
+- [x] `release_items.cours` 컬럼
+- [x] `season_lineup_votes` 테이블
+- [x] `/season/[cours]` 화면 (`/season/current` 포함, 분기 탭·기대/인기·요일·라인업 투표·관심 등록)
+- [x] 분기 회고 자동 토픽 개설 배치 (`/api/cron/season-retro`, `season_retro_topics` 큐, `vercel.json` 크론)
+- [x] GNB "이번 분기 신작" 진입 (`/season/current` → 현재 분기)
+- [x] (같은 흐름 확장) 방영 후 별점·텍스트 리뷰 `release_item_reviews` + 상세 UI 분리 — A1 원문 데이터 목록 밖이나 신작 허브와 연동됨
 - [ ] 채택 기준 측정: 14일 안 관심 등록 200건 또는 재방문률 ≥ 30%
 - [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
 
 ### A2. 오시 타입 확장  (P2)  `experiment/a2-oshi-types`  (의존: A3)
 
-- [ ] 상태: `[ ]`
-- [ ] `oshi_type` enum 확장 (`voice_actor`, `creator`, `pair`, `idol_group`)
-- [ ] `oshi_pair_members` 보조 테이블
-- [ ] 등록 폼 타입별 입력 분기
+- [x] 상태: 구현 반영 (main, 전용 브랜치 미분리 — A1과 동일)
+- [x] `oshi_type` enum 확장 (`voice_actor`, `creator`, `pair`, `idol_group`)
+- [x] `oshi_pair_members` 보조 테이블
+- [x] 등록 폼 타입별 입력 분기
 - [ ] 채택 기준 측정: 확장 타입 등록 비중 ≥ 20%
 - [ ] 결정: 채택 / 폐기 (날짜:        / 사유:        )
 
