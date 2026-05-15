@@ -1,6 +1,6 @@
 import { getCurrentCours, normalizeCours } from "@/lib/otaku/cours";
 
-export type CoursCalendarPhase = "upcoming" | "lineup" | "ongoing" | "retro" | "archived";
+export type CoursCalendarPhase = "upcoming" | "ongoing" | "retro" | "archived";
 
 const MS_PER_DAY = 86_400_000;
 
@@ -53,18 +53,6 @@ export function compareCours(a: string, b: string): number {
   return pa.quarter - pb.quarter;
 }
 
-/**
- * 분기 시작일부터 `days`일(당일 포함) — 라인업 투표용 첫 주.
- */
-export function coursLineupWindowEnd(cours: string, days = 7): Date | null {
-  const start = coursQuarterStartDate(cours);
-  if (!start) return null;
-  return new Date(start.getTime() + (days - 1) * MS_PER_DAY);
-}
-
-/**
- * 분기 마지막일 기준 앞으로 `days`일(당일 포함) — 회고 기간.
- */
 export function coursRetroWindowStart(cours: string, days = 7): Date | null {
   const end = coursQuarterEndDate(cours);
   if (!end) return null;
@@ -83,27 +71,33 @@ export function getCoursCalendarPhase(cours: string, now = new Date()): CoursCal
   if (today < startInt) return "upcoming";
   if (today > endInt) return "archived";
 
-  const lineupEnd = seoulYmdInt(coursLineupWindowEnd(cours, 7)!);
-  if (today <= lineupEnd) return "lineup";
-
   const retroStart = seoulYmdInt(coursRetroWindowStart(cours, 7)!);
   if (today >= retroStart) return "retro";
 
   return "ongoing";
 }
 
-/**
- * 라인업 투표(볼래/고민/패스) 허용 여부.
- * - 지난 분기: 항상 허용(기록·정리 목적).
- * - 이번 분기: 라인업 주(분기 첫 7일)에만 허용.
- * - 미래 분기: 비허용.
- */
-export function isLineupVoteAllowed(cours: string, now = new Date()): boolean {
+export type CoursSlotKind = "ahead" | "live" | "behind";
+
+export function getCoursSlotKind(cours: string, now = new Date()): CoursSlotKind {
   const current = getCurrentCours(now);
   const cmp = compareCours(cours, current);
-  if (cmp < 0) return true;
-  if (cmp > 0) return false;
-  return getCoursCalendarPhase(cours, now) === "lineup";
+  if (cmp > 0) return "ahead";
+  if (cmp < 0) return "behind";
+  return "live";
+}
+
+/**
+ * 라인업 투표(볼래/고민/패스) 허용 여부.
+ * - 다가올 분기(ahead): 해당 분기 **시작일 전**까지만 투표 가능.
+ * - 현재·지난 분기: 분기 시작일 이후에는 마감(지난 분기는 기록 수정 불가).
+ */
+export function isLineupVoteAllowed(cours: string, now = new Date()): boolean {
+  const start = coursQuarterStartDate(cours);
+  if (!start) return false;
+  const todayInt = seoulYmdInt(now);
+  const startInt = seoulYmdInt(start);
+  return todayInt < startInt;
 }
 
 const WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"] as const;

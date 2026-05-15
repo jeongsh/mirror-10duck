@@ -14,6 +14,8 @@ import {
   getCalendarEvents,
   getReleaseItemById,
 } from "@/lib/otaku/hub";
+import { ReleaseReviewsPanel } from "@/components/releases/ReleaseReviewsPanel";
+import { StarBar } from "@/components/ui/StarBar";
 
 const EMPTY_IMAGE =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600' viewBox='0 0 800 600'%3E%3Crect width='800' height='600' fill='%23f3f4f6'/%3E%3Ctext x='400' y='300' text-anchor='middle' fill='%239ca3af' font-family='sans-serif' font-size='28'%3ENo Image%3C/text%3E%3C/svg%3E";
@@ -24,6 +26,7 @@ export default function ReleaseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [followed, setFollowed] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [reviewSummary, setReviewSummary] = useState<{ avg: number; count: number } | null>(null);
   const events = useMemo(
     () => getCalendarEvents().filter((event) => event.contentId === item?.id),
     [item?.id],
@@ -32,6 +35,7 @@ export default function ReleaseDetailPage() {
   useEffect(() => {
     const fetchRelease = async () => {
       setLoading(true);
+      setReviewSummary(null);
       const id = decodeURIComponent(params.id);
       const { data, error } = await supabase
         .from("release_items")
@@ -58,16 +62,36 @@ export default function ReleaseDetailPage() {
         const fallback = getReleaseItemById(id);
         setItem(fallback ?? null);
         setFollowed(fallback ? persistedFollowedIds.has(fallback.id) || fallback.isFollowing : false);
+        if (fallback) {
+          const { data: starRows } = await supabase
+            .from("release_item_reviews")
+            .select("stars")
+            .eq("release_item_id", fallback.id);
+          if (starRows && starRows.length > 0) {
+            const sum = (starRows as { stars: number }[]).reduce((acc, r) => acc + r.stars, 0);
+            setReviewSummary({ avg: sum / starRows.length, count: starRows.length });
+          }
+        }
       } else if (data) {
         if (data.status !== "PUBLISHED") {
           setItem(null);
           setFollowed(false);
+          setReviewSummary(null);
           setLoading(false);
           return;
         }
         const mapped = mapReleaseRow(data as ReleaseRow);
         setItem(mapped);
         setFollowed(persistedFollowedIds.has(mapped.id));
+
+        const { data: starRows } = await supabase
+          .from("release_item_reviews")
+          .select("stars")
+          .eq("release_item_id", mapped.id);
+        if (starRows && starRows.length > 0) {
+          const sum = (starRows as { stars: number }[]).reduce((acc, r) => acc + r.stars, 0);
+          setReviewSummary({ avg: sum / starRows.length, count: starRows.length });
+        }
       }
 
       setLoading(false);
@@ -107,8 +131,8 @@ export default function ReleaseDetailPage() {
     return (
       <main className="border border-dashed border-gray-500 bg-white/80 p-6">
         <h1 className="text-xl font-bold text-gray-900">신작 정보를 찾을 수 없습니다.</h1>
-        <Link href="/releases" className="mt-4 inline-block text-sm text-gray-600 hover:underline">
-          신작 목록으로 돌아가기
+        <Link href="/season/current" className="mt-4 inline-block text-sm text-gray-600 hover:underline">
+          이번 분기 신작으로 돌아가기
         </Link>
       </main>
     );
@@ -116,7 +140,12 @@ export default function ReleaseDetailPage() {
 
   return (
     <main className="flex w-full flex-col gap-6">
-      <Hero item={item} followed={followed} onToggleFollow={() => void toggleFollow()} />
+      <Hero
+        item={item}
+        followed={followed}
+        reviewSummary={reviewSummary}
+        onToggleFollow={() => void toggleFollow()}
+      />
 
       <Panel title="소개">
         <p className="text-sm leading-7 text-gray-700 whitespace-pre-wrap">
@@ -146,6 +175,8 @@ export default function ReleaseDetailPage() {
           )}
         </div>
       </Panel>
+
+      <ReleaseReviewsPanel releaseItemId={item.id} releaseDate={item.releaseDate} />
     </main>
   );
 }
@@ -153,10 +184,12 @@ export default function ReleaseDetailPage() {
 function Hero({
   item,
   followed,
+  reviewSummary,
   onToggleFollow,
 }: {
   item: ReleaseItem;
   followed: boolean;
+  reviewSummary: { avg: number; count: number } | null;
   onToggleFollow: () => void;
 }) {
   return (
@@ -172,8 +205,8 @@ function Hero({
       
       <div className="relative z-10 p-5 sm:p-6 lg:p-8">
         <div className="mb-6">
-          <Link href="/releases" className="inline-flex items-center text-xs font-medium text-gray-600 hover:text-gray-900 hover:underline">
-            ← 신작/일정으로 돌아가기
+          <Link href="/season/current" className="inline-flex items-center text-xs font-medium text-gray-600 hover:text-gray-900 hover:underline">
+            ← 이번 분기 신작으로 돌아가기
           </Link>
         </div>
 
@@ -196,7 +229,12 @@ function Hero({
             
             <h1 className="text-3xl font-extrabold tracking-tight text-gray-950 sm:text-4xl">{item.title}</h1>
             {item.originalTitle && <p className="mt-1.5 text-sm text-gray-600">{item.originalTitle}</p>}
-            
+            {reviewSummary && reviewSummary.count > 0 && (
+              <div className="mt-3">
+                <StarBar avg={reviewSummary.avg} count={reviewSummary.count} />
+              </div>
+            )}
+
             <div className="mt-4 flex flex-wrap gap-1.5">
               {item.genres.map((tag) => (
                 <span

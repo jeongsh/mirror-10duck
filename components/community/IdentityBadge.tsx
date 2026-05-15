@@ -34,7 +34,7 @@ export default function IdentityBadge({
 }: IdentityBadgeProps) {
   const displayName = profile?.display_name || profile?.nickname || fallback?.nickname || "Anonymous";
   const truncatedName = truncateName(displayName, maxNameLength);
-  const avatarUrl = profile?.avatar_url || fallback?.avatar_url;
+  const avatarUrl = profile?.card_avatar_url || profile?.avatar_url || fallback?.avatar_url;
   const isFixed = (profile?.nickname_type || fallback?.nickname_type) === "FIXED";
 
   const sizeClasses = {
