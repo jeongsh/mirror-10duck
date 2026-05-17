@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { PostVoteType } from "@/types/community";
+import { grantExperience, XP_AMOUNTS } from "@/lib/supabase/experience";
 
 type Props = {
   postId: string;
   viewerId: string | null;
   upvoteCount: number;
   downvoteCount: number;
+  authorId?: string;
   /** 집계 갱신 후 상위가 posts 행을 다시 읽을 때 */
   onCountsSynced?: (next: { upvote_count: number; downvote_count: number }) => void;
 };
@@ -22,6 +24,7 @@ export default function PostVoteBar({
   viewerId,
   upvoteCount,
   downvoteCount,
+  authorId,
   onCountsSynced,
 }: Props) {
   const [mine, setMine] = useState<PostVoteType | null>(null);
@@ -89,6 +92,9 @@ export default function PostVoteBar({
         });
         if (error) throw error;
         setMine(target);
+        if (target === "up" && authorId && authorId !== viewerId) {
+          void grantExperience(authorId, XP_AMOUNTS.UPVOTE_RECEIVED);
+        }
       } else {
         const { error } = await supabase
           .from("post_votes")

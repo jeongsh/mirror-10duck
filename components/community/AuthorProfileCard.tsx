@@ -5,6 +5,7 @@ import { UserProfile, OshiRegistration, UserBadge, Badge } from "@/types/communi
 import { supabase } from "@/lib/supabase/client";
 import { formatOshiPrimaryTitle, formatOshiSubtitle } from "@/lib/supabase/oshi";
 import { CARD_THEMES } from "@/lib/cardThemes";
+import LevelBadge from "@/components/community/LevelBadge";
 
 interface AuthorProfileCardProps {
   profile: UserProfile | null | undefined;
@@ -125,6 +126,9 @@ export default function AuthorProfileCard({
               <span className={`text-[8px] font-black px-1 border uppercase ${theme.badge}`}>FIXED</span>
             ) : (
               <span className={`text-[8px] font-bold border border-dashed px-1 uppercase ${theme.subtext} ${theme.border}`}>TEMP</span>
+            )}
+            {profile.level != null && profile.level >= 1 && (
+              <LevelBadge level={profile.level} size="sm" />
             )}
             <span
               className={`font-bold text-sm leading-tight ${

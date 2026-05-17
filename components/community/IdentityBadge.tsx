@@ -1,5 +1,6 @@
 import { UserProfile } from "@/types/community";
 import React from "react";
+import LevelBadge from "@/components/community/LevelBadge";
 
 interface IdentityBadgeProps {
   profile?: UserProfile | null;
@@ -83,6 +84,9 @@ export default function IdentityBadge({
             <span className="text-gray-400 text-[8px] font-bold border border-dashed border-gray-300 px-1 uppercase tracking-tighter leading-tight">
               TEMP
             </span>
+          )}
+          {!isAnonymous && profile?.level != null && profile.level >= 1 && (
+            <LevelBadge level={profile.level} size="xs" />
           )}
         </div>
       )}

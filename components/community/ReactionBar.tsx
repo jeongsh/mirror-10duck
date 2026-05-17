@@ -3,6 +3,7 @@
 import { SmilePlus, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createNotification } from "@/lib/community/notifications";
+import { grantExperience, XP_AMOUNTS } from "@/lib/supabase/experience";
 import {
   REACTION_META,
   fetchReactionsByPost,
@@ -112,6 +113,7 @@ export default function ReactionBar({ postId, viewerId, authorId }: Props) {
         content: `${userProfile?.nickname || "누군가"}님이 글에 ${meta.emoji} 반응을 남겼습니다.`,
         linkUrl: window.location.pathname,
       });
+      void grantExperience(authorId, XP_AMOUNTS.REACTION_RECEIVED);
     }
 
     setBusy(null);

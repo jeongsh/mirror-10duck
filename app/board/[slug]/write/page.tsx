@@ -10,6 +10,7 @@ import CommunityEditor from "@/components/community/editor/CommunityEditor";
 import { getClientIp } from "@/lib/community/actions";
 import { normalizeBoardSlug } from "@/lib/community/boardSlug";
 import { isSpoilerPrefix } from "@/lib/community/boardTitlePrefix";
+import { grantExperience, XP_AMOUNTS } from "@/lib/supabase/experience";
 
 function WritePostContent() {
   const router = useRouter();
@@ -204,6 +205,10 @@ function WritePostContent() {
       }
 
       const newId = data.id as string;
+
+      if (!isAnonymous && userId) {
+        void grantExperience(userId, XP_AMOUNTS.POST_CREATED);
+      }
 
       router.push(`/board/${board.slug}/${newId}`);
     }

@@ -62,6 +62,9 @@ export type UserProfile = {
   representative_character_id: string | null;
   nickname_type: NicknameType;
   role: "USER" | "ADMIN";
+  experience_points?: number;
+  level?: number;
+  last_daily_xp_at?: string | null;
   // 프로필 카드 커스터마이징
   card_theme: CardTheme | null;
   card_accent: string | null;

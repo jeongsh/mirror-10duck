@@ -154,13 +154,20 @@ export default function GlobalNavigation() {
                 {nickname || "프로필"}
               </button>
               {showMenu && (
-                <div className="absolute right-0 mt-1 w-40 border border-dashed border-gray-500 bg-white shadow-lg z-50">
+                <div className="absolute right-0 mt-1 w-44 border border-dashed border-gray-500 bg-white shadow-lg z-50">
                   <Link
                     href="/profile"
                     className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 border-b border-dashed border-gray-300"
                     onClick={() => setShowMenu(false)}
                   >
                     프로필 설정
+                  </Link>
+                  <Link
+                    href="/profile/level"
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 border-b border-dashed border-gray-300"
+                    onClick={() => setShowMenu(false)}
+                  >
+                    레벨 & 경험치
                   </Link>
                   <button
                     onClick={handleLogout}

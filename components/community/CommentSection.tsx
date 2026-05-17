@@ -12,6 +12,7 @@ import IdentityBadge from "@/components/community/IdentityBadge";
 import CommentVoteBar from "@/components/community/CommentVoteBar";
 import { createNotification } from "@/lib/community/notifications";
 import { checkAndGrantActivityBadges } from "@/lib/supabase/badges";
+import { grantExperience, XP_AMOUNTS } from "@/lib/supabase/experience";
 import { getClientIp } from "@/lib/community/actions";
 import { formatIp } from "@/lib/utils/formatIp";
 
@@ -207,7 +208,10 @@ export default function CommentSection({
       }
     }
 
-    if (viewerId) checkAndGrantActivityBadges(viewerId);
+    if (viewerId) {
+      checkAndGrantActivityBadges(viewerId);
+      void grantExperience(viewerId, XP_AMOUNTS.COMMENT_CREATED);
+    }
     setText("");
     setReplyTo(null);
     await refresh();
@@ -275,7 +279,10 @@ export default function CommentSection({
       }
     }
 
-    if (viewerId) checkAndGrantActivityBadges(viewerId);
+    if (viewerId) {
+      checkAndGrantActivityBadges(viewerId);
+      void grantExperience(viewerId, XP_AMOUNTS.COMMENT_CREATED);
+    }
     setReplyTo(null);
     await refresh();
     onThreadChanged?.();

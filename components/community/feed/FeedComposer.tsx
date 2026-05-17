@@ -13,6 +13,7 @@ import FeedMediaGrid from "@/components/community/feed/FeedMediaGrid";
 import StickerPicker from "@/components/stickers/StickerPicker";
 import { insertAtTextarea } from "@/lib/stickers/insertAtCursor";
 import { supabase } from "@/lib/supabase/client";
+import { grantExperience, XP_AMOUNTS } from "@/lib/supabase/experience";
 
 const MAX_FEED_LENGTH = 280;
 const MAX_MEDIA_COUNT = 4;
@@ -181,6 +182,8 @@ export default function FeedComposer({
       });
 
       if (error) throw error;
+
+      if (userId) void grantExperience(userId, XP_AMOUNTS.FEED_CREATED);
 
       setContent("");
       setFocused(false);
