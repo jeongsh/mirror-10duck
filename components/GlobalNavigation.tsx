@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { getUnreadNotificationCount } from "@/lib/community/notifications";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
@@ -22,6 +22,18 @@ export default function GlobalNavigation() {
   const authUser = useAuthUser();
   const [unreadCount, setUnreadCount] = useState(0);
   const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showMenu]);
 
   const userId = authUser?.id ?? null;
   const nickname = useMemo(() => {
@@ -146,7 +158,7 @@ export default function GlobalNavigation() {
             </Link>
           )}
           {authUser ? (
-            <div className="relative">
+            <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setShowMenu(!showMenu)}
                 className="border border-dashed border-gray-500 bg-white px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-100"
