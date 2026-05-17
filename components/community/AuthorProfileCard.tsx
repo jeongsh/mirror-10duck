@@ -20,6 +20,7 @@ const RARITY_GLOW: Record<string, string> = {
   rare:      "shadow-[0_0_6px_rgba(59,130,246,0.4)]",
   epic:      "shadow-[0_0_6px_rgba(168,85,247,0.5)]",
   legendary: "shadow-[0_0_8px_rgba(234,179,8,0.6)]",
+  season:    "shadow-[0_0_6px_rgba(34,197,94,0.5)]",
 };
 
 export default function AuthorProfileCard({

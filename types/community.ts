@@ -322,7 +322,7 @@ export type OshiRegistration = {
   pair_members?: OshiPairMember[];
 };
 
-export type BadgeRarity = "common" | "rare" | "epic" | "legendary";
+export type BadgeRarity = "common" | "rare" | "epic" | "legendary" | "season";
 
 export type Badge = {
   id: string;

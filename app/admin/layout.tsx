@@ -59,6 +59,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           >
             뉴스 관리
           </Link>
+          <Link
+            href="/admin/badges"
+            className="rounded border border-transparent p-2 transition-colors hover:border-gray-300 hover:bg-gray-100"
+          >
+            뱃지 관리
+          </Link>
         </nav>
       </aside>
       <main className="flex-1 p-6">{children}</main>
