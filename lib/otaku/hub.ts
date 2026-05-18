@@ -44,7 +44,8 @@ export type CalendarEventType =
   | "game_update"
   | "game_maintenance"
   | "community_event"
-  | "personal";
+  | "personal"
+  | "attendance";
 
 export type CalendarEvent = {
   id: string;
@@ -91,6 +92,7 @@ export const EVENT_TYPE_LABELS: Record<CalendarEventType, string> = {
   game_maintenance: "점검",
   community_event: "이벤트",
   personal: "개인",
+  attendance: "출석",
 };
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;

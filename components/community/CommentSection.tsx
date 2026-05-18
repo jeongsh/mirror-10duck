@@ -10,7 +10,9 @@ import CharacterSticker from "@/components/stickers/CharacterSticker";
 import { insertAtTextarea } from "@/lib/stickers/insertAtCursor";
 import IdentityBadge from "@/components/community/IdentityBadge";
 import CommentVoteBar from "@/components/community/CommentVoteBar";
+import { processMentionsForComment } from "@/lib/community/mentions";
 import { createNotification } from "@/lib/community/notifications";
+import { bumpMissionProgress } from "@/lib/community/missions";
 import { checkAndGrantActivityBadges } from "@/lib/supabase/badges";
 import { grantExperience, XP_AMOUNTS } from "@/lib/supabase/experience";
 import { getClientIp } from "@/lib/community/actions";
@@ -206,11 +208,21 @@ export default function CommentSection({
           linkUrl: `${window.location.pathname}#comment-${insertedComment?.id ?? ""}`,
         });
       }
+
+      if (insertedComment?.id) {
+        await processMentionsForComment({
+          text,
+          commentId: insertedComment.id,
+          actorId: viewerId,
+          linkUrl: `${window.location.pathname}#comment-${insertedComment.id}`,
+        });
+      }
     }
 
     if (viewerId) {
       checkAndGrantActivityBadges(viewerId);
       void grantExperience(viewerId, XP_AMOUNTS.COMMENT_CREATED);
+      void bumpMissionProgress(viewerId, "comment", 1);
     }
     setText("");
     setReplyTo(null);

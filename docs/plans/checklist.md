@@ -81,6 +81,7 @@
 - [ ] `comment_votes` DB 마이그레이션 적용 여부 확인
 - [ ] 뉴스 댓글과 일반 게시글 댓글의 공통/분리 정책 정리
 - [ ] 댓글 정렬, 삭제 표시, 숨김 표시 정책 정리
+- [ ] `@handle` 멘션 파싱과 자동완성 (`lib/community/mentions.ts`, 글쓰기·댓글 입력 UI)
 
 ### 2.5 추천, 개념글, 피드
 
@@ -194,6 +195,11 @@
 - [ ] 콘텐츠 추천 도우미
 - [ ] 스포일러 가드
 - [ ] 활동·기록 리마인더
+- [ ] 어시스턴트 슬롯 매트릭스: `lib/assistant/slots.ts` 라우트 기반 슬롯 헬퍼와 `Live2DWrapper.tsx` 교체
+- [ ] 어시스턴트 액션: 오늘 내 활동 요약 (`lib/community/today.ts`)
+- [ ] 어시스턴트 액션: 내 미답글 큐 (`lib/community/unreplied.ts`, 멘션 포함)
+- [ ] 어시스턴트 액션: 오늘의 미션 (`/missions`, `/admin/missions`)
+- [ ] 어시스턴트 컨텍스트 액션: 글 상세 스티커 답글, 글쓰기 임시저장 복귀
 - [ ] 스티커 관리 페이지
 - [ ] 캐릭터별 스티커 팩 생성/삭제/재생성
 - [ ] 글/댓글 작성자 캐릭터 스냅샷
@@ -223,6 +229,21 @@
 - [ ] NudeNet/WD14 기반 1차 NSFW·위험 태그 검수 워커
 - [ ] 해시 기반 중복 이미지 검수 캐시와 차단 해시 목록
 - [ ] 창작물/유료 콘텐츠/거래/가챠가 붙을 때 필요한 신고 사유 확장
+
+### 6.1 알림 시스템 v2 (2026-05-18 정책 확정)
+
+- [x] 알림 종류 매트릭스 8종 (`COMMENT/REPLY/REACTION/FOLLOW/MENTION/HOT_PROMOTED/SYSTEM/RELEASE`) 문서화
+- [ ] DB 마이그레이션: `notification_type` enum에 `RELEASE` / `MENTION` 추가
+- [ ] DB 마이그레이션: `notifications`에 `group_key text`, `aggregate_count int` 컬럼과 인덱스
+- [ ] DB 마이그레이션: `user_notification_settings(user_id, notifications_enabled, live2d_bubble_enabled)` 신규
+- [ ] DB 마이그레이션: `mentions(source_type, source_id, mentioned_user_id, actor_id)` 신규 + RLS
+- [ ] DB 마이그레이션: `daily_missions`, `user_mission_progress` 신규 + 시드 3종
+- [ ] `lib/community/notifications.ts`: `group_key` 묶기 로직, 사용자 설정 체크, MENTION/RELEASE 발행 헬퍼
+- [ ] `lib/community/mentions.ts`: `@handle` 파싱 + 멘션 알림 발행
+- [ ] `lib/community/missions.ts`: 일일 진행 카운터 + 시드 fetch
+- [ ] `/settings/notifications`: 전체 알림 ON/OFF + Live2D 말풍선 ON/OFF
+- [ ] `/missions` 사용자 화면, `/admin/missions` 운영자 화면
+- [ ] `Live2DWrapper.tsx`: 말풍선 전역 60초 / type별 5분 쿨다운 + 사용자 설정 체크
 
 ## Phase 7. 창작자 트랙과 웹툰/소설
 

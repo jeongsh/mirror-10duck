@@ -11,6 +11,20 @@ import type { CharacterActionKey, CharacterScenarioKey, MotionRef } from "@/type
 import { supabase } from "@/lib/supabase/client";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { formatDateTime, getCalendarEvents } from "@/lib/otaku/hub";
+import {
+  ASSISTANT_SLOT_DEFINITIONS,
+  getAssistantSlots,
+  type AssistantSlotDefinition,
+  type AssistantSlotKey,
+} from "@/lib/assistant/slots";
+import { fetchTodayActivitySummary, summarizeTodayActivity } from "@/lib/community/today";
+import { fetchUnrepliedQueue, summarizeUnreplied } from "@/lib/community/unreplied";
+import { fetchMissionBoard, summarizeMissionBoard } from "@/lib/community/missions";
+import {
+  LIVE2D_NOTIFICATION_TYPES,
+  fetchUserNotificationSettings,
+  type NotificationType,
+} from "@/lib/community/notifications";
 
 declare global {
   interface Window {
@@ -89,6 +103,10 @@ const NOTIFICATION_SCENARIOS: Record<string, CharacterScenarioKey> = {
   REPLY: "notification",
   REACTION: "notification",
   FOLLOW: "notification",
+  MENTION: "notification",
+  HOT_PROMOTED: "notification",
+  SYSTEM: "notification",
+  RELEASE: "notification",
 };
 
 interface MotionFileMeta {
@@ -101,7 +119,10 @@ interface SpeechAnchor {
   y: number;
 }
 
-type AssistantActionKey = "today" | "week" | "news";
+type AssistantActionKey = AssistantSlotKey;
+
+const LIVE2D_BUBBLE_COOLDOWN_GLOBAL_MS = 60 * 1000;
+const LIVE2D_BUBBLE_COOLDOWN_PER_TYPE_MS = 5 * 60 * 1000;
 
 function normalizeCharacterAction(action: CharacterActionKey): CharacterActionKey {
   if (action === "tap_body") return "attention";
@@ -159,8 +180,11 @@ export default function Live2DWrapper() {
   const [speechAnchor, setSpeechAnchor] = useState<SpeechAnchor | null>(null);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantBusy, setAssistantBusy] = useState<AssistantActionKey | null>(null);
+  const lastBubbleAtRef = useRef(0);
+  const lastBubbleTypeAtRef = useRef<Map<NotificationType, number>>(new Map());
 
   const pathname = usePathname();
+  const assistantSlots = getAssistantSlots(pathname);
   const modelPath = useCharacterStore((s) => s.modelPath);
   const authUser = useAuthUser();
   const userId = authUser?.id ?? null;
@@ -712,37 +736,62 @@ export default function Live2DWrapper() {
           table: 'notifications',
           filter: `receiver_id=eq.${userId}`,
         },
-        (payload) => {
-          if (isMounted && userId && payload.new.receiver_id === userId) {
-            // 알림 메시지 표시
-            const typeLabel = 
-              payload.new.type === 'COMMENT' ? '새 댓글' :
-              payload.new.type === 'REPLY' ? '새 답글' :
-              payload.new.type === 'REACTION' ? '새 리액션' : '새로운 알림';
-            
-            const scenarioKey = NOTIFICATION_SCENARIOS[payload.new.type] ?? "notification";
-            const store = useCharacterStore.getState();
-            const scenarioMapping = store.profile?.scenarioMap?.[scenarioKey];
+        async (payload) => {
+          if (!isMounted || !userId || payload.new.receiver_id !== userId) return;
 
-            store.setMessage(`${typeLabel}이 도착했어요!`);
-            store.triggerScenario(scenarioKey);
+          const rawType = (payload.new.type ?? "") as NotificationType;
+          if (!LIVE2D_NOTIFICATION_TYPES.has(rawType)) return;
 
-            if (!scenarioMapping?.expressionId) {
-              store.setEmotion("happy");
-            }
-            
-            // 일정 시간 후 메시지 초기화
-            setTimeout(() => {
-              if (isMounted) {
-                const nextStore = useCharacterStore.getState();
-                nextStore.setMessage(null);
-                nextStore.triggerScenario("idle_return");
-                if (!nextStore.profile?.scenarioMap?.idle_return?.expressionId) {
-                  nextStore.setEmotion("idle");
-                }
-              }
-            }, 5000);
+          const settings = await fetchUserNotificationSettings(userId);
+          if (!isMounted) return;
+          if (!settings.notifications_enabled || !settings.live2d_bubble_enabled) return;
+
+          const nowMs = Date.now();
+          if (nowMs - lastBubbleAtRef.current < LIVE2D_BUBBLE_COOLDOWN_GLOBAL_MS) return;
+          const lastForType = lastBubbleTypeAtRef.current.get(rawType) ?? 0;
+          if (nowMs - lastForType < LIVE2D_BUBBLE_COOLDOWN_PER_TYPE_MS) return;
+
+          lastBubbleAtRef.current = nowMs;
+          lastBubbleTypeAtRef.current.set(rawType, nowMs);
+
+          const aggregateCount = Number(payload.new.aggregate_count ?? 1) || 1;
+          const typeLabel =
+            rawType === 'COMMENT' ? '새 댓글' :
+            rawType === 'REPLY' ? '새 답글' :
+            rawType === 'REACTION' ? '새 리액션' :
+            rawType === 'FOLLOW' ? '새 팔로워' :
+            rawType === 'MENTION' ? '새 멘션' :
+            rawType === 'HOT_PROMOTED' ? '개념글 등극' :
+            rawType === 'RELEASE' ? '관심작 소식' :
+            rawType === 'SYSTEM' ? '시스템 안내' :
+            '새로운 알림';
+
+          const message = aggregateCount > 1
+            ? `${typeLabel} ${aggregateCount}개가 도착했어요!`
+            : `${typeLabel}이 도착했어요!`;
+
+          const scenarioKey = NOTIFICATION_SCENARIOS[rawType] ?? "notification";
+          const store = useCharacterStore.getState();
+          const scenarioMapping = store.profile?.scenarioMap?.[scenarioKey];
+
+          store.setMessage(message);
+          store.triggerScenario(scenarioKey);
+
+          if (!scenarioMapping?.expressionId) {
+            store.setEmotion("happy");
           }
+
+          setTimeout(() => {
+            if (!isMounted) return;
+            const nextStore = useCharacterStore.getState();
+            if (nextStore.message === message) {
+              nextStore.setMessage(null);
+            }
+            nextStore.triggerScenario("idle_return");
+            if (!nextStore.profile?.scenarioMap?.idle_return?.expressionId) {
+              nextStore.setEmotion("idle");
+            }
+          }, 5000);
         }
       )
       .subscribe();
@@ -1152,7 +1201,40 @@ export default function Live2DWrapper() {
     setAssistantOpen(false);
 
     try {
-      if (action === "today") {
+      if (action === "today_activity") {
+        if (!userId) {
+          setTemporaryMessage("로그인하면 오늘 활동을 보여드릴게요.", ASSISTANT_RESPONSE_DURATION_MS);
+          return;
+        }
+        const summary = await fetchTodayActivitySummary(userId);
+        setTemporaryMessage(summarizeTodayActivity(summary), ASSISTANT_RESPONSE_DURATION_MS);
+        useCharacterStore.getState().setEmotion(summary.total > 0 ? "happy" : "idle");
+        return;
+      }
+
+      if (action === "unreplied_queue") {
+        if (!userId) {
+          setTemporaryMessage("로그인하면 미답글을 모아드릴게요.", ASSISTANT_RESPONSE_DURATION_MS);
+          return;
+        }
+        const queue = await fetchUnrepliedQueue(userId, 20);
+        setTemporaryMessage(summarizeUnreplied(queue), ASSISTANT_RESPONSE_DURATION_MS);
+        useCharacterStore.getState().setEmotion(queue.total > 0 ? "happy" : "idle");
+        return;
+      }
+
+      if (action === "daily_missions") {
+        if (!userId) {
+          setTemporaryMessage("로그인하면 미션을 챙겨드릴게요.", ASSISTANT_RESPONSE_DURATION_MS);
+          return;
+        }
+        const board = await fetchMissionBoard(userId);
+        setTemporaryMessage(summarizeMissionBoard(board), ASSISTANT_RESPONSE_DURATION_MS);
+        useCharacterStore.getState().setEmotion("happy");
+        return;
+      }
+
+      if (action === "today_schedule") {
         const todayEvents = getCalendarEvents().filter(
           (event) => event.isFollowing && ymdKey(event.startsAt) === ymdKey(new Date()),
         );
@@ -1165,7 +1247,7 @@ export default function Live2DWrapper() {
         return;
       }
 
-      if (action === "week") {
+      if (action === "week_schedule") {
         const now = new Date();
         const weekEvents = getCalendarEvents()
           .filter((event) => event.isFollowing && isWithinDays(new Date(event.startsAt), now, 7))
@@ -1179,17 +1261,34 @@ export default function Live2DWrapper() {
         return;
       }
 
-      if (action === "news") {
+      if (action === "oshi_updates") {
         const unreadCount = await fetchUnreadCount();
         const message =
           unreadCount > 0
-            ? `새 알림이 ${unreadCount}개 있어요.`
-            : "확인할 새 알림은 없어요.";
+            ? `오시 새 소식 ${unreadCount}건이 있어요.`
+            : "관심작 새 소식은 아직 없어요.";
         setTemporaryMessage(message, ASSISTANT_RESPONSE_DURATION_MS);
         useCharacterStore.getState().setEmotion("happy");
         return;
       }
 
+      if (action === "sticker_reply") {
+        setTemporaryMessage(
+          "스티커 답글은 곧 이 페이지에서 1탭으로 등록할 수 있게 연결될 거예요.",
+          ASSISTANT_RESPONSE_DURATION_MS,
+        );
+        useCharacterStore.getState().setEmotion("happy");
+        return;
+      }
+
+      if (action === "draft_resume") {
+        setTemporaryMessage(
+          "쓰던 임시저장이 있으면 곧 한 번에 불러올 수 있게 연결될 거예요.",
+          ASSISTANT_RESPONSE_DURATION_MS,
+        );
+        useCharacterStore.getState().setEmotion("happy");
+        return;
+      }
     } catch (e) {
       console.warn("[Live2DWrapper] assistant action warning:", e);
       setTemporaryMessage(
@@ -1301,6 +1400,7 @@ export default function Live2DWrapper() {
           <SpeechBubble anchor={speechAnchor} bubbleRef={speechBubbleRef}>
             {assistantOpen && (
               <AssistantQuickActions
+                slots={assistantSlots}
                 busyAction={assistantBusy}
                 onAction={runAssistantAction}
                 onClose={closeAssistantMenu}
@@ -1406,10 +1506,12 @@ function SpeechBubble({
 }
 
 function AssistantQuickActions({
+  slots,
   busyAction,
   onAction,
   onClose,
 }: {
+  slots: AssistantSlotKey[];
   busyAction: AssistantActionKey | null;
   onAction: (action: AssistantActionKey) => void;
   onClose: () => void;
@@ -1417,38 +1519,27 @@ function AssistantQuickActions({
   const buttonClass =
     "rounded-full border border-pink-200 bg-pink-50 px-3 py-1 text-[11px] font-semibold text-pink-700 shadow-sm hover:bg-pink-100 disabled:opacity-50";
 
+  const definitions: AssistantSlotDefinition[] = slots.map(
+    (key) => ASSISTANT_SLOT_DEFINITIONS[key],
+  );
+
   return (
     <div
       data-testid="assistant-quick-actions"
       className="mt-2 flex flex-wrap items-center justify-center gap-1"
     >
-      <button
-        type="button"
-        data-testid="assistant-action-today"
-        className={buttonClass}
-        disabled={busyAction !== null}
-        onClick={() => onAction("today")}
-      >
-        {busyAction === "today" ? "\ud655\uc778 \uc911" : "\uc624\ub298 \uc77c\uc815"}
-      </button>
-      <button
-        type="button"
-        data-testid="assistant-action-week"
-        className={buttonClass}
-        disabled={busyAction !== null}
-        onClick={() => onAction("week")}
-      >
-        {busyAction === "week" ? "\ud655\uc778 \uc911" : "\uc774\ubc88 \uc8fc"}
-      </button>
-      <button
-        type="button"
-        data-testid="assistant-action-news"
-        className={buttonClass}
-        disabled={busyAction !== null}
-        onClick={() => onAction("news")}
-      >
-        {busyAction === "news" ? "\ud655\uc778 \uc911" : "\uc0c8 \uc18c\uc2dd"}
-      </button>
+      {definitions.map((definition) => (
+        <button
+          key={definition.key}
+          type="button"
+          data-testid={`assistant-action-${definition.key}`}
+          className={buttonClass}
+          disabled={busyAction !== null}
+          onClick={() => onAction(definition.key)}
+        >
+          {busyAction === definition.key ? definition.busyLabel : definition.label}
+        </button>
+      ))}
       <button
         type="button"
         data-testid="assistant-action-close"

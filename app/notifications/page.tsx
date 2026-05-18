@@ -17,8 +17,10 @@ const TYPE_LABEL: Record<NotificationRow["type"], string> = {
   REPLY: "답글",
   REACTION: "리액션",
   FOLLOW: "팔로우",
+  MENTION: "멘션",
   HOT_PROMOTED: "인기글",
   SYSTEM: "시스템",
+  RELEASE: "신작",
 };
 
 function formatExpiresAt(value: string | null) {

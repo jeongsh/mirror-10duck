@@ -18,6 +18,7 @@ import {
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { fetchFollowedReleaseIds, getCurrentUserId, setReleaseFollow } from "@/lib/supabase/releaseFollows";
+import { fetchAttendanceCalendarEvents } from "@/lib/community/attendance";
 import {
   CATEGORY_LABELS,
   EVENT_TYPE_LABELS,
@@ -57,6 +58,7 @@ export default function CalendarPage() {
   const [followingOnly, setFollowingOnly] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [personalEvents, setPersonalEvents] = useState<CalendarEvent[]>([]);
+  const [attendanceEvents, setAttendanceEvents] = useState<CalendarEvent[]>([]);
   const [dbEvents, setDbEvents] = useState<CalendarEvent[]>([]);
   const [followedReleaseIds, setFollowedReleaseIds] = useState<Set<string>>(new Set());
   const [userId, setUserId] = useState<string | null>(null);
@@ -152,15 +154,30 @@ export default function CalendarPage() {
     void fetchEvents();
   }, []);
 
+  useEffect(() => {
+    if (!userId) {
+      setAttendanceEvents([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const rows = await fetchAttendanceCalendarEvents(userId, cursor);
+      if (!cancelled) setAttendanceEvents(rows);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, cursor]);
+
   const events = useMemo(
     () =>
-      [...baseEvents, ...dbEvents, ...personalEvents]
+      [...baseEvents, ...dbEvents, ...personalEvents, ...attendanceEvents]
         .map((event) => ({
           ...event,
           isFollowing: event.contentId ? followedReleaseIds.has(event.contentId) : event.isFollowing,
         }))
         .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt)),
-    [baseEvents, dbEvents, followedReleaseIds, personalEvents],
+    [baseEvents, dbEvents, followedReleaseIds, personalEvents, attendanceEvents],
   );
   const monthEvents = useMemo(() => {
     const categoryFiltered = filterByCategory(events, activeCategory);
@@ -463,9 +480,11 @@ export default function CalendarPage() {
                           className={`w-full truncate border border-dashed px-1 py-0.5 text-left text-[10px] ${
                             selectedId === event.id
                               ? "border-gray-800 bg-gray-200 text-gray-900"
-                              : event.isFollowing
-                                ? "border-pink-300 bg-pink-50 text-pink-700"
-                                : "border-gray-300 bg-gray-100 text-gray-700"
+                              : event.type === "attendance"
+                                ? "border-emerald-400 bg-emerald-50 text-emerald-800"
+                                : event.isFollowing
+                                  ? "border-pink-300 bg-pink-50 text-pink-700"
+                                  : "border-gray-300 bg-gray-100 text-gray-700"
                           }`}
                           title={event.title}
                         >

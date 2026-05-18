@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AuthProvider } from "@/lib/supabase/useAuthUser";
+import AttendanceRecorder from "@/components/AttendanceRecorder";
 import GlobalNavigation from "@/components/GlobalNavigation";
 import Live2DClientOnly from "@/components/Live2DClientOnly";
 import MainLayoutClient from "@/components/MainLayoutClient";
@@ -19,6 +20,7 @@ export default function RootLayout({
     <html lang="ko">
       <body className="min-h-screen antialiased">
         <AuthProvider>
+          <AttendanceRecorder />
           <GlobalNavigation />
           <div className="relative mx-auto w-full max-w-7xl px-4 pt-6 pb-4">
             <MainLayoutClient>{children}</MainLayoutClient>

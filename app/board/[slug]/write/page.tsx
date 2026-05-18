@@ -10,6 +10,8 @@ import CommunityEditor from "@/components/community/editor/CommunityEditor";
 import { getClientIp } from "@/lib/community/actions";
 import { normalizeBoardSlug } from "@/lib/community/boardSlug";
 import { isSpoilerPrefix } from "@/lib/community/boardTitlePrefix";
+import { processMentionsForPost } from "@/lib/community/mentions";
+import { bumpMissionProgress } from "@/lib/community/missions";
 import { grantExperience, XP_AMOUNTS } from "@/lib/supabase/experience";
 
 function WritePostContent() {
@@ -175,6 +177,15 @@ function WritePostContent() {
         return;
       }
 
+      if (userId) {
+        await processMentionsForPost({
+          text: content,
+          postId: editId,
+          actorId: userId,
+          boardSlug: board.slug,
+        });
+      }
+
       router.push(`/board/${board.slug}/${editId}`);
     } else {
       // 생성 모드
@@ -208,6 +219,13 @@ function WritePostContent() {
 
       if (!isAnonymous && userId) {
         void grantExperience(userId, XP_AMOUNTS.POST_CREATED);
+        void bumpMissionProgress(userId, "post", 1);
+        await processMentionsForPost({
+          text: content,
+          postId: newId,
+          actorId: userId,
+          boardSlug: board.slug,
+        });
       }
 
       router.push(`/board/${board.slug}/${newId}`);

@@ -3,6 +3,7 @@
 import { SmilePlus, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createNotification } from "@/lib/community/notifications";
+import { bumpMissionProgress } from "@/lib/community/missions";
 import { grantExperience, XP_AMOUNTS } from "@/lib/supabase/experience";
 import {
   REACTION_META,
@@ -102,6 +103,10 @@ export default function ReactionBar({ postId, viewerId, authorId }: Props) {
       displayName: userProfile?.nickname || profileDisplayName,
       avatarUrl: userProfile?.avatar_url || profileAvatarUrl,
     });
+
+    if (result.ok && !isSameType && viewerId) {
+      void bumpMissionProgress(viewerId, "reaction", 1);
+    }
 
     if (result.ok && !isSameType && authorId && authorId !== viewerId) {
       const meta = REACTION_META[reactionType];
