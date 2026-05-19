@@ -8,11 +8,17 @@ import {
   Loader2,
   Smile,
 } from "lucide-react";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import FeedMediaGrid from "@/components/community/feed/FeedMediaGrid";
 import StickerPicker from "@/components/stickers/StickerPicker";
-import { insertAtTextarea } from "@/lib/stickers/insertAtCursor";
+import { insertAtContentEditable } from "@/lib/stickers/insertAtCursor";
+import {
+  getContentEditableCaretOffset,
+  setContentEditableCaretOffset,
+} from "@/lib/community/mentionEditor";
 import { supabase } from "@/lib/supabase/client";
+import MentionTextarea from "@/components/community/MentionTextarea";
+import { processMentionsForFeedPost } from "@/lib/community/mentions";
 import { grantExperience, XP_AMOUNTS } from "@/lib/supabase/experience";
 
 const MAX_FEED_LENGTH = 280;
@@ -57,7 +63,8 @@ export default function FeedComposer({
   const [message, setMessage] = useState("");
   const [replyPolicy, setReplyPolicy] = useState<ReplyPolicy>("everyone");
   const [replyMenuOpen, setReplyMenuOpen] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [restoreCaret, setRestoreCaret] = useState<number | null>(null);
+  const textareaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRef = useRef<MediaDraft[]>([]);
 
@@ -71,10 +78,10 @@ export default function FeedComposer({
     (content.trim().length > 0 || media.length > 0);
 
   useEffect(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    textarea.style.height = "auto";
-    textarea.style.height = `${Math.max(textarea.scrollHeight, 84)}px`;
+    const editor = textareaRef.current;
+    if (!editor) return;
+    editor.style.height = "auto";
+    editor.style.height = `${Math.max(editor.scrollHeight, 84)}px`;
   }, [content]);
 
   useEffect(() => {
@@ -96,14 +103,15 @@ export default function FeedComposer({
   };
 
   const handleInsertSticker = (token: string) => {
-    const { next, cursor } = insertAtTextarea(textareaRef.current, content, token);
+    const { next, cursor } = insertAtContentEditable(
+      textareaRef.current,
+      content,
+      token,
+      getContentEditableCaretOffset,
+      setContentEditableCaretOffset,
+    );
+    setRestoreCaret(cursor);
     setContent(next);
-    requestAnimationFrame(() => {
-      const textarea = textareaRef.current;
-      if (!textarea) return;
-      textarea.focus();
-      textarea.setSelectionRange(cursor, cursor);
-    });
   };
 
   const handleSelectMedia = (files: FileList | null) => {
@@ -161,9 +169,16 @@ export default function FeedComposer({
     return urls;
   };
 
-  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!canPost) return;
+  const submitPost = useCallback(async () => {
+    if (
+      disabled ||
+      loading ||
+      isOverLimit ||
+      !userId ||
+      (content.trim().length === 0 && media.length === 0)
+    ) {
+      return;
+    }
 
     setLoading(true);
     setMessage("");
@@ -173,17 +188,28 @@ export default function FeedComposer({
       const imageTokens = imageUrls.map((url) => `!image[${url}]`).join("\n");
       const nextContent = [content.trim(), imageTokens].filter(Boolean).join("\n");
 
-      const { error } = await supabase.from("posts").insert({
-        content: nextContent,
-        source_type: "FEED",
-        author_id: userId,
-        author_email: userEmail,
-        board_id: null,
-      });
+      const { data, error } = await supabase
+        .from("posts")
+        .insert({
+          content: nextContent,
+          source_type: "FEED",
+          author_id: userId,
+          author_email: userEmail,
+          board_id: null,
+        })
+        .select("id")
+        .single();
 
       if (error) throw error;
 
-      if (userId) void grantExperience(userId, XP_AMOUNTS.FEED_CREATED);
+      if (userId && data?.id) {
+        void grantExperience(userId, XP_AMOUNTS.FEED_CREATED);
+        await processMentionsForFeedPost({
+          text: nextContent,
+          postId: data.id as string,
+          actorId: userId,
+        });
+      }
 
       setContent("");
       setFocused(false);
@@ -198,6 +224,11 @@ export default function FeedComposer({
     } finally {
       setLoading(false);
     }
+  }, [content, disabled, isOverLimit, loading, media, onPosted, userEmail, userId]);
+
+  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    await submitPost();
   };
 
   const iconButtonClass =
@@ -215,14 +246,24 @@ export default function FeedComposer({
         </div>
 
         <div className="min-w-0 flex-1">
-          <textarea
-            ref={textareaRef}
+          <MentionTextarea
+            textareaRef={textareaRef}
+            userId={userId || null}
             value={content}
-            onChange={(event) => setContent(event.target.value)}
+            onChange={setContent}
+            restoreCaret={restoreCaret}
+            onRestoreCaret={() => setRestoreCaret(null)}
+            onSubmitShortcut={submitPost}
             onFocus={() => setFocused(true)}
             disabled={disabled || loading}
+            maxLength={MAX_FEED_LENGTH}
+            rows={4}
             className="block min-h-20 w-full resize-none bg-transparent text-lg leading-7 text-gray-900 outline-none placeholder:text-gray-500 disabled:opacity-60"
-            placeholder={disabled ? "로그인 후 작성할 수 있습니다." : "무슨 일이 일어나고 있나요?"}
+            placeholder={
+              disabled
+                ? "로그인 후 작성할 수 있습니다."
+                : "무슨 일이 일어나고 있나요? @ 로 팔로우한 친구를 멘션할 수 있어요."
+            }
           />
 
           {showReplyControl && (focused || content || media.length > 0) ? (
@@ -329,6 +370,7 @@ export default function FeedComposer({
           <button
             type="submit"
             disabled={!canPost}
+            title="Ctrl+Enter로 게시 (Mac: ⌘+Enter)"
             className="border border-dashed border-gray-500 bg-gray-200 px-5 py-2 text-sm font-bold text-gray-900 hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : "게시"}

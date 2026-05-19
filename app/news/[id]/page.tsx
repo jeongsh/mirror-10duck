@@ -224,6 +224,7 @@ export default function NewsDetailPage() {
           viewerEmail={viewer?.email || null}
           allowAnonymous={false}
           isNews={true}
+          mentionMode="none"
         />
       </div>
 

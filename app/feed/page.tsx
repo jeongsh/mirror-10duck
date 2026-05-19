@@ -13,6 +13,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
+import CommentSection from "@/components/community/CommentSection";
 import FeedComposer from "@/components/community/feed/FeedComposer";
 import FeedMediaGrid from "@/components/community/feed/FeedMediaGrid";
 import IdentityBadge from "@/components/community/IdentityBadge";
@@ -53,6 +54,7 @@ export default function FeedPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [latestNoticeCount, setLatestNoticeCount] = useState(0);
   const [openPostMenuId, setOpenPostMenuId] = useState<string | null>(null);
+  const [openCommentsPostId, setOpenCommentsPostId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -671,7 +673,14 @@ export default function FeedPage() {
                     <div className="mt-3 flex items-center justify-between gap-2 text-xs text-gray-500">
                       <button
                         type="button"
-                        className="flex items-center gap-1 hover:text-gray-900"
+                        onClick={() =>
+                          setOpenCommentsPostId((current) =>
+                            current === post.id ? null : post.id,
+                          )
+                        }
+                        className={`flex items-center gap-1 hover:text-gray-900 ${
+                          openCommentsPostId === post.id ? "font-semibold text-gray-900" : ""
+                        }`}
                         title="댓글"
                       >
                         <MessageCircle size={17} />
@@ -696,6 +705,22 @@ export default function FeedPage() {
                         <Share size={17} />
                       </button>
                     </div>
+
+                    {openCommentsPostId === post.id ? (
+                      <div className="mt-3 border-t border-dashed border-gray-300 pt-3">
+                        <CommentSection
+                          postId={post.id}
+                          postAuthorId={post.author_id ?? undefined}
+                          viewerId={currentUser?.id ?? null}
+                          viewerEmail={currentUser?.email ?? null}
+                          mentionMode="typed"
+                          buildMentionLinkUrl={(commentId) =>
+                            `/feed?post=${encodeURIComponent(post.id)}#comment-${commentId}`
+                          }
+                          onThreadChanged={() => void fetchFeed()}
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </article>

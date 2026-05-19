@@ -7,10 +7,18 @@ import { parseStickerToken } from "@/lib/stickers/token";
 import RichContent from "@/components/stickers/RichContent";
 import StickerPicker from "@/components/stickers/StickerPicker";
 import CharacterSticker from "@/components/stickers/CharacterSticker";
-import { insertAtTextarea } from "@/lib/stickers/insertAtCursor";
+import { insertAtContentEditable, insertAtTextarea } from "@/lib/stickers/insertAtCursor";
+import {
+  getContentEditableCaretOffset,
+  setContentEditableCaretOffset,
+} from "@/lib/community/mentionEditor";
 import IdentityBadge from "@/components/community/IdentityBadge";
 import CommentVoteBar from "@/components/community/CommentVoteBar";
-import { processMentionsForComment } from "@/lib/community/mentions";
+import {
+  processMentionForUser,
+  processMentionsForFeedComment,
+} from "@/lib/community/mentions";
+import MentionTextarea from "@/components/community/MentionTextarea";
 import { createNotification } from "@/lib/community/notifications";
 import { bumpMissionProgress } from "@/lib/community/missions";
 import { checkAndGrantActivityBadges } from "@/lib/supabase/badges";
@@ -36,6 +44,10 @@ interface Props {
   viewerEmail: string | null;
   allowAnonymous?: boolean;
   isNews?: boolean; // 뉴스 댓글 여부
+  /** none | reply-only(게시판 답글 자동 멘션) | typed(피드 @멘션) */
+  mentionMode?: "none" | "reply-only" | "typed";
+  /** 멘션 알림 링크 (피드: /feed?post=...) */
+  buildMentionLinkUrl?: (commentId: string) => string;
   /** 댓글 스레드가 바뀐 뒤(등록/삭제) 상위에서 글 집계를 다시 읽을 때 */
   onThreadChanged?: () => void;
   onOpenUserAction?: (authorId: string) => void;
@@ -46,8 +58,10 @@ export default function CommentSection({
   postAuthorId, 
   viewerId, 
   viewerEmail, 
-  allowAnonymous = false, 
+  allowAnonymous = false,
   isNews = false,
+  mentionMode = "reply-only",
+  buildMentionLinkUrl,
   onThreadChanged,
   onOpenUserAction
 }: Props) {
@@ -64,7 +78,9 @@ export default function CommentSection({
   const [revealedBlockedCommentIds, setRevealedBlockedCommentIds] = useState<Set<string>>(
     () => new Set()
   );
+  const [restoreCaret, setRestoreCaret] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mentionEditorRef = useRef<HTMLDivElement>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
 
   const tableName = isNews ? "news_comments" : "comments";
@@ -134,7 +150,29 @@ export default function CommentSection({
     });
   }, []);
 
+  const beginReply = (commentId: string) => {
+    setReplyTo((current) => (current === commentId ? null : commentId));
+    requestAnimationFrame(() => {
+      if (mentionMode === "typed") mentionEditorRef.current?.focus();
+      else textareaRef.current?.focus();
+    });
+  };
+
+  const replyTarget = replyTo ? comments.find((c) => c.id === replyTo) : null;
+
   const handleInsertSticker = (token: string) => {
+    if (mentionMode === "typed") {
+      const { next, cursor } = insertAtContentEditable(
+        mentionEditorRef.current,
+        text,
+        token,
+        getContentEditableCaretOffset,
+        setContentEditableCaretOffset,
+      );
+      setRestoreCaret(cursor);
+      setText(next);
+      return;
+    }
     const { next, cursor } = insertAtTextarea(textareaRef.current, text, token);
     setText(next);
     requestAnimationFrame(() => {
@@ -210,12 +248,29 @@ export default function CommentSection({
       }
 
       if (insertedComment?.id) {
-        await processMentionsForComment({
-          text,
-          commentId: insertedComment.id,
-          actorId: viewerId,
-          linkUrl: `${window.location.pathname}#comment-${insertedComment.id}`,
-        });
+        const linkUrl =
+          buildMentionLinkUrl?.(insertedComment.id) ??
+          `${window.location.pathname}#comment-${insertedComment.id}`;
+
+        if (mentionMode === "reply-only" && replyTo) {
+          const parent = comments.find((c) => c.id === replyTo);
+          if (parent?.author_id && parent.author_id !== viewerId) {
+            await processMentionForUser({
+              mentionedUserId: parent.author_id,
+              sourceType: "comment",
+              sourceId: insertedComment.id,
+              actorId: viewerId,
+              linkUrl,
+            });
+          }
+        } else if (mentionMode === "typed") {
+          await processMentionsForFeedComment({
+            text,
+            commentId: insertedComment.id,
+            actorId: viewerId,
+            linkUrl,
+          });
+        }
       }
     }
 
@@ -287,6 +342,22 @@ export default function CommentSection({
           title: '새 댓글 (스티커)',
           content: '내 글에 새로운 스티커 댓글이 달렸습니다.',
           linkUrl: `${window.location.pathname}#comment-${insertedComment?.id ?? ""}`,
+        });
+      }
+    }
+
+    if (!isNews && viewerId && insertedComment?.id && mentionMode === "reply-only" && replyTo) {
+      const parent = comments.find((c) => c.id === replyTo);
+      if (parent?.author_id && parent.author_id !== viewerId) {
+        const linkUrl =
+          buildMentionLinkUrl?.(insertedComment.id) ??
+          `${window.location.pathname}#comment-${insertedComment.id}`;
+        await processMentionForUser({
+          mentionedUserId: parent.author_id,
+          sourceType: "comment",
+          sourceId: insertedComment.id,
+          actorId: viewerId,
+          linkUrl,
         });
       }
     }
@@ -486,8 +557,9 @@ export default function CommentSection({
                         }}
                       />
                       <div className="flex items-center gap-3">
-                        <button 
-                          onClick={() => setReplyTo(replyTo === c.id ? null : c.id)}
+                        <button
+                          type="button"
+                          onClick={() => beginReply(c.id)}
                           className={`text-[10px] font-bold uppercase tracking-widest ${replyTo === c.id ? "text-red-500" : "text-blue-500 hover:underline"}`}
                         >
                           {replyTo === c.id ? "[취소]" : "[답글 달기]"}
@@ -613,6 +685,13 @@ export default function CommentSection({
                                 }}
                               />
                               <div className="flex items-center gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => beginReply(r.id)}
+                                  className={`text-[10px] font-bold uppercase tracking-widest ${replyTo === r.id ? "text-red-500" : "text-blue-500 hover:underline"}`}
+                                >
+                                  {replyTo === r.id ? "[취소]" : "[답글 달기]"}
+                                </button>
                                 {canDeleteReply && (
                                   <>
                                     <button
@@ -660,14 +739,22 @@ export default function CommentSection({
       </ul>
 
       <div className="flex flex-col gap-2 border-t border-dashed border-gray-300 pt-3">
-        {replyTo && (
+        {replyTo && replyTarget && (
           <div className="flex items-center justify-between border border-dashed border-blue-200 bg-blue-50 px-3 py-1.5 text-[10px] font-bold text-blue-700">
             <span>
-              {root.find(c => c.id === replyTo)?.profiles?.nickname || 
-               root.find(c => c.id === replyTo)?.anonymous_nickname ||
-               root.find(c => c.id === replyTo)?.author_email?.split('@')[0]} 님에게 답글 작성 중...
+              {replyTarget.profiles?.nickname ||
+                replyTarget.anonymous_nickname ||
+                replyTarget.author_email?.split("@")[0] ||
+                "상대"}{" "}
+              {mentionMode === "reply-only" ? "님에게 답글 · 자동 멘션" : "님에게 답글 작성 중..."}
             </span>
-            <button onClick={() => setReplyTo(null)} className="text-gray-400 hover:text-red-500 uppercase tracking-widest">[취소]</button>
+            <button
+              type="button"
+              onClick={() => setReplyTo(null)}
+              className="text-gray-400 hover:text-red-500 uppercase tracking-widest"
+            >
+              [취소]
+            </button>
           </div>
         )}
 
@@ -690,19 +777,40 @@ export default function CommentSection({
           </div>
         )}
 
-        <textarea
-          ref={textareaRef}
-          rows={3}
-          placeholder={
-            viewerId || effectiveAllowAnonymous
-              ? "텍스트 댓글을 작성하세요. 본문에 스티커 토큰을 섞을 수 있습니다."
-              : "댓글을 작성하려면 로그인하세요."
-          }
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          disabled={!viewerId && !effectiveAllowAnonymous}
-          className="w-full border border-dashed border-gray-400 bg-white px-3 py-2 text-sm disabled:bg-gray-100 disabled:text-gray-400"
-        />
+        {mentionMode === "typed" ? (
+          <MentionTextarea
+            textareaRef={mentionEditorRef}
+            rows={3}
+            userId={viewerId}
+            value={text}
+            onChange={setText}
+            restoreCaret={restoreCaret}
+            onRestoreCaret={() => setRestoreCaret(null)}
+            disabled={!viewerId && !effectiveAllowAnonymous}
+            placeholder={
+              viewerId || effectiveAllowAnonymous
+                ? "댓글을 입력하세요. @ 를 누르면 팔로우한 계정을 멘션할 수 있어요."
+                : "댓글을 작성하려면 로그인하세요."
+            }
+            className="w-full border border-dashed border-gray-400 bg-white px-3 py-2 text-sm disabled:bg-gray-100 disabled:text-gray-400"
+          />
+        ) : (
+          <textarea
+            ref={textareaRef}
+            rows={3}
+            placeholder={
+              viewerId || effectiveAllowAnonymous
+                ? mentionMode === "reply-only"
+                  ? "댓글을 작성하세요. 답글 달기를 누르면 상대에게 자동으로 멘션됩니다."
+                  : "텍스트 댓글을 작성하세요. 본문에 스티커 토큰을 섞을 수 있습니다."
+                : "댓글을 작성하려면 로그인하세요."
+            }
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            disabled={!viewerId && !effectiveAllowAnonymous}
+            className="w-full border border-dashed border-gray-400 bg-white px-3 py-2 text-sm disabled:bg-gray-100 disabled:text-gray-400"
+          />
+        )}
 
         <div className="flex flex-wrap items-center gap-2">
           <StickerPicker onInsert={handleInsertSticker} label="본문에 스티커 삽입" />

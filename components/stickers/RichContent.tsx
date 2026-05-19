@@ -1,8 +1,29 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef } from "react";
+import { splitMentionText } from "@/lib/community/mentionEditor";
 import { splitContentSegments } from "@/lib/stickers/token";
 import CharacterSticker from "./CharacterSticker";
+
+function renderTextWithMentions(text: string, keyPrefix: string) {
+  const parts = splitMentionText(text);
+  if (parts.length === 0) return text;
+  return parts.map((part, index) => {
+    if (part.type === "mention") {
+      return (
+        <Link
+          key={`${keyPrefix}-m-${index}`}
+          href={`/user/${encodeURIComponent(part.handle)}`}
+          className="font-semibold text-blue-600 hover:underline"
+        >
+          @{part.handle}
+        </Link>
+      );
+    }
+    return <span key={`${keyPrefix}-t-${index}`}>{part.value}</span>;
+  });
+}
 
 /**
  * 본문 문자열을 텍스트와 캐릭터 스티커가 섞인 React 노드로 렌더링한다.
@@ -148,7 +169,7 @@ export default function RichContent({ content, className }: Props) {
     <div className={`whitespace-pre-wrap break-words text-sm leading-7 text-gray-800 ${className ?? ""}`}>
       {segments.map((seg, idx) => {
         if (seg.type === "text") {
-          return <span key={idx}>{seg.value}</span>;
+          return <span key={idx}>{renderTextWithMentions(seg.value, `seg-${idx}`)}</span>;
         }
         if (seg.type === "sticker") {
           return (

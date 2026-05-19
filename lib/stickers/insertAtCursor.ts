@@ -26,3 +26,21 @@ export function insertAtTextarea(
   const next = `${current.slice(0, start)}${text}${current.slice(end)}`;
   return { next, cursor: start + text.length };
 }
+
+/** contenteditable 멘션 에디터용 — plain text 커서 기준 삽입 */
+export function insertAtContentEditable(
+  editor: HTMLDivElement | null,
+  current: string,
+  text: string,
+  getCaretOffset: (root: HTMLElement) => number,
+  setCaretOffset: (root: HTMLElement, offset: number) => void,
+): InsertResult {
+  if (!editor) {
+    const next = `${current}${text}`;
+    return { next, cursor: next.length };
+  }
+
+  const start = getCaretOffset(editor);
+  const next = `${current.slice(0, start)}${text}${current.slice(start)}`;
+  return { next, cursor: start + text.length };
+}
