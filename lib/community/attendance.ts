@@ -1,18 +1,22 @@
 import { supabase } from "@/lib/supabase/client";
-import type { CalendarEvent } from "@/lib/otaku/hub";
 import { bumpMissionProgress } from "@/lib/community/missions";
 
 const ATTENDANCE_MISSION_SLUG = "attendance";
+
+export type AttendanceMonthSummary = {
+  /** 해당 월에 출석 완료한 날짜 (YYYY-MM-DD) */
+  attendedYmds: string[];
+  /** 이번 달 출석 일수 */
+  monthCount: number;
+  /** 누적 출석 일수 */
+  totalCount: number;
+};
 
 export function ymdLocal(now: Date = new Date()): string {
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-function ymdToKstMorningIso(ymd: string): string {
-  return `${ymd}T09:00:00+09:00`;
 }
 
 export async function hasAttendanceToday(userId: string, now: Date = new Date()): Promise<boolean> {
@@ -51,58 +55,76 @@ export async function recordAutoAttendance(userId: string): Promise<{ recorded: 
   return { recorded: true };
 }
 
-/** 캘린더에 표시할 출석 완료 이벤트 목록 (해당 월). */
-export async function fetchAttendanceCalendarEvents(
+async function getAttendanceMissionId(): Promise<string | null> {
+  const { data: mission, error } = await supabase
+    .from("daily_missions")
+    .select("id")
+    .eq("slug", ATTENDANCE_MISSION_SLUG)
+    .maybeSingle();
+
+  if (error || !mission?.id) return null;
+  return mission.id as string;
+}
+
+function isAttendedRow(row: { completed_at: string | null; progress_count: number | null }): boolean {
+  return Boolean(row.completed_at) || (row.progress_count ?? 0) >= 1;
+}
+
+/** 캘린더 출석 도장·횟수 표시용 (해당 월 + 누적). */
+export async function fetchAttendanceMonthSummary(
   userId: string,
   monthCursor: Date,
-): Promise<CalendarEvent[]> {
-  if (!userId) return [];
+): Promise<AttendanceMonthSummary> {
+  const empty: AttendanceMonthSummary = { attendedYmds: [], monthCount: 0, totalCount: 0 };
+  if (!userId) return empty;
+
+  const missionId = await getAttendanceMissionId();
+  if (!missionId) return empty;
 
   const year = monthCursor.getFullYear();
   const month = monthCursor.getMonth();
   const startYmd = ymdLocal(new Date(year, month, 1));
   const endYmd = ymdLocal(new Date(year, month + 1, 0));
 
-  const { data: mission, error: missionError } = await supabase
-    .from("daily_missions")
-    .select("id")
-    .eq("slug", ATTENDANCE_MISSION_SLUG)
-    .maybeSingle();
+  const [monthResult, totalResult] = await Promise.all([
+    supabase
+      .from("user_mission_progress")
+      .select("ymd_key, completed_at, progress_count")
+      .eq("user_id", userId)
+      .eq("mission_id", missionId)
+      .gte("ymd_key", startYmd)
+      .lte("ymd_key", endYmd)
+      .order("ymd_key", { ascending: true }),
+    supabase
+      .from("user_mission_progress")
+      .select("ymd_key, completed_at, progress_count", { count: "exact", head: false })
+      .eq("user_id", userId)
+      .eq("mission_id", missionId),
+  ]);
 
-  if (missionError || !mission?.id) return [];
-
-  const { data: rows, error } = await supabase
-    .from("user_mission_progress")
-    .select("ymd_key, completed_at, progress_count")
-    .eq("user_id", userId)
-    .eq("mission_id", mission.id)
-    .gte("ymd_key", startYmd)
-    .lte("ymd_key", endYmd)
-    .order("ymd_key", { ascending: true });
-
-  if (error) {
-    console.warn("[attendance] fetch calendar events failed:", error.message);
-    return [];
+  if (monthResult.error) {
+    console.warn("[attendance] fetch month summary failed:", monthResult.error.message);
+    return empty;
   }
 
-  return (rows ?? [])
+  const attendedYmds = (monthResult.data ?? [])
     .filter((row) => {
       const ymd = row.ymd_key as string;
-      if (!ymd) return false;
-      return Boolean(row.completed_at) || (row.progress_count ?? 0) >= 1;
+      return Boolean(ymd) && isAttendedRow(row);
     })
-    .map((row) => {
-      const ymd = row.ymd_key as string;
-      return {
-        id: `attendance-${userId}-${ymd}`,
-        category: "personal" as const,
-        type: "attendance" as const,
-        title: "출석완료",
-        startsAt: ymdToKstMorningIso(ymd),
-        timezone: "Asia/Seoul",
-        platform: "10duck",
-        isFollowing: true,
-        reminderOffsetMinutes: null,
-      };
-    });
+    .map((row) => row.ymd_key as string);
+
+  let totalCount = 0;
+  if (!totalResult.error && totalResult.data) {
+    totalCount = totalResult.data.filter((row) => isAttendedRow(row)).length;
+  } else if (totalResult.error) {
+    console.warn("[attendance] fetch total count failed:", totalResult.error.message);
+    totalCount = attendedYmds.length;
+  }
+
+  return {
+    attendedYmds,
+    monthCount: attendedYmds.length,
+    totalCount,
+  };
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   Bell,
   CalendarDays,
+  Check,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -18,7 +19,10 @@ import {
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { fetchFollowedReleaseIds, getCurrentUserId, setReleaseFollow } from "@/lib/supabase/releaseFollows";
-import { fetchAttendanceCalendarEvents } from "@/lib/community/attendance";
+import {
+  fetchAttendanceMonthSummary,
+  type AttendanceMonthSummary,
+} from "@/lib/community/attendance";
 import {
   CATEGORY_LABELS,
   EVENT_TYPE_LABELS,
@@ -58,7 +62,11 @@ export default function CalendarPage() {
   const [followingOnly, setFollowingOnly] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [personalEvents, setPersonalEvents] = useState<CalendarEvent[]>([]);
-  const [attendanceEvents, setAttendanceEvents] = useState<CalendarEvent[]>([]);
+  const [attendanceSummary, setAttendanceSummary] = useState<AttendanceMonthSummary>({
+    attendedYmds: [],
+    monthCount: 0,
+    totalCount: 0,
+  });
   const [dbEvents, setDbEvents] = useState<CalendarEvent[]>([]);
   const [followedReleaseIds, setFollowedReleaseIds] = useState<Set<string>>(new Set());
   const [userId, setUserId] = useState<string | null>(null);
@@ -156,28 +164,33 @@ export default function CalendarPage() {
 
   useEffect(() => {
     if (!userId) {
-      setAttendanceEvents([]);
+      setAttendanceSummary({ attendedYmds: [], monthCount: 0, totalCount: 0 });
       return;
     }
     let cancelled = false;
     void (async () => {
-      const rows = await fetchAttendanceCalendarEvents(userId, cursor);
-      if (!cancelled) setAttendanceEvents(rows);
+      const summary = await fetchAttendanceMonthSummary(userId, cursor);
+      if (!cancelled) setAttendanceSummary(summary);
     })();
     return () => {
       cancelled = true;
     };
   }, [userId, cursor]);
 
+  const attendedDaySet = useMemo(
+    () => new Set(attendanceSummary.attendedYmds),
+    [attendanceSummary.attendedYmds],
+  );
+
   const events = useMemo(
     () =>
-      [...baseEvents, ...dbEvents, ...personalEvents, ...attendanceEvents]
+      [...baseEvents, ...dbEvents, ...personalEvents]
         .map((event) => ({
           ...event,
           isFollowing: event.contentId ? followedReleaseIds.has(event.contentId) : event.isFollowing,
         }))
         .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt)),
-    [baseEvents, dbEvents, followedReleaseIds, personalEvents, attendanceEvents],
+    [baseEvents, dbEvents, followedReleaseIds, personalEvents],
   );
   const monthEvents = useMemo(() => {
     const categoryFiltered = filterByCategory(events, activeCategory);
@@ -417,7 +430,19 @@ export default function CalendarPage() {
             </div>
           </div>
 
-          <div className="mb-3 flex justify-end">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            {userId ? (
+              <p className="inline-flex items-center gap-2 border border-dashed border-emerald-400 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-emerald-500 bg-white text-emerald-600">
+                  <Check size={14} strokeWidth={3} />
+                </span>
+                이번 달 출석 {attendanceSummary.monthCount}회
+                <span className="font-normal text-emerald-700/80">·</span>
+                누적 {attendanceSummary.totalCount}회
+              </p>
+            ) : (
+              <p className="text-xs text-gray-500">로그인하면 출석 도장이 캘린더에 표시됩니다.</p>
+            )}
             <button
               type="button"
               onClick={handleOpenCreateModal}
@@ -444,8 +469,12 @@ export default function CalendarPage() {
           <div className="grid grid-cols-7">
             {weeks.flat().map((day) => {
               const inMonth = day.getMonth() === cursor.getMonth();
-              const dayEvents = eventsByDay.get(ymdKey(day)) ?? [];
-              const isToday = ymdKey(day) === ymdKey(today);
+              const dayKey = ymdKey(day);
+              const dayEvents = eventsByDay.get(dayKey) ?? [];
+              const isToday = dayKey === ymdKey(today);
+              const hasAttendance = Boolean(userId && attendedDaySet.has(dayKey));
+              const visibleEventLimit = hasAttendance ? 2 : 3;
+              const slotCount = (hasAttendance ? 1 : 0) + dayEvents.length;
 
               return (
                 <div
@@ -462,14 +491,25 @@ export default function CalendarPage() {
                     >
                       {day.getDate()}
                     </span>
-                    {dayEvents.length > 0 ? (
+                    {slotCount > 0 ? (
                       <span className="rounded-full bg-gray-200 px-1.5 text-[10px] text-gray-700">
-                        {dayEvents.length}
+                        {slotCount}
                       </span>
                     ) : null}
                   </div>
                   <ul className="mt-1 space-y-1">
-                    {dayEvents.slice(0, 3).map((event) => (
+                    {hasAttendance ? (
+                      <li>
+                        <div
+                          className="flex h-[18px] w-full items-center justify-center gap-0.5 border border-dashed border-emerald-500 bg-emerald-50 text-[10px] font-bold tracking-wide text-emerald-800"
+                          title="출석 완료"
+                        >
+                          <Check size={11} strokeWidth={3} />
+                          출석
+                        </div>
+                      </li>
+                    ) : null}
+                    {dayEvents.slice(0, visibleEventLimit).map((event) => (
                       <li key={event.id} className="relative">
                         <button
                           type="button"
@@ -480,11 +520,9 @@ export default function CalendarPage() {
                           className={`w-full truncate border border-dashed px-1 py-0.5 text-left text-[10px] ${
                             selectedId === event.id
                               ? "border-gray-800 bg-gray-200 text-gray-900"
-                              : event.type === "attendance"
-                                ? "border-emerald-400 bg-emerald-50 text-emerald-800"
-                                : event.isFollowing
-                                  ? "border-pink-300 bg-pink-50 text-pink-700"
-                                  : "border-gray-300 bg-gray-100 text-gray-700"
+                              : event.isFollowing
+                                ? "border-pink-300 bg-pink-50 text-pink-700"
+                                : "border-gray-300 bg-gray-100 text-gray-700"
                           }`}
                           title={event.title}
                         >
@@ -512,8 +550,10 @@ export default function CalendarPage() {
                         ) : null}
                       </li>
                     ))}
-                    {dayEvents.length > 3 ? (
-                      <li className="text-[10px] text-gray-500">+{dayEvents.length - 3}</li>
+                    {dayEvents.length > visibleEventLimit ? (
+                      <li className="text-[10px] text-gray-500">
+                        +{dayEvents.length - visibleEventLimit}
+                      </li>
                     ) : null}
                   </ul>
                 </div>
