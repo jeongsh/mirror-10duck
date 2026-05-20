@@ -30,6 +30,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         <h2 className="mb-6 text-xl font-bold">어드민 통합 페이지</h2>
         <nav className="flex flex-col gap-2">
           <Link
+            href="/admin/works"
+            className="rounded border border-transparent p-2 transition-colors hover:border-gray-300 hover:bg-gray-100"
+          >
+            공식 작품/오시 관리
+          </Link>
+          <Link
             href="/admin/boards"
             className="rounded border border-transparent p-2 transition-colors hover:border-gray-300 hover:bg-gray-100"
           >

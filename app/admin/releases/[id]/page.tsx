@@ -34,6 +34,7 @@ type ReleaseEditRow = {
   episode_count: number | null;
   details_json: unknown | null;
   release_date: string | null;
+  official_work_id: string | null;
 };
 
 export default function AdminReleaseEditPage({ params }: { params: Promise<{ id: string }> }) {
@@ -50,7 +51,7 @@ export default function AdminReleaseEditPage({ params }: { params: Promise<{ id:
       const { data, error } = await supabase
         .from("release_items")
         .select(
-          "id, category, status, title, original_title, synopsis, poster_url, banner_url, genres, studios, season, cours, episode_count, details_json, release_date",
+          "id, category, status, title, original_title, synopsis, poster_url, banner_url, genres, studios, season, cours, episode_count, details_json, release_date, official_work_id",
         )
         .eq("id", id)
         .single();
@@ -79,6 +80,8 @@ export default function AdminReleaseEditPage({ params }: { params: Promise<{ id:
         episodeCount: item.episode_count?.toString() ?? "",
         details: formatDetailsForTextarea(item.details_json),
         releaseDate: item.release_date ?? "",
+        officialWorkId: item.official_work_id ?? "",
+        createOfficialWork: false,
       });
       setLoading(false);
     };
@@ -114,6 +117,7 @@ export default function AdminReleaseEditPage({ params }: { params: Promise<{ id:
         episode_count: numberOrNull(form.episodeCount),
         details_json: parseDetails(form.details),
         release_date: emptyToNull(form.releaseDate),
+        official_work_id: emptyToNull(form.officialWorkId),
       })
       .eq("id", id);
 

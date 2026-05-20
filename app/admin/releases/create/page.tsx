@@ -12,6 +12,7 @@ import {
 } from "@/components/releases/AdminReleaseForm";
 import { supabase } from "@/lib/supabase/client";
 import { formatCoursShort, normalizeCours } from "@/lib/otaku/cours";
+import { normalizeOfficialSlug } from "@/lib/official/catalog";
 
 export default function CreateReleasePage() {
   return (
@@ -50,6 +51,34 @@ function CreateReleaseInner() {
       return;
     }
 
+    let officialWorkId = emptyToNull(form.officialWorkId);
+
+    if (!officialWorkId && form.createOfficialWork) {
+      const baseSlug = normalizeOfficialSlug(form.originalTitle || form.title);
+      const slug = baseSlug || `work-${Date.now()}`;
+      const { data: workData, error: workError } = await supabase
+        .from("official_works")
+        .insert({
+          slug,
+          title: form.title.trim(),
+          original_title: emptyToNull(form.originalTitle),
+          category: form.category,
+          synopsis: form.synopsis.trim(),
+          cover_image_url: emptyToNull(form.posterUrl),
+          status: "PUBLISHED",
+          sort_order: 0,
+        })
+        .select("id")
+        .single();
+
+      if (workError) {
+        alert("공식 작품 생성 실패: " + workError.message);
+        return;
+      }
+
+      officialWorkId = workData.id as string;
+    }
+
     const { error } = await supabase.from("release_items").insert([
       {
         category: form.category.toUpperCase(),
@@ -66,6 +95,7 @@ function CreateReleaseInner() {
         episode_count: numberOrNull(form.episodeCount),
         details_json: parseDetails(form.details),
         release_date: emptyToNull(form.releaseDate),
+        official_work_id: officialWorkId,
       },
     ]);
 

@@ -24,6 +24,7 @@ type AdminReleaseRow = {
   episode_count: number | null;
   status: string;
   release_date: string | null;
+  official_works?: { title: string } | { title: string }[] | null;
 };
 
 const UNASSIGNED = "__unassigned__";
@@ -56,7 +57,7 @@ function AdminReleasesInner() {
     setLoading(true);
     const { data, error } = await supabase
       .from("release_items")
-      .select("id, category, title, original_title, poster_url, season, cours, episode_count, status, release_date")
+      .select("id, category, title, original_title, poster_url, season, cours, episode_count, status, release_date, official_works(title)")
       .order("release_date", { ascending: true, nullsFirst: false });
 
     if (error) {
@@ -289,6 +290,7 @@ function AdminReleasesInner() {
                 <tr>
                   <th className="p-3 font-semibold">작품</th>
                   <th className="p-3 font-semibold">유형</th>
+                  <th className="p-3 font-semibold">작품 허브</th>
                   <th className="p-3 font-semibold">출시일</th>
                   <th className="p-3 font-semibold">화수</th>
                   <th className="p-3 font-semibold">상태</th>
@@ -303,6 +305,7 @@ function AdminReleasesInner() {
                       <div className="text-xs text-gray-500">{item.original_title}</div>
                     </td>
                     <td className="p-3 text-gray-600">{getCategoryLabel(item.category)}</td>
+                    <td className="p-3 text-gray-600">{getOfficialWorkTitle(item.official_works)}</td>
                     <td className="p-3 text-gray-600">{item.release_date ?? "미정"}</td>
                     <td className="p-3 text-gray-600">
                       {item.episode_count ? `${item.episode_count}화` : "미정"}
@@ -345,4 +348,9 @@ function AdminReleasesInner() {
 function getCategoryLabel(category: string) {
   const key = category.toLowerCase() as keyof typeof CATEGORY_LABELS;
   return CATEGORY_LABELS[key] ?? category;
+}
+
+function getOfficialWorkTitle(value: AdminReleaseRow["official_works"]) {
+  if (Array.isArray(value)) return value[0]?.title ?? "-";
+  return value?.title ?? "-";
 }

@@ -28,6 +28,7 @@ import {
   getOshiList,
   upsertOshi,
   deleteOshi,
+  reorderOshi,
   formatOshiPrimaryTitle,
   formatOshiSubtitle,
 } from "@/lib/supabase/oshi";
@@ -36,6 +37,7 @@ import { getAllBadges, getUserBadges, checkAndGrantOshiBadges } from "@/lib/supa
 import AuthorProfileCard from "@/components/community/AuthorProfileCard";
 import { CARD_THEMES, THEME_ORDER } from "@/lib/cardThemes";
 import CardImageCropModal from "@/components/profile/CardImageCropModal";
+import type { OfficialOshiCharacter, OfficialWork } from "@/types/official";
 
 type TabId = "profile" | "library" | "subscription" | "oshi" | "card" | "account";
 
@@ -176,7 +178,11 @@ export default function ProfilePage() {
     pair_char_a: "",
     pair_char_b: "",
     pair_direction: "reversible" as OshiPairDirection,
+    official_work_id: "",
+    official_oshi_id: "",
   });
+  const [officialWorks, setOfficialWorks] = useState<OfficialWork[]>([]);
+  const [officialOshi, setOfficialOshi] = useState<OfficialOshiCharacter[]>([]);
   const [newBadgeIds, setNewBadgeIds] = useState<string[]>([]);
 
   // 캐릭터 라이브러리 동기화 및 관리
@@ -292,6 +298,31 @@ export default function ProfilePage() {
 
     void syncData();
   }, [user, setProfiles]);
+
+  useEffect(() => {
+    const fetchOfficialCatalog = async () => {
+      const [{ data: worksData, error: worksError }, { data: oshiData, error: oshiError }] =
+        await Promise.all([
+          supabase
+            .from("official_works")
+            .select("*")
+            .eq("status", "PUBLISHED")
+            .order("sort_order", { ascending: true })
+            .order("title", { ascending: true }),
+          supabase
+            .from("official_oshi_characters")
+            .select("*")
+            .eq("status", "PUBLISHED")
+            .order("sort_order", { ascending: true })
+            .order("name", { ascending: true }),
+        ]);
+
+      if (!worksError) setOfficialWorks((worksData ?? []) as OfficialWork[]);
+      if (!oshiError) setOfficialOshi((oshiData ?? []) as OfficialOshiCharacter[]);
+    };
+
+    void fetchOfficialCatalog();
+  }, []);
 
   if (user === undefined) {
     return (
@@ -644,6 +675,8 @@ export default function ProfilePage() {
         pair_direction: ["a_to_b", "b_to_a", "reversible", "unknown"].includes(d)
           ? d
           : "reversible",
+        official_work_id: "",
+        official_oshi_id: "",
       });
     } else {
       setEditingOshi(null);
@@ -659,9 +692,57 @@ export default function ProfilePage() {
         pair_char_a: "",
         pair_char_b: "",
         pair_direction: "reversible",
+        official_work_id: "",
+        official_oshi_id: "",
       });
     }
     setShowOshiForm(true);
+  };
+
+  const officialOshiForSelectedWork = officialOshi.filter(
+    (item) => item.work_id === oshiForm.official_work_id,
+  );
+
+  const applyOfficialWork = (workId: string) => {
+    const work = officialWorks.find((item) => item.id === workId);
+    if (!work) {
+      setOshiForm((f) => ({ ...f, official_work_id: "", official_oshi_id: "" }));
+      return;
+    }
+
+    const nextType: OshiType =
+      work.category === "anime" || work.category === "manga" ? work.category : "other";
+
+    setOshiForm((f) => ({
+      ...f,
+      official_work_id: work.id,
+      official_oshi_id: "",
+      oshi_type: nextType,
+      title: work.title,
+      image_url: work.cover_image_url ?? f.image_url,
+      reference_work: "",
+    }));
+  };
+
+  const applyOfficialOshi = (oshiId: string) => {
+    const selected = officialOshi.find((item) => item.id === oshiId);
+    if (!selected) {
+      setOshiForm((f) => ({ ...f, official_oshi_id: "" }));
+      return;
+    }
+
+    const work = officialWorks.find((item) => item.id === selected.work_id);
+    setOshiForm((f) => ({
+      ...f,
+      official_work_id: selected.work_id,
+      official_oshi_id: selected.id,
+      oshi_type: "character",
+      title: selected.name,
+      image_url: selected.profile_image_url ?? f.image_url,
+      affiliation: selected.role_label ?? "",
+      reference_work: work?.title ?? "",
+      description: selected.description ? selected.description.slice(0, 100) : f.description,
+    }));
   };
 
   const handleOshiSubmit = async (e: React.FormEvent) => {
@@ -749,6 +830,30 @@ export default function ProfilePage() {
       alert(`오류: ${err.message}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOshiMove = async (oshiId: string, direction: "up" | "down") => {
+    if (!user) return;
+    const currentIndex = oshiList.findIndex((oshi) => oshi.id === oshiId);
+    if (currentIndex < 0) return;
+    const nextIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (nextIndex < 0 || nextIndex >= oshiList.length) return;
+
+    const nextList = [...oshiList];
+    [nextList[currentIndex], nextList[nextIndex]] = [
+      nextList[nextIndex],
+      nextList[currentIndex],
+    ];
+    const reranked = nextList.map((oshi, index) => ({ ...oshi, rank: index + 1 }));
+    const previous = oshiList;
+
+    setOshiList(reranked);
+    try {
+      await reorderOshi(user.id, reranked.map((oshi) => oshi.id));
+    } catch (err: any) {
+      setOshiList(previous);
+      alert(`순서 변경 실패: ${err.message}`);
     }
   };
 
@@ -991,6 +1096,26 @@ export default function ProfilePage() {
                         )}
                       </div>
                       <div className="flex flex-col gap-1 shrink-0">
+                        <div className="flex gap-1">
+                          <button
+                            type="button"
+                            disabled={oshi.rank === 1}
+                            onClick={() => handleOshiMove(oshi.id, "up")}
+                            className="border border-dashed border-gray-300 px-2 py-1 text-[10px] font-bold text-gray-400 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
+                            aria-label="오시 순서 위로"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            disabled={oshi.rank === oshiList.length}
+                            onClick={() => handleOshiMove(oshi.id, "down")}
+                            className="border border-dashed border-gray-300 px-2 py-1 text-[10px] font-bold text-gray-400 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
+                            aria-label="오시 순서 아래로"
+                          >
+                            ↓
+                          </button>
+                        </div>
                         <button onClick={() => openOshiForm(oshi)} className="border border-dashed border-gray-400 px-3 py-1 text-[10px] font-bold text-gray-500 hover:bg-gray-100 transition-colors">[편집]</button>
                         <button onClick={() => handleOshiDelete(oshi)} className="border border-dashed border-red-300 px-3 py-1 text-[10px] font-bold text-red-400 hover:bg-red-50 transition-colors">[삭제]</button>
                       </div>
@@ -1020,7 +1145,27 @@ export default function ProfilePage() {
                             </p>
                           )}
                         </div>
-                        <div className="flex flex-col gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex flex-col gap-1 shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              disabled={oshi.rank === 1}
+                              onClick={() => handleOshiMove(oshi.id, "up")}
+                              className="text-[11px] font-bold text-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
+                              aria-label="오시 순서 위로"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              disabled={oshi.rank === oshiList.length}
+                              onClick={() => handleOshiMove(oshi.id, "down")}
+                              className="text-[11px] font-bold text-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
+                              aria-label="오시 순서 아래로"
+                            >
+                              ↓
+                            </button>
+                          </div>
                           <button onClick={() => openOshiForm(oshi)} className="text-[9px] font-bold text-gray-400 hover:text-gray-700 px-1">[편집]</button>
                           <button onClick={() => handleOshiDelete(oshi)} className="text-[9px] font-bold text-red-300 hover:text-red-500 px-1">[삭제]</button>
                         </div>
@@ -1820,6 +1965,56 @@ export default function ProfilePage() {
               )}
             </div>
             <form onSubmit={handleOshiSubmit} className="p-5 space-y-4 max-h-[85vh] overflow-y-auto">
+              {officialWorks.length > 0 && (
+                <div className="space-y-3 rounded border border-dashed border-blue-300 bg-blue-50/50 p-3">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-blue-700">
+                      공식 작품/오시에서 선택
+                    </p>
+                    <p className="mt-1 text-[10px] text-blue-500">
+                      선택하면 아래 입력값이 자동으로 채워집니다. 목록에 없으면 직접 입력하세요.
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
+                      공식 작품
+                    </label>
+                    <select
+                      value={oshiForm.official_work_id}
+                      onChange={(e) => applyOfficialWork(e.target.value)}
+                      className="w-full border border-dashed border-blue-300 bg-white px-3 py-2 text-sm outline-none"
+                    >
+                      <option value="">직접 입력</option>
+                      {officialWorks.map((work) => (
+                        <option key={work.id} value={work.id}>
+                          {work.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {oshiForm.official_work_id && officialOshiForSelectedWork.length > 0 && (
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
+                        공식 오시
+                      </label>
+                      <select
+                        value={oshiForm.official_oshi_id}
+                        onChange={(e) => applyOfficialOshi(e.target.value)}
+                        className="w-full border border-dashed border-blue-300 bg-white px-3 py-2 text-sm outline-none"
+                      >
+                        <option value="">작품만 등록</option>
+                        {officialOshiForSelectedWork.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name}
+                            {item.role_label ? ` · ${item.role_label}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-1">
                 <label className="text-[11px] font-bold uppercase tracking-widest text-gray-500">타입 *</label>
                 <select

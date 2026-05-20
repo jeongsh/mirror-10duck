@@ -1,9 +1,10 @@
 ﻿"use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ImageIcon, Loader2, Search, Upload, X } from "lucide-react";
 import type { OtakuCategory } from "@/lib/otaku/hub";
 import { supabase } from "@/lib/supabase/client";
+import type { OfficialWork } from "@/types/official";
 
 const categories: Exclude<OtakuCategory, "all" | "game">[] = ["anime", "manga"];
 const statuses = ["DRAFT", "PUBLISHED", "HIDDEN"] as const;
@@ -23,6 +24,8 @@ export type ReleaseFormState = {
   episodeCount: string;
   details: string;
   releaseDate: string;
+  officialWorkId: string;
+  createOfficialWork: boolean;
 };
 
 export const emptyReleaseForm: ReleaseFormState = {
@@ -40,6 +43,8 @@ export const emptyReleaseForm: ReleaseFormState = {
   episodeCount: "",
   details: "",
   releaseDate: "",
+  officialWorkId: "",
+  createOfficialWork: true,
 };
 
 export function ReleaseForm({
@@ -63,10 +68,51 @@ export function ReleaseForm({
   const [selectedAniListId, setSelectedAniListId] = useState<number | null>(null);
   const [showAniListResults, setShowAniListResults] = useState(true);
   const [uploadingAsset, setUploadingAsset] = useState<"posterUrl" | "bannerUrl" | null>(null);
+  const [officialWorks, setOfficialWorks] = useState<OfficialWork[]>([]);
 
   const set = <K extends keyof ReleaseFormState>(key: K, value: ReleaseFormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
+
+  const applyOfficialWork = (workId: string) => {
+    const selected = officialWorks.find((work) => work.id === workId);
+    setForm((prev) => {
+      if (!selected) {
+        return { ...prev, officialWorkId: "", createOfficialWork: true };
+      }
+      return {
+        ...prev,
+        officialWorkId: selected.id,
+        createOfficialWork: false,
+        category:
+          selected.category === "manga"
+            ? "manga"
+            : "anime",
+        title: prev.title.trim() ? prev.title : selected.title,
+        originalTitle: prev.originalTitle.trim()
+          ? prev.originalTitle
+          : selected.original_title ?? "",
+        synopsis: prev.synopsis.trim() ? prev.synopsis : selected.synopsis ?? "",
+        posterUrl: prev.posterUrl.trim()
+          ? prev.posterUrl
+          : selected.cover_image_url ?? "",
+      };
+    });
+  };
+
+  useEffect(() => {
+    const fetchOfficialWorks = async () => {
+      const { data, error } = await supabase
+        .from("official_works")
+        .select("*")
+        .order("sort_order", { ascending: true })
+        .order("title", { ascending: true });
+
+      if (!error) setOfficialWorks((data ?? []) as OfficialWork[]);
+    };
+
+    void fetchOfficialWorks();
+  }, []);
 
   const searchAnilist = async () => {
     const search = anilistQuery.trim() || form.title.trim() || form.originalTitle.trim();
@@ -293,6 +339,42 @@ export function ReleaseForm({
           onChange={(value) => set("releaseDate", value)}
         />
       </div>
+
+      <section className="rounded border border-dashed border-blue-300 bg-blue-50/50 p-4">
+        <div className="mb-3">
+          <h3 className="text-sm font-bold text-blue-900">공식 작품 허브</h3>
+          <p className="mt-1 text-xs text-blue-600">
+            기존 허브에 연결하거나, 이 신작 정보로 공식 작품 허브를 함께 생성합니다.
+          </p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-semibold">기존 공식 작품</span>
+            <select
+              value={form.officialWorkId}
+              onChange={(event) => applyOfficialWork(event.target.value)}
+              className="rounded border p-2 focus:border-black focus:outline-none"
+            >
+              <option value="">새 공식 작품으로 함께 등록</option>
+              {officialWorks.map((work) => (
+                <option key={work.id} value={work.id}>
+                  {work.title}
+                  {work.status !== "PUBLISHED" ? ` (${work.status})` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 rounded border border-dashed border-blue-300 bg-white px-3 py-2 text-sm font-semibold text-blue-900 md:mt-6">
+            <input
+              type="checkbox"
+              checked={form.createOfficialWork}
+              disabled={Boolean(form.officialWorkId)}
+              onChange={(event) => set("createOfficialWork", event.target.checked)}
+            />
+            새 허브 생성
+          </label>
+        </div>
+      </section>
 
       <TextInput label="제목 *" value={form.title} onChange={(value) => set("title", value)} required />
       <TextInput label="원제" value={form.originalTitle} onChange={(value) => set("originalTitle", value)} />
