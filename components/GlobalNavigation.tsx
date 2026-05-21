@@ -181,6 +181,13 @@ export default function GlobalNavigation() {
                   >
                     레벨 & 경험치
                   </Link>
+                  <Link
+                    href="/onboarding/interests"
+                    className="block border-b border-dashed border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    onClick={() => setShowMenu(false)}
+                  >
+                    관심작 설정
+                  </Link>
                   <button
                     onClick={handleLogout}
                     className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"

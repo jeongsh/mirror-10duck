@@ -6,6 +6,7 @@ import { useMemo, useState, type ComponentProps } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { checkHandleAvailability } from "@/lib/supabase/profiles";
+import { fetchFollowedOfficialWorkIds } from "@/lib/supabase/officialWorkFollows";
 
 type AuthMode = "login" | "signup" | "findHandle" | "findPassword";
 
@@ -104,14 +105,21 @@ export default function AuthPage() {
         targetEmail = data as string;
       }
 
-      const { error } = await supabase.auth.signInWithPassword({ email: targetEmail, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email: targetEmail, password });
 
       if (error) {
         setMessage(error.message);
       } else {
         setMessage("로그인 성공. 홈으로 이동합니다.");
         setLoading(false);
-        router.push("/");
+        if (data.user?.id) {
+          const followed = await fetchFollowedOfficialWorkIds(data.user.id).catch(
+            () => new Set<string>(),
+          );
+          router.push(followed.size < 3 ? "/onboarding/interests" : "/");
+        } else {
+          router.push("/");
+        }
         router.refresh();
         return;
       }

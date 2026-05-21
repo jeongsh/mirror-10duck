@@ -309,6 +309,8 @@ export type OshiRegistration = {
   rank: number;
   title: string;
   oshi_type: OshiType;
+  official_work_id: string | null;
+  official_oshi_character_id: string | null;
   image_url: string | null;
   description: string | null;
   is_public: boolean;

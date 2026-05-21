@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { useCharacterLibraryStore } from "@/store/useCharacterLibraryStore";
@@ -34,6 +34,10 @@ import {
 } from "@/lib/supabase/oshi";
 import { saveLive2DEnabledPreference } from "@/lib/supabase/characterPreferences";
 import { getAllBadges, getUserBadges, checkAndGrantOshiBadges } from "@/lib/supabase/badges";
+import {
+  fetchFollowedOfficialWorkIds,
+  setOfficialWorkFollow,
+} from "@/lib/supabase/officialWorkFollows";
 import AuthorProfileCard from "@/components/community/AuthorProfileCard";
 import { CARD_THEMES, THEME_ORDER } from "@/lib/cardThemes";
 import CardImageCropModal from "@/components/profile/CardImageCropModal";
@@ -97,6 +101,7 @@ const RARITY_LABELS: Record<string, string> = {
 
 export default function ProfilePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const user = useAuthUser();
   const profiles = useCharacterLibraryStore((s) => s.profiles);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -110,6 +115,13 @@ export default function ProfilePage() {
   const [live2dSaving, setLive2dSaving] = useState(false);
   
   const [activeTab, setActiveTab] = useState<TabId>("profile");
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && TABS.some((item) => item.id === tab)) {
+      setActiveTab(tab as TabId);
+    }
+  }, [searchParams]);
   
   // 프로필 상태
   const [nickname, setNickname] = useState("");
@@ -183,6 +195,10 @@ export default function ProfilePage() {
   });
   const [officialWorks, setOfficialWorks] = useState<OfficialWork[]>([]);
   const [officialOshi, setOfficialOshi] = useState<OfficialOshiCharacter[]>([]);
+  const [followedOfficialWorkIds, setFollowedOfficialWorkIds] = useState<Set<string>>(new Set());
+  const [officialWorkFollowSavingId, setOfficialWorkFollowSavingId] = useState<string | null>(null);
+  const [interestWorkQuery, setInterestWorkQuery] = useState("");
+  const [oshiWorkQuery, setOshiWorkQuery] = useState("");
   const [newBadgeIds, setNewBadgeIds] = useState<string[]>([]);
 
   // 캐릭터 라이브러리 동기화 및 관리
@@ -319,10 +335,20 @@ export default function ProfilePage() {
 
       if (!worksError) setOfficialWorks((worksData ?? []) as OfficialWork[]);
       if (!oshiError) setOfficialOshi((oshiData ?? []) as OfficialOshiCharacter[]);
+
+      if (user?.id) {
+        try {
+          const followed = await fetchFollowedOfficialWorkIds(user.id);
+          setFollowedOfficialWorkIds(followed);
+        } catch (error) {
+          console.warn("[profile] failed to fetch official work follows:", error);
+          setFollowedOfficialWorkIds(new Set());
+        }
+      }
     };
 
     void fetchOfficialCatalog();
-  }, []);
+  }, [user?.id]);
 
   if (user === undefined) {
     return (
@@ -675,11 +701,15 @@ export default function ProfilePage() {
         pair_direction: ["a_to_b", "b_to_a", "reversible", "unknown"].includes(d)
           ? d
           : "reversible",
-        official_work_id: "",
-        official_oshi_id: "",
+        official_work_id: existing.official_work_id ?? "",
+        official_oshi_id: existing.official_oshi_character_id ?? "",
       });
+      setOshiWorkQuery(
+        officialWorks.find((work) => work.id === existing.official_work_id)?.title ?? ""
+      );
     } else {
       setEditingOshi(null);
+      setOshiWorkQuery("");
       setOshiForm({
         title: "",
         oshi_type: "anime",
@@ -703,6 +733,33 @@ export default function ProfilePage() {
     (item) => item.work_id === oshiForm.official_work_id,
   );
 
+  const followedOfficialWorks = officialWorks.filter((work) =>
+    followedOfficialWorkIds.has(work.id),
+  );
+
+  const interestWorkSearchResults = officialWorks
+    .filter((work) => !followedOfficialWorkIds.has(work.id))
+    .filter((work) => {
+      const query = interestWorkQuery.trim().toLowerCase();
+      if (!query) return false;
+      return [work.title, work.original_title ?? "", work.slug]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    })
+    .slice(0, 8);
+
+  const oshiWorkSearchResults = officialWorks
+    .filter((work) => {
+      const query = oshiWorkQuery.trim().toLowerCase();
+      if (!query) return false;
+      return [work.title, work.original_title ?? "", work.slug]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    })
+    .slice(0, 8);
+
   const applyOfficialWork = (workId: string) => {
     const work = officialWorks.find((item) => item.id === workId);
     if (!work) {
@@ -713,6 +770,7 @@ export default function ProfilePage() {
     const nextType: OshiType =
       work.category === "anime" || work.category === "manga" ? work.category : "other";
 
+    setOshiWorkQuery(work.title);
     setOshiForm((f) => ({
       ...f,
       official_work_id: work.id,
@@ -745,6 +803,27 @@ export default function ProfilePage() {
     }));
   };
 
+  const handleOfficialWorkFollowToggle = async (workId: string) => {
+    if (!user) return;
+    const nextEnabled = !followedOfficialWorkIds.has(workId);
+    const previous = followedOfficialWorkIds;
+    const next = new Set(previous);
+    if (nextEnabled) next.add(workId);
+    else next.delete(workId);
+
+    setFollowedOfficialWorkIds(next);
+    setOfficialWorkFollowSavingId(workId);
+    try {
+      await setOfficialWorkFollow(user.id, workId, nextEnabled);
+    } catch (error) {
+      setFollowedOfficialWorkIds(previous);
+      const message = error instanceof Error ? error.message : "알 수 없는 오류";
+      alert(`관심작 변경 실패: ${message}`);
+    } finally {
+      setOfficialWorkFollowSavingId(null);
+    }
+  };
+
   const handleOshiSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -774,6 +853,8 @@ export default function ProfilePage() {
       const saved = await upsertOshi(user.id, rank, {
         title: titleForDb,
         oshi_type: oshiForm.oshi_type,
+        official_work_id: oshiForm.official_work_id || null,
+        official_oshi_character_id: oshiForm.official_oshi_id || null,
         image_url: oshiForm.image_url.trim() || undefined,
         description: oshiForm.description.trim() || undefined,
         is_public: oshiForm.is_public,
@@ -1036,6 +1117,111 @@ export default function ProfilePage() {
                 새 배지 획득! {newBadgeIds.map((id) => allBadges.find((b) => b.id === id)?.name).filter(Boolean).join(", ")}
               </div>
             )}
+
+            <section>
+              <div className="flex items-end justify-between border-b border-dashed border-gray-300 pb-2 mb-6">
+                <div>
+                  <h2 className="text-sm font-bold uppercase tracking-widest text-gray-500">내 관심작</h2>
+                  <p className="text-[11px] text-gray-400 mt-0.5">공식 작품 중 관심 있는 작품을 등록합니다.</p>
+                </div>
+                <span className="text-[10px] text-gray-400">TOTAL: {followedOfficialWorkIds.size}</span>
+              </div>
+
+              <div className="mb-4 space-y-3">
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
+                    작품 검색
+                  </span>
+                  <input
+                    type="search"
+                    value={interestWorkQuery}
+                    onChange={(e) => setInterestWorkQuery(e.target.value)}
+                    placeholder="작품명, 원제, 슬러그로 검색"
+                    className="w-full border border-dashed border-gray-400 bg-white px-3 py-2 text-sm outline-none focus:border-gray-700"
+                  />
+                </label>
+
+                {interestWorkQuery.trim() && (
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {interestWorkSearchResults.length === 0 ? (
+                      <p className="border border-dashed border-gray-300 bg-gray-50 p-4 text-xs text-gray-400 sm:col-span-2">
+                        검색 결과가 없습니다.
+                      </p>
+                    ) : (
+                      interestWorkSearchResults.map((work) => {
+                        const saving = officialWorkFollowSavingId === work.id;
+                        return (
+                          <button
+                            key={work.id}
+                            type="button"
+                            disabled={saving}
+                            onClick={() => void handleOfficialWorkFollowToggle(work.id)}
+                            className="flex gap-3 border border-dashed border-gray-300 bg-white p-3 text-left transition-colors hover:border-blue-400 hover:bg-blue-50 disabled:opacity-50"
+                          >
+                            <div className="h-12 w-9 shrink-0 overflow-hidden border border-dashed border-gray-300 bg-gray-100">
+                              {work.cover_image_url ? (
+                                <img src={work.cover_image_url} alt={work.title} className="h-full w-full object-cover" />
+                              ) : (
+                                <div className="flex h-full items-center justify-center text-[9px] text-gray-400">NO</div>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-bold text-gray-900">{work.title}</p>
+                              {work.original_title && (
+                                <p className="mt-0.5 truncate text-[10px] text-gray-400">{work.original_title}</p>
+                              )}
+                              <p className="mt-1 text-[10px] font-bold text-blue-600">
+                                {saving ? "저장 중..." : "+ 관심 등록"}
+                              </p>
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {followedOfficialWorks.length === 0 ? (
+                <div className="border border-dashed border-gray-300 bg-gray-50/50 p-8 text-center text-xs text-gray-400">
+                  아직 등록된 관심작이 없습니다.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {followedOfficialWorks.map((work) => {
+                    const saving = officialWorkFollowSavingId === work.id;
+                    return (
+                      <div
+                        key={work.id}
+                        className="flex gap-3 border border-dashed border-blue-400 bg-blue-50 p-3"
+                      >
+                        <div className="h-14 w-10 shrink-0 overflow-hidden border border-dashed border-gray-300 bg-gray-100">
+                          {work.cover_image_url ? (
+                            <img src={work.cover_image_url} alt={work.title} className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-[10px] text-gray-400">NO</div>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-bold text-gray-900">{work.title}</p>
+                          {work.original_title && (
+                            <p className="mt-0.5 truncate text-[10px] text-gray-400">{work.original_title}</p>
+                          )}
+                          <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() => void handleOfficialWorkFollowToggle(work.id)}
+                            className="mt-2 border border-dashed border-blue-400 bg-blue-600 px-3 py-1 text-[10px] font-bold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            {saving ? "저장 중..." : "관심 해제"}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
 
             {/* 오시 섹션 */}
             <section>
@@ -1977,20 +2163,70 @@ export default function ProfilePage() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
-                      공식 작품
+                      공식 작품 검색
                     </label>
-                    <select
-                      value={oshiForm.official_work_id}
-                      onChange={(e) => applyOfficialWork(e.target.value)}
+                    <input
+                      type="search"
+                      value={oshiWorkQuery}
+                      onChange={(e) => {
+                        setOshiWorkQuery(e.target.value);
+                        if (!e.target.value.trim()) {
+                          setOshiForm((f) => ({
+                            ...f,
+                            official_work_id: "",
+                            official_oshi_id: "",
+                          }));
+                        }
+                      }}
+                      placeholder="작품명, 원제, 슬러그로 검색"
                       className="w-full border border-dashed border-blue-300 bg-white px-3 py-2 text-sm outline-none"
-                    >
-                      <option value="">직접 입력</option>
-                      {officialWorks.map((work) => (
-                        <option key={work.id} value={work.id}>
-                          {work.title}
-                        </option>
-                      ))}
-                    </select>
+                    />
+                    {oshiWorkQuery.trim() && !oshiForm.official_work_id && (
+                      <div className="max-h-48 overflow-y-auto border border-dashed border-blue-200 bg-white">
+                        {oshiWorkSearchResults.length === 0 ? (
+                          <p className="p-3 text-xs text-gray-400">검색 결과가 없습니다.</p>
+                        ) : (
+                          oshiWorkSearchResults.map((work) => (
+                            <button
+                              key={work.id}
+                              type="button"
+                              onClick={() => applyOfficialWork(work.id)}
+                              className="flex w-full gap-2 border-b border-dashed border-blue-100 p-2 text-left last:border-b-0 hover:bg-blue-50"
+                            >
+                              <div className="h-10 w-7 shrink-0 overflow-hidden border border-dashed border-gray-300 bg-gray-100">
+                                {work.cover_image_url ? (
+                                  <img src={work.cover_image_url} alt={work.title} className="h-full w-full object-cover" />
+                                ) : (
+                                  <div className="flex h-full items-center justify-center text-[8px] text-gray-400">NO</div>
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-xs font-bold text-gray-900">{work.title}</p>
+                                {work.original_title && (
+                                  <p className="truncate text-[10px] text-gray-400">{work.original_title}</p>
+                                )}
+                              </div>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                    {oshiForm.official_work_id && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOshiWorkQuery("");
+                          setOshiForm((f) => ({
+                            ...f,
+                            official_work_id: "",
+                            official_oshi_id: "",
+                          }));
+                        }}
+                        className="text-[10px] font-bold text-blue-600 hover:underline"
+                      >
+                        작품 선택 해제
+                      </button>
+                    )}
                   </div>
                   {oshiForm.official_work_id && officialOshiForSelectedWork.length > 0 && (
                     <div className="space-y-1">

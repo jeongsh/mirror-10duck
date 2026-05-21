@@ -14,10 +14,13 @@ import { supabase } from "@/lib/supabase/client";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { formatCommunityDate } from "@/lib/utils/formatDate";
 import { CommunityPost, UserProfile, postAggregateDefaults } from "@/types/community";
+import type { Badge, OshiRegistration, UserBadge } from "@/types/community";
+import type { OfficialWork } from "@/types/official";
 import { createNotification } from "@/lib/community/notifications";
 import { enrichPostsSharedFrom } from "@/lib/community/enrichPostsSharedFrom";
 import { splitFeedBodyForDisplay } from "@/lib/community/feedContentDisplay";
 import { blockUser, unblockUser, checkIsBlocked } from "@/lib/supabase/profiles";
+import { formatOshiPrimaryTitle, formatOshiSubtitle, getOshiList } from "@/lib/supabase/oshi";
 import SharedPostOriginCard from "@/components/community/SharedPostOriginCard";
 
 function profileName(profile: UserProfile) {
@@ -34,6 +37,9 @@ export default function UserFeedPage() {
   
   const [targetProfile, setTargetProfile] = useState<UserProfile | null>(null);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
+  const [oshiList, setOshiList] = useState<OshiRegistration[]>([]);
+  const [interestWorks, setInterestWorks] = useState<OfficialWork[]>([]);
+  const [userBadges, setUserBadges] = useState<UserBadge[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [isFollowing, setIsFollowing] = useState(false);
@@ -67,6 +73,40 @@ export default function UserFeedPage() {
     }
 
     setTargetProfile(profile);
+
+    const [oshiRows, interestRows, badgeRows] = await Promise.all([
+      getOshiList(profile.user_id),
+      supabase
+        .from("user_official_work_follows")
+        .select("official_works(*)")
+        .eq("user_id", profile.user_id)
+        .eq("notify_enabled", true)
+        .limit(8),
+      supabase
+        .from("user_badges")
+        .select("*, badge:badges(*)")
+        .eq("user_id", profile.user_id)
+        .order("earned_at", { ascending: false })
+        .limit(6),
+    ]);
+
+    setOshiList(oshiRows.filter((oshi) => oshi.is_public).slice(0, 5));
+    if (!interestRows.error) {
+      const works = ((interestRows.data ?? []) as Array<{ official_works: OfficialWork | OfficialWork[] | null }>)
+        .flatMap((row) => {
+          if (!row.official_works) return [];
+          return Array.isArray(row.official_works) ? row.official_works : [row.official_works];
+        })
+        .filter((work): work is OfficialWork => Boolean(work));
+      setInterestWorks(works);
+    } else {
+      setInterestWorks([]);
+    }
+    if (!badgeRows.error) {
+      setUserBadges((badgeRows.data ?? []) as UserBadge[]);
+    } else {
+      setUserBadges([]);
+    }
 
     // 2. 작성글 가져오기 (타인 프로필은 숨김 글 제외, 본인은 전체)
     let postsQuery = supabase
@@ -272,6 +312,12 @@ export default function UserFeedPage() {
         {targetProfile.bio && (
           <p className="mt-3 text-sm text-gray-800 whitespace-pre-wrap">{targetProfile.bio}</p>
         )}
+
+        <ProfileTasteSummary
+          oshiList={oshiList}
+          interestWorks={interestWorks}
+          userBadges={userBadges}
+        />
       </section>
 
       {/* 탭 영역 (현재는 글만) */}
@@ -391,5 +437,104 @@ export default function UserFeedPage() {
         )}
       </section>
     </main>
+  );
+}
+
+function ProfileTasteSummary({
+  oshiList,
+  interestWorks,
+  userBadges,
+}: {
+  oshiList: OshiRegistration[];
+  interestWorks: OfficialWork[];
+  userBadges: UserBadge[];
+}) {
+  const mainOshi = oshiList.find((oshi) => oshi.rank === 1) ?? oshiList[0];
+  const subOshi = oshiList.filter((oshi) => oshi.id !== mainOshi?.id).slice(0, 4);
+  const badges = userBadges
+    .map((userBadge) => userBadge.badge)
+    .filter((badge): badge is Badge => Boolean(badge))
+    .slice(0, 4);
+
+  if (!mainOshi && interestWorks.length === 0 && badges.length === 0) return null;
+
+  return (
+    <div className="mt-5 space-y-3 border-t border-dashed border-gray-300 pt-4">
+      {mainOshi ? (
+        <div className="flex gap-3 border border-dashed border-gray-400 bg-white/80 p-3">
+          <div className="h-14 w-14 shrink-0 overflow-hidden border border-dashed border-gray-300 bg-gray-100">
+            {mainOshi.image_url ? (
+              <img
+                src={mainOshi.image_url}
+                alt={formatOshiPrimaryTitle(mainOshi)}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-[10px] font-bold text-gray-400">
+                OSHI
+              </div>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+              Main oshi
+            </p>
+            <p className="truncate text-sm font-bold text-gray-950">
+              {formatOshiPrimaryTitle(mainOshi)}
+            </p>
+            {(formatOshiSubtitle(mainOshi) || mainOshi.description) && (
+              <p className="mt-0.5 line-clamp-2 text-xs text-gray-600">
+                {formatOshiSubtitle(mainOshi) ?? mainOshi.description}
+              </p>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {subOshi.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {subOshi.map((oshi) => (
+            <span
+              key={oshi.id}
+              className="max-w-full truncate border border-dashed border-gray-300 bg-white px-2 py-1 text-[11px] font-semibold text-gray-700"
+            >
+              #{oshi.rank} {formatOshiPrimaryTitle(oshi)}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {interestWorks.length > 0 ? (
+        <div>
+          <p className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-gray-500">
+            관심작
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {interestWorks.slice(0, 4).map((work) => (
+              <div key={work.id} className="min-w-0 border border-dashed border-gray-300 bg-white/80 p-2">
+                <p className="truncate text-[11px] font-bold text-gray-900">{work.title}</p>
+                {work.original_title ? (
+                  <p className="truncate text-[10px] text-gray-400">{work.original_title}</p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {badges.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {badges.map((badge) => (
+            <span
+              key={badge.id}
+              className="inline-flex items-center gap-1 border border-dashed border-yellow-300 bg-yellow-50 px-2 py-1 text-[11px] font-bold text-yellow-800"
+            >
+              <span>{badge.icon}</span>
+              {badge.name}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }

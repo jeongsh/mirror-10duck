@@ -79,6 +79,8 @@ export async function getOshiList(userId: string): Promise<OshiRegistration[]> {
 export type UpsertOshiFields = {
   title: string;
   oshi_type: OshiType;
+  official_work_id?: string | null;
+  official_oshi_character_id?: string | null;
   image_url?: string;
   description?: string;
   is_public?: boolean;
@@ -119,6 +121,8 @@ export async function upsertOshi(
         rank,
         title: fields.title.trim(),
         oshi_type: fields.oshi_type,
+        official_work_id: fields.official_work_id || null,
+        official_oshi_character_id: fields.official_oshi_character_id || null,
         image_url: fields.image_url?.trim() || null,
         description: fields.description?.trim() || null,
         is_public: fields.is_public ?? true,
