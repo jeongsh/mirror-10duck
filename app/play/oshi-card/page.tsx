@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { CSSProperties, PointerEvent, useMemo, useRef, useState } from "react";
+import { CSSProperties, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Download, ImagePlus, RefreshCcw, Save, Share2, X } from "lucide-react";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { getOshiList, upsertOshi } from "@/lib/supabase/oshi";
+import OshiCardStyles from "./OshiCardStyles";
 
 const WORK_OPTIONS = ["슈타게", "봇치 더 록", "리제로", "주술회전", "프리렌", "체인소 맨", "에반게리온", "메이드 인 어비스"];
 const TAG_OPTIONS = ["순애파", "피폐물 좋아함", "작화충", "원작 설정 경찰", "굿즈 수집", "1화 판독관", "오프닝 스킵 불가", "성우 따라감"];
@@ -169,6 +170,38 @@ export default function OshiCardPage() {
   const [isTypeMenuOpen, setIsTypeMenuOpen] = useState(false);
   const [tilt, setTilt] = useState<TiltState>({ rotateX: 0, rotateY: 0, glareX: 50, glareY: 50 });
 
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const hasUrlParams = p.has("n") || p.has("o") || p.has("w") || p.has("tg") || p.has("g") || p.has("t");
+    if (hasUrlParams) {
+      if (p.has("n")) setNickname(p.get("n")!);
+      if (p.has("o")) setOshi(p.get("o")!);
+      if (p.has("w")) setWorks(p.get("w")!.split(",").filter(Boolean).slice(0, 5));
+      if (p.has("tg")) setTags(p.get("tg")!.split(",").filter(Boolean).slice(0, 6));
+      if (p.has("g") && GRADE_OPTIONS.includes(p.get("g")!)) setGrade(p.get("g")!);
+      if (p.has("t") && TYPE_OPTIONS.some((item) => item.id === p.get("t"))) setTypeId(p.get("t")!);
+    } else {
+      try {
+        const saved = localStorage.getItem("oshi-card-draft");
+        if (saved) {
+          const d = JSON.parse(saved);
+          if (d.nickname) setNickname(d.nickname);
+          if (d.oshi) setOshi(d.oshi);
+          if (Array.isArray(d.works)) setWorks(d.works.slice(0, 5));
+          if (Array.isArray(d.tags)) setTags(d.tags.slice(0, 6));
+          if (d.grade && GRADE_OPTIONS.includes(d.grade)) setGrade(d.grade);
+          if (d.typeId && TYPE_OPTIONS.some((item) => item.id === d.typeId)) setTypeId(d.typeId);
+        }
+      } catch {}
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("oshi-card-draft", JSON.stringify({ nickname, oshi, works, tags, grade, typeId }));
+    } catch {}
+  }, [nickname, oshi, works, tags, grade, typeId]);
+
   const cardType = useMemo(
     () => TYPE_OPTIONS.find((item) => item.id === typeId) ?? TYPE_OPTIONS[0],
     [typeId],
@@ -244,20 +277,18 @@ export default function OshiCardPage() {
 
   const handleShare = async () => {
     try {
-      const blob = await exportBlob();
-      const file = new File([blob], "ssibduk-holo-oshi-card.png", { type: "image/png" });
-      const nav = navigator as Navigator & {
-        canShare?: (data: { files: File[] }) => boolean;
-        share?: (data: { title: string; text: string; files?: File[] }) => Promise<void>;
-      };
-      if (nav.share && (!nav.canShare || nav.canShare({ files: [file] }))) {
-        await nav.share({ title: "내 덕질 프로필 카드", text: copy, files: [file] });
-        setMessage("공유 창을 열었습니다.");
-      } else {
-        await handleDownload();
-      }
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "공유에 실패했습니다.");
+      const params = new URLSearchParams();
+      if (nickname.trim()) params.set("n", nickname.trim());
+      if (oshi.trim()) params.set("o", oshi.trim());
+      if (works.length) params.set("w", works.join(","));
+      if (tags.length) params.set("tg", tags.join(","));
+      params.set("g", grade);
+      params.set("t", typeId);
+      const url = `${window.location.origin}/play/oshi-card/view?${params.toString()}`;
+      await navigator.clipboard.writeText(url);
+      setMessage("공유 링크가 클립보드에 복사됐습니다.");
+    } catch {
+      setMessage("링크 복사에 실패했습니다.");
     }
   };
 
@@ -535,6 +566,7 @@ export default function OshiCardPage() {
 
   return (
     <main className="w-full">
+      <OshiCardStyles />
       <div className="border border-dashed border-gray-500 bg-white p-5">
         <Link href="/play" className="text-xs font-bold text-gray-500 hover:underline">
           바이럴 허브로 돌아가기
@@ -692,262 +724,7 @@ export default function OshiCardPage() {
         </p>
       </div>
 
-      <style jsx>{`
-        .oshi-holo-card {
-          background:
-            linear-gradient(115deg, transparent 0%, rgba(255,255,255,.20) var(--glare-x), transparent 58%),
-            radial-gradient(farthest-corner circle at var(--glare-x) var(--glare-y), rgba(255,255,255,.34) 0%, rgba(255,255,255,.10) 22%, transparent 44%),
-            linear-gradient(135deg, var(--card-accent), var(--card-bg) 44%, var(--card-sub));
-        }
-        .holo-foil {
-          background:
-            radial-gradient(circle at var(--glare-x) var(--glare-y), color-mix(in srgb, var(--card-accent) 48%, white) 0%, transparent 34%),
-            url("${SPARKLES_TEXTURE_URL}") var(--glare-x) var(--glare-y) / cover,
-            url("${HOLO_TEXTURE_URL}") center / cover,
-            repeating-linear-gradient(115deg, transparent 0 10px, rgba(255,255,255,.10) 11px 12px, transparent 13px 24px),
-            conic-gradient(
-              from 180deg at var(--glare-x) var(--glare-y),
-              rgba(255,0,128,.16),
-              rgba(255,140,0,.12),
-              rgba(255,255,0,.10),
-              rgba(0,255,132,.12),
-              rgba(0,194,255,.18),
-              rgba(139,92,246,.14),
-              rgba(255,0,128,.16)
-            );
-          background-blend-mode: screen, screen, screen, overlay, normal;
-          mix-blend-mode: screen;
-          filter: brightness(.82) contrast(1.18) saturate(1.25);
-          opacity: .22;
-          transition: opacity 160ms ease, filter 160ms ease;
-        }
-        .holo-glare {
-          background:
-            linear-gradient(
-              115deg,
-              transparent 16%,
-              rgba(255,255,255,.10) calc(var(--glare-x) - 12%),
-              rgba(255,255,255,.34) var(--glare-x),
-              rgba(255,255,255,.12) calc(var(--glare-x) + 12%),
-              transparent 84%
-            ),
-            radial-gradient(
-              circle at var(--glare-x) var(--glare-y),
-              rgba(255, 255, 255, 0.32),
-              rgba(255, 255, 255, 0.12) 16%,
-              transparent 38%
-            );
-          mix-blend-mode: screen;
-          opacity: 0;
-          transition: opacity 160ms ease;
-        }
-        .holo-type-tint {
-          background:
-            linear-gradient(115deg, transparent 8%, var(--card-accent) 38%, var(--card-foil) 58%, transparent 86%),
-            radial-gradient(circle at var(--glare-x) var(--glare-y), var(--card-sub), transparent 42%);
-          mix-blend-mode: color-dodge;
-          transition: opacity 160ms ease;
-        }
-        .oshi-holo-card[data-hovering="true"] .holo-foil {
-          opacity: .68;
-          filter: brightness(1.08) contrast(1.36) saturate(1.6);
-        }
-        .oshi-holo-card[data-hovering="true"] .holo-glare {
-          opacity: .46;
-        }
-        :global(.oshi-title-stroke) {
-          text-shadow:
-            -2px -2px 0 #111827,
-            2px -2px 0 #111827,
-            -2px 2px 0 #111827,
-            2px 2px 0 #111827,
-            0 -2px 0 #111827,
-            0 2px 0 #111827,
-            -2px 0 0 #111827,
-            2px 0 0 #111827,
-            0 2px 6px rgba(0,0,0,.55);
-        }
-        :global(.oshi-info-plate) {
-          border-radius: 12px;
-          background:
-            linear-gradient(135deg, rgba(0,0,0,.78) 0%, rgba(20,20,32,.72) 50%, rgba(0,0,0,.82) 100%);
-          border: 1.5px solid rgba(255,255,255,.55);
-          box-shadow:
-            0 10px 26px rgba(0,0,0,.45),
-            inset 0 1px 0 rgba(255,255,255,.2),
-            inset 0 -1px 0 rgba(0,0,0,.45);
-          isolation: isolate;
-        }
-        :global(.oshi-info-plate::before) {
-          content: "";
-          position: absolute;
-          inset: 0;
-          border-radius: inherit;
-          padding: 1.5px;
-          background: linear-gradient(135deg, var(--card-accent), var(--card-foil) 50%, var(--card-sub));
-          -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-          -webkit-mask-composite: xor;
-          mask-composite: exclude;
-          pointer-events: none;
-          z-index: 1;
-        }
-        :global(.oshi-info-plate::after) {
-          content: "";
-          position: absolute;
-          inset: 0;
-          border-radius: inherit;
-          background:
-            radial-gradient(120% 60% at 0% 0%, var(--card-accent) 0%, transparent 55%),
-            radial-gradient(120% 60% at 100% 100%, var(--card-sub) 0%, transparent 55%);
-          mix-blend-mode: overlay;
-          opacity: .55;
-          pointer-events: none;
-          z-index: 0;
-        }
-        :global(.oshi-info-plate > *) {
-          position: relative;
-          z-index: 2;
-        }
-        :global(.oshi-ribbon) {
-          display: inline-flex;
-          align-items: center;
-          gap: .55rem;
-          padding: 3px 16px;
-          font-size: 10px;
-          font-weight: 900;
-          letter-spacing: .22em;
-          color: #1a1208;
-          text-shadow: 0 1px 0 rgba(255,255,255,.55);
-          background:
-            linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,0) 55%),
-            linear-gradient(90deg, var(--card-accent) 0%, var(--card-foil) 50%, var(--card-accent) 100%);
-          border-radius: 999px;
-          border: 1.5px solid rgba(255,255,255,.9);
-          box-shadow:
-            0 6px 16px rgba(0,0,0,.5),
-            inset 0 1px 0 rgba(255,255,255,.7),
-            inset 0 -1px 0 rgba(0,0,0,.3);
-        }
-        :global(.oshi-tag) {
-          display: inline-flex;
-          align-items: center;
-          gap: 3px;
-          padding: 1.5px 8px;
-          font-size: 9.5px;
-          font-weight: 900;
-          letter-spacing: .12em;
-          color: #fff;
-          text-shadow: 0 1px 1px rgba(0,0,0,.55);
-          background: linear-gradient(95deg, var(--card-accent), var(--card-sub));
-          border-radius: 999px;
-          border: 1px solid rgba(255,255,255,.55);
-          box-shadow: 0 2px 6px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.35);
-          width: fit-content;
-          white-space: nowrap;
-        }
-        :global(.oshi-chip) {
-          display: inline-flex;
-          align-items: center;
-          gap: 3px;
-          padding: 2px 8px;
-          font-size: 11px;
-          font-weight: 900;
-          color: #fff;
-          text-shadow:
-            -1.5px -1.5px 0 #111,
-            1.5px -1.5px 0 #111,
-            -1.5px 1.5px 0 #111,
-            1.5px 1.5px 0 #111;
-          background: linear-gradient(135deg, rgba(255,255,255,.22), rgba(255,255,255,.08));
-          border: 1px solid rgba(255,255,255,.5);
-          border-radius: 6px;
-          box-shadow: 0 2px 4px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.3);
-        }
-        :global(.oshi-chip::before) {
-          content: "✦";
-          font-size: 9px;
-          color: var(--card-foil);
-          text-shadow: 0 0 4px var(--card-accent);
-        }
-        :global(.oshi-avatar-frame) {
-          position: relative;
-          display: flex;
-          height: 5rem;
-          width: 5rem;
-          flex-shrink: 0;
-          overflow: visible;
-          border-radius: 14px;
-          background: rgba(0,0,0,.4);
-          isolation: isolate;
-        }
-        :global(.oshi-avatar-frame > img),
-        :global(.oshi-avatar-frame > svg) {
-          border-radius: 12px;
-          overflow: hidden;
-        }
-        :global(.oshi-avatar-frame > img) {
-          height: 100%;
-          width: 100%;
-          object-fit: cover;
-        }
-        :global(.oshi-avatar-frame::before) {
-          content: "";
-          position: absolute;
-          inset: -2px;
-          border-radius: 16px;
-          padding: 2.5px;
-          background: linear-gradient(135deg, var(--card-accent), var(--card-foil), var(--card-sub));
-          -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-          -webkit-mask-composite: xor;
-          mask-composite: exclude;
-          pointer-events: none;
-          box-shadow: 0 6px 14px rgba(0,0,0,.4);
-        }
-        :global(.oshi-avatar-frame::after) {
-          content: "";
-          position: absolute;
-          inset: 2px;
-          border-radius: 12px;
-          border: 1.5px solid rgba(255,255,255,.7);
-          pointer-events: none;
-        }
-        :global(.oshi-ex-badge) {
-          position: absolute;
-          right: -6px;
-          bottom: -6px;
-          z-index: 5;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          padding: 1.5px 6px;
-          font-size: 10px;
-          font-weight: 900;
-          font-style: italic;
-          letter-spacing: .04em;
-          color: #1a1208;
-          background: linear-gradient(135deg, #fde047, #fbbf24 55%, #fde047);
-          border: 1.5px solid #fff;
-          border-radius: 999px;
-          box-shadow: 0 3px 8px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.6);
-        }
-        :global(.oshi-star) {
-          font-size: 14px;
-          line-height: 1;
-        }
-        :global(.oshi-star-on) {
-          color: #fde047;
-          text-shadow:
-            0 0 6px rgba(253,224,71,.65),
-            0 0 2px rgba(253,224,71,.95),
-            0 1px 0 rgba(0,0,0,.6);
-        }
-        :global(.oshi-star-off) {
-          color: rgba(255,255,255,.22);
-          text-shadow: 0 1px 0 rgba(0,0,0,.45);
-        }
-      `}</style>
+
     </main>
   );
 
@@ -1335,62 +1112,7 @@ export default function OshiCardPage() {
 
           {message ? <p className="mt-3 text-xs font-bold text-gray-600">{message}</p> : null}
 
-          <style jsx>{`
-            .oshi-holo-card {
-              background:
-                linear-gradient(115deg, transparent 0%, rgba(255,255,255,.20) var(--glare-x), transparent 58%),
-                radial-gradient(farthest-corner circle at var(--glare-x) var(--glare-y), rgba(255,255,255,.34) 0%, rgba(255,255,255,.10) 22%, transparent 44%),
-                linear-gradient(135deg, var(--card-accent), var(--card-bg) 44%, var(--card-sub));
-            }
-            .holo-foil {
-              background:
-                url("${SPARKLES_TEXTURE_URL}") var(--glare-x) var(--glare-y) / cover,
-                url("${HOLO_TEXTURE_URL}") center / cover,
-                repeating-linear-gradient(115deg, transparent 0 10px, rgba(255,255,255,.10) 11px 12px, transparent 13px 24px),
-                conic-gradient(
-                  from 180deg at var(--glare-x) var(--glare-y),
-                  rgba(255,0,128,.16),
-                  rgba(255,140,0,.12),
-                  rgba(255,255,0,.10),
-                  rgba(0,255,132,.12),
-                  rgba(0,194,255,.18),
-                  rgba(139,92,246,.14),
-                  rgba(255,0,128,.16)
-                );
-              background-blend-mode: screen, screen, overlay, normal;
-              mix-blend-mode: screen;
-              filter: brightness(.82) contrast(1.18) saturate(1.25);
-              opacity: .22;
-              transition: opacity 160ms ease, filter 160ms ease;
-            }
-            .holo-glare {
-              background:
-                linear-gradient(
-                  115deg,
-                  transparent 16%,
-                  rgba(255,255,255,.10) calc(var(--glare-x) - 12%),
-                  rgba(255,255,255,.34) var(--glare-x),
-                  rgba(255,255,255,.12) calc(var(--glare-x) + 12%),
-                  transparent 84%
-                ),
-                radial-gradient(
-                  circle at var(--glare-x) var(--glare-y),
-                  rgba(255, 255, 255, 0.32),
-                  rgba(255, 255, 255, 0.12) 16%,
-                  transparent 38%
-                );
-              mix-blend-mode: screen;
-              opacity: 0;
-              transition: opacity 160ms ease;
-            }
-            .oshi-holo-card[data-hovering="true"] .holo-foil {
-              opacity: .68;
-              filter: brightness(1.08) contrast(1.36) saturate(1.6);
-            }
-            .oshi-holo-card[data-hovering="true"] .holo-glare {
-              opacity: .46;
-            }
-          `}</style>
+
         </section>
 
         <section className="border border-dashed border-gray-400 bg-white p-4">
