@@ -104,8 +104,6 @@ const PALETTE_OPTIONS = [
 ];
 const HOLO_TEXTURE_URL = "/viral/holo.png";
 const SPARKLES_TEXTURE_URL = "/viral/sparkles.gif";
-const CARD_EXPORT_WIDTH = 734;
-const CARD_EXPORT_HEIGHT = 1024;
 type Palette = (typeof PALETTE_OPTIONS)[number];
 type CardType = (typeof TYPE_OPTIONS)[number];
 
@@ -129,338 +127,12 @@ function readImageFile(file: File, onLoad: (dataUrl: string) => void) {
   reader.readAsDataURL(file);
 }
 
-function loadImage(src: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = reject;
-    image.src = src;
-  });
-}
 
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.arcTo(x + width, y, x + width, y + height, radius);
-  ctx.arcTo(x + width, y + height, x, y + height, radius);
-  ctx.arcTo(x, y + height, x, y, radius);
-  ctx.arcTo(x, y, x + width, y, radius);
-  ctx.closePath();
-}
-
-function drawCoverImage(
-  ctx: CanvasRenderingContext2D,
-  image: HTMLImageElement,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius: number,
-) {
-  ctx.save();
-  roundRect(ctx, x, y, width, height, radius);
-  ctx.clip();
-  const ratio = Math.max(width / image.width, height / image.height);
-  const drawWidth = image.width * ratio;
-  const drawHeight = image.height * ratio;
-  ctx.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
-  ctx.restore();
-}
-
-function drawWrappedText(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  x: number,
-  y: number,
-  maxWidth: number,
-  lineHeight: number,
-  maxLines = 2,
-) {
-  const chars = Array.from(text);
-  const lines: string[] = [];
-  let line = "";
-
-  for (const char of chars) {
-    const test = `${line}${char}`;
-    if (ctx.measureText(test).width > maxWidth && line) {
-      lines.push(line);
-      line = char;
-      if (lines.length >= maxLines) break;
-    } else {
-      line = test;
-    }
-  }
-  if (lines.length < maxLines && line) lines.push(line);
-
-  lines.slice(0, maxLines).forEach((item, index) => {
-    ctx.fillText(item, x, y + index * lineHeight);
-  });
-}
-
-function drawFoil(ctx: CanvasRenderingContext2D, palette: Palette, x: number, y: number, width: number, height: number) {
-  const rainbow = ctx.createLinearGradient(x, y, x + width, y + height);
-  rainbow.addColorStop(0, "rgba(255,255,255,0.12)");
-  rainbow.addColorStop(0.18, `${palette.sub}55`);
-  rainbow.addColorStop(0.38, `${palette.accent}55`);
-  rainbow.addColorStop(0.58, "rgba(255,255,255,0.18)");
-  rainbow.addColorStop(0.78, `${palette.foil}55`);
-  rainbow.addColorStop(1, "rgba(255,255,255,0.10)");
-  ctx.fillStyle = rainbow;
-  roundRect(ctx, x, y, width, height, 42);
-  ctx.fill();
-
-  ctx.save();
-  ctx.globalAlpha = 0.16;
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 2;
-  for (let offset = -height; offset < width; offset += 34) {
-    ctx.beginPath();
-    ctx.moveTo(x + offset, y + height);
-    ctx.lineTo(x + offset + height, y);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-async function drawHoloTexture(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number) {
-  const [holo, sparkles] = await Promise.all([
-    loadImage(HOLO_TEXTURE_URL).catch(() => null),
-    loadImage(SPARKLES_TEXTURE_URL).catch(() => null),
-  ]);
-
-  ctx.save();
-  roundRect(ctx, x, y, width, height, 42);
-  ctx.clip();
-  ctx.globalCompositeOperation = "screen";
-  ctx.globalAlpha = 0.14;
-  if (holo) ctx.drawImage(holo, x, y, width, height);
-  ctx.globalAlpha = 0.18;
-  if (sparkles) ctx.drawImage(sparkles, x, y, width, height);
-
-  const glare = ctx.createLinearGradient(x - width * 0.3, y + height * 0.15, x + width * 1.15, y + height * 0.82);
-  glare.addColorStop(0, "rgba(255,255,255,0)");
-  glare.addColorStop(0.44, "rgba(255,255,255,0)");
-  glare.addColorStop(0.52, "rgba(255,255,255,0.20)");
-  glare.addColorStop(0.58, "rgba(255,255,255,0.06)");
-  glare.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = glare;
-  ctx.fillRect(x, y, width, height);
-  ctx.restore();
-  ctx.globalCompositeOperation = "source-over";
-}
-
-async function renderCardToBlob({
-  nickname,
-  oshi,
-  works,
-  tags,
-  grade,
-  copy,
-  hp,
-  cardType,
-  evolvesFrom,
-  attack1,
-  attack1Damage,
-  attack2,
-  attack2Damage,
-  imageDataUrl,
-  oshiAvatarDataUrl,
-  palette,
-}: {
-  nickname: string;
-  oshi: string;
-  works: string[];
-  tags: string[];
-  grade: string;
-  copy: string;
-  hp: string;
-  cardType: CardType;
-  evolvesFrom: string;
-  attack1: string;
-  attack1Damage: string;
-  attack2: string;
-  attack2Damage: string;
-  imageDataUrl: string;
-  oshiAvatarDataUrl: string;
-  palette: Palette;
-}) {
-  const canvas = document.createElement("canvas");
-  canvas.width = CARD_EXPORT_WIDTH;
-  canvas.height = CARD_EXPORT_HEIGHT;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas context unavailable");
-
-  ctx.fillStyle = "#f4f4f5";
-  roundRect(ctx, 0, 0, canvas.width, canvas.height, 34);
-  ctx.fill();
-
-  ctx.fillStyle = "#111827";
-  roundRect(ctx, 10, 10, 714, 1004, 26);
-  ctx.fill();
-
-  const borderGradient = ctx.createLinearGradient(18, 18, 716, 1006);
-  borderGradient.addColorStop(0, "#ffffff");
-  borderGradient.addColorStop(0.2, palette.foil);
-  borderGradient.addColorStop(0.48, cardType.accent);
-  borderGradient.addColorStop(0.72, palette.sub);
-  borderGradient.addColorStop(1, "#ffffff");
-  ctx.fillStyle = borderGradient;
-  roundRect(ctx, 22, 20, 690, 984, 22);
-  ctx.fill();
-
-  ctx.fillStyle = "rgba(255,255,255,0.92)";
-  roundRect(ctx, 36, 34, 662, 956, 14);
-  ctx.fill();
-
-  ctx.save();
-  roundRect(ctx, 44, 44, 646, 850, 8);
-  ctx.clip();
-
-  if (imageDataUrl) {
-    try {
-      const image = await loadImage(imageDataUrl);
-      drawCoverImage(ctx, image, 44, 44, 646, 850, 0);
-    } catch {
-      // 이미지가 깨져도 카드 생성은 계속한다.
-    }
-  } else {
-    const placeholder = ctx.createLinearGradient(44, 44, 690, 894);
-    placeholder.addColorStop(0, palette.accent);
-    placeholder.addColorStop(0.52, palette.bg);
-    placeholder.addColorStop(1, palette.sub);
-    ctx.fillStyle = placeholder;
-    ctx.fillRect(44, 44, 646, 850);
-    ctx.fillStyle = "rgba(255,255,255,0.18)";
-    roundRect(ctx, 128, 240, 480, 360, 18);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.45)";
-    ctx.setLineDash([18, 14]);
-    roundRect(ctx, 128, 240, 480, 360, 18);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = "rgba(255,255,255,0.86)";
-    ctx.font = "900 34px sans-serif";
-    ctx.fillText("CHARACTER IMAGE", 178, 430);
-  }
-  ctx.restore();
-
-  const artShade = ctx.createLinearGradient(44, 44, 690, 894);
-  artShade.addColorStop(0, "rgba(255,255,255,0.12)");
-  artShade.addColorStop(0.46, "rgba(255,255,255,0)");
-  artShade.addColorStop(0.74, "rgba(0,0,0,0.10)");
-  artShade.addColorStop(1, "rgba(0,0,0,0.34)");
-  ctx.fillStyle = artShade;
-  roundRect(ctx, 44, 44, 646, 850, 8);
-  ctx.fill();
-
-  ctx.strokeStyle = "rgba(255,255,255,0.78)";
-  ctx.lineWidth = 4;
-  roundRect(ctx, 44, 44, 646, 850, 8);
-  ctx.stroke();
-
-  const outlinedText = (text: string, x: number, y: number, font: string, fill = "#ffffff", stroke = "#111827", lineWidth = 7) => {
-    ctx.font = font;
-    ctx.lineJoin = "round";
-    ctx.strokeStyle = stroke;
-    ctx.lineWidth = lineWidth;
-    ctx.strokeText(text, x, y);
-    ctx.fillStyle = fill;
-    ctx.fillText(text, x, y);
-  };
-
-  outlinedText(displaySafe(nickname || "이름 없는 오타쿠"), 58, 84, "900 38px sans-serif");
-  try {
-    const typeLogo = await loadImage(`/viral/type-logos/${cardType.id}.svg`);
-    ctx.save();
-    roundRect(ctx, 548, 36, 56, 56, 28);
-    ctx.clip();
-    ctx.drawImage(typeLogo, 548, 36, 56, 56);
-    ctx.restore();
-  } catch {
-    // 타입 로고가 없어도 텍스트만 출력한다.
-  }
-  outlinedText(cardType.label, 612, 76, "900 18px sans-serif", "#ffffff", "#111827", 5);
-
-  ctx.fillStyle = "rgba(0,0,0,0.58)";
-  roundRect(ctx, 58, 584, 618, 136, 14);
-  ctx.fill();
-  ctx.strokeStyle = "rgba(255,255,255,0.78)";
-  ctx.lineWidth = 2;
-  roundRect(ctx, 58, 584, 618, 136, 14);
-  ctx.stroke();
-
-  if (oshiAvatarDataUrl) {
-    try {
-      const avatar = await loadImage(oshiAvatarDataUrl);
-      ctx.save();
-      roundRect(ctx, 80, 610, 92, 92, 14);
-      ctx.clip();
-      drawCoverImage(ctx, avatar, 80, 610, 92, 92, 0);
-      ctx.restore();
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 4;
-      roundRect(ctx, 80, 610, 92, 92, 14);
-      ctx.stroke();
-      ctx.strokeStyle = "#111827";
-      ctx.lineWidth = 2;
-      roundRect(ctx, 80, 610, 92, 92, 14);
-      ctx.stroke();
-    } catch {
-      // 프로필 이미지가 깨져도 카드 생성은 계속한다.
-    }
-  } else {
-    ctx.strokeStyle = "rgba(255,255,255,0.78)";
-    ctx.setLineDash([8, 8]);
-    roundRect(ctx, 80, 610, 92, 92, 14);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
-  outlinedText("최애캐 캐릭터", 196, 630, "900 18px sans-serif", "#ffffff", "#111827", 5);
-  outlinedText(oshi || "아직 고르는 중", 196, 682, "900 38px sans-serif", "#ffffff", "#111827", 7);
-
-  ctx.fillStyle = "rgba(0,0,0,0.58)";
-  roundRect(ctx, 58, 742, 618, 72, 12);
-  ctx.fill();
-  ctx.strokeStyle = "rgba(255,255,255,0.78)";
-  ctx.lineWidth = 2;
-  roundRect(ctx, 58, 742, 618, 72, 12);
-  ctx.stroke();
-  outlinedText("인생작", 78, 787, "900 20px sans-serif", "#ffffff", "#111827", 5);
-  outlinedText(works.length ? works.join(" / ") : "인생작 미선택", 178, 787, "900 28px sans-serif", "#ffffff", "#111827", 5);
-
-  ctx.fillStyle = "rgba(0,0,0,0.58)";
-  roundRect(ctx, 58, 836, 618, 72, 12);
-  ctx.fill();
-  ctx.strokeStyle = "rgba(255,255,255,0.78)";
-  ctx.lineWidth = 2;
-  roundRect(ctx, 58, 836, 618, 72, 12);
-  ctx.stroke();
-  outlinedText("등급", 78, 881, "900 20px sans-serif", "#ffffff", "#111827", 5);
-  outlinedText(grade, 178, 881, "900 30px sans-serif", "#ffffff", "#111827", 6);
-  outlinedText("©2026 SSIBDUK fandom profile card", 78, 978, "700 14px sans-serif", "rgba(255,255,255,0.85)", "#111827", 4);
-
-  await drawHoloTexture(ctx, 24, 20, 686, 984);
-
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) reject(new Error("Image export failed"));
-      else resolve(blob);
-    }, "image/png");
-  });
-}
 
 function displaySafe(value: string) {
   return value.trim().slice(0, 18) || "SSIBDUK";
 }
 
-function splitInlineList(value: string, limit: number) {
-  return value
-    .split(/[\/,·]/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, limit);
-}
 
 function typeLogoStyle(cardType: CardType): CSSProperties {
   return {
@@ -472,6 +144,7 @@ export default function OshiCardPage() {
   const authUser = useAuthUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const oshiAvatarInputRef = useRef<HTMLInputElement>(null);
+  const previewCardRef = useRef<HTMLDivElement>(null);
   const [nickname, setNickname] = useState("");
   const [oshi, setOshi] = useState("");
   const [works, setWorks] = useState<string[]>(["슈타게", "봇치 더 록", "리제로"]);
@@ -505,25 +178,6 @@ export default function OshiCardPage() {
   const canSave = Boolean(authUser?.id && oshi.trim());
   const gradeStars = Math.max(1, GRADE_OPTIONS.indexOf(grade) + 1);
 
-  const payload = {
-    nickname: displayName,
-    oshi: oshi.trim(),
-    works,
-    tags,
-    grade,
-    copy,
-    hp,
-    cardType,
-    evolvesFrom,
-    attack1,
-    attack1Damage,
-    attack2,
-    attack2Damage,
-    imageDataUrl,
-    oshiAvatarDataUrl,
-    palette,
-  };
-
   const handleImagePick = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -556,11 +210,18 @@ export default function OshiCardPage() {
     setTilt({ rotateX: 0, rotateY: 0, glareX: 50, glareY: 50 });
   };
 
-  const exportBlob = async () => {
+  const exportBlob = async (): Promise<Blob> => {
+    const el = previewCardRef.current;
+    if (!el) throw new Error("미리보기 카드를 찾을 수 없습니다.");
     setBusy(true);
     setMessage("");
     try {
-      return await renderCardToBlob(payload);
+      const prevTransform = el.style.transform;
+      el.style.transform = "none";
+      const { domToBlob } = await import("modern-screenshot");
+      const blob = await domToBlob(el, { scale: 2, type: "image/png" });
+      el.style.transform = prevTransform;
+      return blob;
     } finally {
       setBusy(false);
     }
@@ -789,12 +450,44 @@ export default function OshiCardPage() {
           <span className="text-[9px] font-black tracking-widest text-white/55">{works.length}/5</span>
         </div>
         {editable ? (
-          <input
-            value={works.join(" / ")}
-            onChange={(event) => setWorks(splitInlineList(event.target.value, 5))}
-            placeholder="슈타게 / 봇치 더 록 / 리제로"
-            className="w-full rounded border border-white/70 bg-white/90 px-2 py-1 text-sm font-black text-zinc-950 outline-none"
-          />
+          <div className="flex items-center gap-1 overflow-x-auto">
+            {works.map((work) => (
+              <span key={work} className="flex shrink-0 items-center gap-0.5 rounded bg-white/90 px-1.5 py-0.5 text-[11px] font-black text-zinc-950">
+                {work}
+                <button
+                  type="button"
+                  onClick={() => setWorks(works.filter((w) => w !== work))}
+                  className="leading-none text-zinc-400 hover:text-zinc-700"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {works.length < 5 && (
+              <>
+                <input
+                  value={customWork}
+                  onChange={(event) => setCustomWork(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addCustomWork();
+                    }
+                  }}
+                  maxLength={20}
+                  placeholder={works.length === 0 ? "작품명 입력 후 Enter" : "추가..."}
+                  className="min-w-[72px] flex-1 rounded border border-white/60 bg-white/15 px-2 py-0.5 text-[11px] font-black text-white outline-none placeholder:font-normal placeholder:text-white/50"
+                />
+                <button
+                  type="button"
+                  onClick={addCustomWork}
+                  className="shrink-0 rounded border border-white/70 bg-white/20 px-2 py-0.5 text-xs font-black text-white hover:bg-white/30"
+                >
+                  +
+                </button>
+              </>
+            )}
+          </div>
         ) : works.length ? (
           <div className="flex flex-wrap gap-1">
             {works.map((work) => (
@@ -929,6 +622,7 @@ export default function OshiCardPage() {
           </div>
           <div className="mx-auto [perspective:1200px]">
             <div
+              ref={previewCardRef}
               className="oshi-holo-card relative mx-auto aspect-[734/1024] w-full max-w-[420px] overflow-hidden rounded-[4.8%/3.4%] bg-zinc-100 p-[0.9%] text-white shadow-2xl transition-transform duration-150 ease-out [transform-style:preserve-3d]"
               style={cardStyle}
               data-hovering={isHoveringCard ? "true" : "false"}

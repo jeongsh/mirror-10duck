@@ -1,10 +1,9 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
-@import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 
 @theme {
-  --font-sans: "Pretendard Variable", "Pretendard", -apple-system, BlinkMacSystemFont, system-ui,
-    "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  --font-sans: var(--font-pretendard), "Pretendard Variable", "Pretendard", -apple-system,
+    BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
 }
 
 :root {
