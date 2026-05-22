@@ -18,7 +18,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body className="min-h-screen antialiased">
+      <body className="min-h-screen font-sans antialiased">
         <AuthProvider>
           <AttendanceRecorder />
           <GlobalNavigation />
