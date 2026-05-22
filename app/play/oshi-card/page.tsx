@@ -665,7 +665,7 @@ export default function OshiCardPage() {
               <div
                 className="pointer-events-none absolute inset-0 z-20 holo-foil"
                 style={{
-                  opacity: isHoveringCard ? 0.68 : 0.22,
+                  opacity: isHoveringCard ? 0.35 : 0.22,
                   filter: isHoveringCard ? "brightness(1.08) contrast(1.36) saturate(1.6)" : undefined,
                 }}
               />

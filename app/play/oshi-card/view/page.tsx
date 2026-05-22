@@ -160,12 +160,12 @@ export default function OshiCardViewPage() {
             <div
               className="pointer-events-none absolute inset-0 z-20 holo-foil"
               style={{
-                opacity: isHoveringCard ? 0.68 : 0.22,
+                opacity: isHoveringCard ? 0.35 : 0.22,
                 filter: isHoveringCard ? "brightness(1.08) contrast(1.36) saturate(1.6)" : undefined,
               }}
             />
             <div className="pointer-events-none absolute inset-0 z-[25] holo-type-tint" style={{ opacity: isHoveringCard ? 0.3 : 0 }} />
-            <div className="pointer-events-none absolute inset-0 z-30 holo-glare" style={{ opacity: isHoveringCard ? 0.46 : 0 }} />
+            <div className="pointer-events-none absolute inset-0 z-30 holo-glare" style={{ opacity: isHoveringCard ? 0.34 : 0 }} />
             <div className="pointer-events-none absolute inset-0 z-40 rounded-[4.8%/3.4%] ring-2 ring-white/45" />
           </div>
         </div>

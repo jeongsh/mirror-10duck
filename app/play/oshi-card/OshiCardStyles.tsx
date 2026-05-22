@@ -7,7 +7,7 @@ const CSS = `
 }
 .holo-foil {
   background:
-    radial-gradient(circle at var(--glare-x) var(--glare-y), color-mix(in srgb, var(--card-accent) 48%, white) 0%, transparent 34%),
+    radial-gradient(circle at var(--glare-x) var(--glare-y), color-mix(in srgb, white 23%, var(--card-accent)) 0%, transparent 34%),
     url("/viral/sparkles.gif") var(--glare-x) var(--glare-y) / cover,
     url("/viral/holo.png") center / cover,
     repeating-linear-gradient(115deg, transparent 0 10px, rgba(255,255,255,.10) 11px 12px, transparent 13px 24px),
@@ -20,8 +20,8 @@ const CSS = `
 }
 .holo-glare {
   background:
-    linear-gradient(115deg, transparent 16%, rgba(255,255,255,.10) calc(var(--glare-x) - 12%), rgba(255,255,255,.34) var(--glare-x), rgba(255,255,255,.12) calc(var(--glare-x) + 12%), transparent 84%),
-    radial-gradient(circle at var(--glare-x) var(--glare-y), rgba(255,255,255,0.32), rgba(255,255,255,0.12) 16%, transparent 38%);
+    linear-gradient(115deg, transparent 16%, rgba(255,255,255,.10) calc(var(--glare-x) - 12%), rgba(255,255,255,.16) var(--glare-x), rgba(255,255,255,.12) calc(var(--glare-x) + 12%), transparent 84%),
+    radial-gradient(circle at var(--glare-x) var(--glare-y), rgba(255,255,255,.15), rgba(255,255,255,.05) 16%, transparent 38%);
   mix-blend-mode: screen;
   opacity: 0;
   transition: opacity 160ms ease;
@@ -33,8 +33,8 @@ const CSS = `
   mix-blend-mode: color-dodge;
   transition: opacity 160ms ease;
 }
-.oshi-holo-card[data-hovering="true"] .holo-foil { opacity: .68; filter: brightness(1.08) contrast(1.36) saturate(1.6); }
-.oshi-holo-card[data-hovering="true"] .holo-glare { opacity: .46; }
+.oshi-holo-card[data-hovering="true"] .holo-foil { opacity: .56; filter: brightness(1.08) contrast(1.36) saturate(1.6); }
+.oshi-holo-card[data-hovering="true"] .holo-glare { opacity: .34; }
 .oshi-title-stroke {
   text-shadow:
     -2px -2px 0 #111827, 2px -2px 0 #111827,
