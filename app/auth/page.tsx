@@ -6,7 +6,6 @@ import { useMemo, useState, type ComponentProps } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { checkHandleAvailability } from "@/lib/supabase/profiles";
-import { fetchFollowedOfficialWorkIds } from "@/lib/supabase/officialWorkFollows";
 
 type AuthMode = "login" | "signup" | "findHandle" | "findPassword";
 
@@ -112,14 +111,7 @@ export default function AuthPage() {
       } else {
         setMessage("로그인 성공. 홈으로 이동합니다.");
         setLoading(false);
-        if (data.user?.id) {
-          const followed = await fetchFollowedOfficialWorkIds(data.user.id).catch(
-            () => new Set<string>(),
-          );
-          router.push(followed.size < 3 ? "/onboarding/interests" : "/");
-        } else {
-          router.push("/");
-        }
+        router.push("/");
         router.refresh();
         return;
       }
