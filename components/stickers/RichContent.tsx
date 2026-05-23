@@ -55,6 +55,7 @@ function renderTextWithMentions(text: string, keyPrefix: string) {
 interface Props {
   content: string;
   className?: string;
+  disableMentions?: boolean;
 }
 
 function loadExternalScript(src: string) {
@@ -165,9 +166,9 @@ function SnsEmbed({ url, type }: { url: string; type: string }) {
   );
 }
 
-export default function RichContent({ content, className }: Props) {
+export default function RichContent({ content, className, disableMentions = false }: Props) {
   const isJson = content.trim().startsWith('{') && content.trim().endsWith('}');
-  
+
   if (isJson) {
     try {
       const json = JSON.parse(content);
@@ -189,7 +190,7 @@ export default function RichContent({ content, className }: Props) {
     <div className={`whitespace-pre-wrap break-words text-sm leading-7 text-gray-800 ${className ?? ""}`}>
       {segments.map((seg, idx) => {
         if (seg.type === "text") {
-          return <span key={idx}>{renderTextWithMentions(seg.value, `seg-${idx}`)}</span>;
+          return <span key={idx}>{disableMentions ? seg.value : renderTextWithMentions(seg.value, `seg-${idx}`)}</span>;
         }
         if (seg.type === "sticker") {
           return (

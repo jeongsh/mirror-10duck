@@ -399,7 +399,7 @@ export default function BoardPostDetailPage() {
           </div>
         ) : null}
         {post ? (
-          isSpoilerPost && isSpoilerBodyCollapsed ? null : <RichContent content={renderedPostContent} />
+          isSpoilerPost && isSpoilerBodyCollapsed ? null : <RichContent content={renderedPostContent} disableMentions />
         ) : (
           <p className="text-gray-500">게시글을 찾을 수 없습니다.</p>
         )}
@@ -496,7 +496,7 @@ export default function BoardPostDetailPage() {
           viewerId={userId || null}
           viewerEmail={userEmail || null}
           allowAnonymous={board?.allow_anonymous ?? false}
-          mentionMode="typed"
+          mentionMode="none"
           onThreadChanged={refetchPost}
           onOpenUserAction={(authorId) => setSelectedUserId(authorId)}
         />

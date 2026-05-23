@@ -288,6 +288,308 @@ function getTopResult(scores: Record<ResultType, number>): ResultType {
   );
 }
 
+function TypeIllustration({ type }: { type: ResultType }) {
+  switch (type) {
+    case "idol":
+      return (
+        <svg viewBox="0 0 400 200" className="w-full block">
+          <path d="M200 -10 L110 200 L290 200 Z" fill="rgba(255,240,180,0.45)" />
+          <rect x="195" y="115" width="10" height="65" rx="2" fill="#be185d" opacity="0.7"/>
+          <rect x="177" y="175" width="46" height="8" rx="4" fill="#be185d" opacity="0.6"/>
+          <ellipse cx="200" cy="90" rx="20" ry="26" fill="#db2777" opacity="0.8"/>
+          <ellipse cx="200" cy="87" rx="14" ry="17" fill="#f9a8d4" opacity="0.5"/>
+          <line x1="183" y1="84" x2="217" y2="84" stroke="#be185d" strokeWidth="1.5" opacity="0.5"/>
+          <line x1="181" y1="91" x2="219" y2="91" stroke="#be185d" strokeWidth="1.5" opacity="0.5"/>
+          <line x1="183" y1="98" x2="217" y2="98" stroke="#be185d" strokeWidth="1.5" opacity="0.5"/>
+          <text x="108" y="80" fontSize="28" fill="#f9a8d4" opacity="0.75" fontFamily="serif">♪</text>
+          <text x="278" y="70" fontSize="22" fill="#f9a8d4" opacity="0.75" fontFamily="serif">♫</text>
+          <text x="70" y="140" fontSize="18" fill="#f9a8d4" opacity="0.55" fontFamily="serif">♩</text>
+          <text x="310" y="145" fontSize="20" fill="#f9a8d4" opacity="0.55" fontFamily="serif">♪</text>
+          <circle cx="55" cy="55" r="4" fill="#f472b6" opacity="0.6"/>
+          <circle cx="345" cy="50" r="5" fill="#f472b6" opacity="0.6"/>
+          <circle cx="140" cy="30" r="3" fill="#f472b6" opacity="0.5"/>
+          <circle cx="260" cy="28" r="3.5" fill="#f472b6" opacity="0.5"/>
+          <circle cx="40" cy="165" r="2.5" fill="#f472b6" opacity="0.4"/>
+          <circle cx="360" cy="170" r="2.5" fill="#f472b6" opacity="0.4"/>
+        </svg>
+      );
+
+    case "munchkin":
+      return (
+        <svg viewBox="0 0 400 200" className="w-full block">
+          <circle cx="200" cy="100" r="88" fill="none" stroke="#d97706" strokeWidth="1.5" strokeDasharray="8 4" opacity="0.35"/>
+          <circle cx="200" cy="100" r="62" fill="none" stroke="#d97706" strokeWidth="1.5" strokeDasharray="5 3" opacity="0.4"/>
+          <circle cx="200" cy="100" r="38" fill="#fbbf24" opacity="0.18"/>
+          {Array.from({ length: 12 }).map((_, i) => {
+            const a = (i * 30 * Math.PI) / 180;
+            return (
+              <line key={i}
+                x1={200 + 42 * Math.cos(a)} y1={100 + 42 * Math.sin(a)}
+                x2={200 + 92 * Math.cos(a)} y2={100 + 92 * Math.sin(a)}
+                stroke="#d97706" strokeWidth="1.5" opacity="0.35"
+              />
+            );
+          })}
+          <polygon points="197,25 203,25 206,130 194,130" fill="#92400e" opacity="0.75"/>
+          <polygon points="194,25 206,25 200,8" fill="#b45309" opacity="0.85"/>
+          <rect x="172" y="130" width="56" height="10" rx="4" fill="#78350f" opacity="0.8"/>
+          <rect x="194" y="140" width="12" height="38" rx="3" fill="#92400e" opacity="0.75"/>
+          <circle cx="200" cy="180" r="9" fill="#78350f" opacity="0.75"/>
+          <ellipse cx="200" cy="70" rx="10" ry="40" fill="#fef08a" opacity="0.25"/>
+          <text x="80" y="60" fontSize="20" fill="#fbbf24" opacity="0.7">✦</text>
+          <text x="300" y="55" fontSize="16" fill="#fbbf24" opacity="0.7">✦</text>
+          <text x="60" y="155" fontSize="14" fill="#fbbf24" opacity="0.5">★</text>
+          <text x="320" y="160" fontSize="18" fill="#fbbf24" opacity="0.5">★</text>
+        </svg>
+      );
+
+    case "school":
+      return (
+        <svg viewBox="0 0 400 200" className="w-full block">
+          <rect x="130" y="50" width="140" height="120" rx="4" fill="#93c5fd" opacity="0.45"/>
+          <rect x="193" y="50" width="14" height="120" fill="#60a5fa" opacity="0.35"/>
+          <rect x="130" y="46" width="140" height="8" rx="2" fill="#60a5fa" opacity="0.5"/>
+          {[65, 75, 85, 95].map((y, i) => (
+            <rect key={`l${i}`} x="145" y={y} width={i % 2 === 0 ? 40 : 36} height="3" rx="1" fill="#bfdbfe" opacity="0.7"/>
+          ))}
+          {[65, 75, 85, 95].map((y, i) => (
+            <rect key={`r${i}`} x="215" y={y} width={i % 2 === 0 ? 40 : 36} height="3" rx="1" fill="#bfdbfe" opacity="0.7"/>
+          ))}
+          <path d="M252 50 L252 95 L262 85 L272 95 L272 50 Z" fill="#ef4444" opacity="0.55"/>
+          {[[55,60],[75,90],[45,120],[330,55],[355,80],[340,115],[100,35],[310,40]].map(([x,y],i) => (
+            <g key={i}>
+              <circle cx={x} cy={y} r="9" fill="#fbcfe8" opacity="0.65"/>
+              <circle cx={x-6} cy={y-5} r="5.5" fill="#f9a8d4" opacity="0.65"/>
+              <circle cx={x+6} cy={y-5} r="5.5" fill="#f9a8d4" opacity="0.65"/>
+              <circle cx={x-6} cy={y+5} r="5.5" fill="#fbcfe8" opacity="0.55"/>
+              <circle cx={x+6} cy={y+5} r="5.5" fill="#fbcfe8" opacity="0.55"/>
+              <circle cx={x} cy={y} r="3" fill="#fce7f3" opacity="0.9"/>
+            </g>
+          ))}
+          {[[95,160],[180,175],[300,165],[370,145],[20,155]].map(([x,y],i) => (
+            <ellipse key={i} cx={x} cy={y} rx="5" ry="3" fill="#fbcfe8" opacity="0.45" transform={`rotate(${i*35} ${x} ${y})`}/>
+          ))}
+        </svg>
+      );
+
+    case "animal":
+      return (
+        <svg viewBox="0 0 400 200" className="w-full block">
+          {[[55,45],[340,50],[60,150],[355,155],[180,25],[220,170]].map(([x,y],i) => (
+            <g key={i} opacity="0.25">
+              <ellipse cx={x} cy={y} rx="9" ry="11" fill="#16a34a"/>
+              <circle cx={x-7} cy={y-11} r="4.5" fill="#16a34a"/>
+              <circle cx={x+7} cy={y-11} r="4.5" fill="#16a34a"/>
+              <circle cx={x-11} cy={y-4} r="4" fill="#16a34a"/>
+              <circle cx={x+11} cy={y-4} r="4" fill="#16a34a"/>
+            </g>
+          ))}
+          <circle cx="200" cy="108" r="60" fill="#86efac" opacity="0.45"/>
+          <path d="M152 72 L138 32 L178 60 Z" fill="#4ade80" opacity="0.6"/>
+          <path d="M248 72 L262 32 L222 60 Z" fill="#4ade80" opacity="0.6"/>
+          <path d="M154 70 L143 38 L174 62 Z" fill="#bbf7d0" opacity="0.75"/>
+          <path d="M246 70 L257 38 L226 62 Z" fill="#bbf7d0" opacity="0.75"/>
+          <ellipse cx="178" cy="98" rx="14" ry="16" fill="white" opacity="0.92"/>
+          <ellipse cx="222" cy="98" rx="14" ry="16" fill="white" opacity="0.92"/>
+          <ellipse cx="178" cy="99" rx="8" ry="11" fill="#15803d" opacity="0.85"/>
+          <ellipse cx="222" cy="99" rx="8" ry="11" fill="#15803d" opacity="0.85"/>
+          <circle cx="175" cy="97" r="3" fill="white"/>
+          <circle cx="219" cy="97" r="3" fill="white"/>
+          <path d="M196 118 L200 114 L204 118 L200 123 Z" fill="#fb7185" opacity="0.8"/>
+          <path d="M194 123 Q200 130 206 123" fill="none" stroke="#fb7185" strokeWidth="1.8" opacity="0.75"/>
+          <line x1="135" y1="115" x2="188" y2="120" stroke="#16a34a" strokeWidth="1.5" opacity="0.5"/>
+          <line x1="135" y1="124" x2="188" y2="124" stroke="#16a34a" strokeWidth="1.5" opacity="0.5"/>
+          <line x1="212" y1="120" x2="265" y2="115" stroke="#16a34a" strokeWidth="1.5" opacity="0.5"/>
+          <line x1="212" y1="124" x2="265" y2="124" stroke="#16a34a" strokeWidth="1.5" opacity="0.5"/>
+          <ellipse cx="158" cy="112" rx="12" ry="7" fill="#fb7185" opacity="0.25"/>
+          <ellipse cx="242" cy="112" rx="12" ry="7" fill="#fb7185" opacity="0.25"/>
+        </svg>
+      );
+
+    case "monster":
+      return (
+        <svg viewBox="0 0 400 200" className="w-full block">
+          <circle cx="200" cy="100" r="88" fill="#991b1b" opacity="0.12"/>
+          {[0,60,120,180,240,300].map((deg,i) => {
+            const a = (deg * Math.PI) / 180;
+            const a2 = ((deg + 40) * Math.PI) / 180;
+            return (
+              <path key={i}
+                d={`M ${200+75*Math.cos(a)} ${100+75*Math.sin(a)} Q ${200+45*Math.cos(a+0.4)} ${100+45*Math.sin(a+0.4)} ${200+18*Math.cos(a2)} ${100+18*Math.sin(a2)}`}
+                fill="none" stroke="#b91c1c" strokeWidth="1.5" opacity="0.3"
+              />
+            );
+          })}
+          <ellipse cx="200" cy="88" rx="52" ry="58" fill="#fca5a5" opacity="0.4"/>
+          <ellipse cx="200" cy="84" rx="44" ry="48" fill="#fecaca" opacity="0.5"/>
+          <ellipse cx="178" cy="78" rx="16" ry="18" fill="#991b1b" opacity="0.65"/>
+          <ellipse cx="222" cy="78" rx="16" ry="18" fill="#991b1b" opacity="0.65"/>
+          <ellipse cx="178" cy="78" rx="9" ry="11" fill="#ef4444" opacity="0.9"/>
+          <ellipse cx="222" cy="78" rx="9" ry="11" fill="#ef4444" opacity="0.9"/>
+          <ellipse cx="178" cy="78" rx="4.5" ry="5.5" fill="#fef2f2" opacity="0.95"/>
+          <ellipse cx="222" cy="78" rx="4.5" ry="5.5" fill="#fef2f2" opacity="0.95"/>
+          <path d="M195 100 L200 108 L205 100 Z" fill="#991b1b" opacity="0.6"/>
+          <rect x="155" y="128" width="90" height="16" rx="2" fill="#fecaca" opacity="0.45"/>
+          {[0,1,2,3,4,5].map(i => (
+            <rect key={i} x={163+i*14} y="128" width="10" height="12" rx="1" fill="#991b1b" opacity="0.5"/>
+          ))}
+          <path d="M163 144 Q165 157 163 168" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" opacity="0.4"/>
+          <path d="M237 144 Q235 158 237 170" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" opacity="0.4"/>
+          {[0,36,72,108,144,180,216,252,288,324].map((deg,i) => {
+            if (deg > 30 && deg < 150) return null;
+            const a = (deg * Math.PI) / 180;
+            return (
+              <polygon key={i}
+                points={`${200+92*Math.cos(a-0.12)},${100+92*Math.sin(a-0.12)} ${200+108*Math.cos(a)},${100+108*Math.sin(a)} ${200+92*Math.cos(a+0.12)},${100+92*Math.sin(a+0.12)}`}
+                fill="#991b1b" opacity="0.35"
+              />
+            );
+          })}
+        </svg>
+      );
+
+    case "sports":
+      return (
+        <svg viewBox="0 0 400 200" className="w-full block">
+          <ellipse cx="200" cy="195" rx="185" ry="35" fill="#4ade80" opacity="0.18"/>
+          <rect x="40" y="65" width="7" height="105" fill="#65a30d" opacity="0.5"/>
+          <rect x="165" y="65" width="7" height="105" fill="#65a30d" opacity="0.5"/>
+          <rect x="40" y="65" width="132" height="7" fill="#65a30d" opacity="0.5"/>
+          {[0,1,2,3].map(i => (
+            <line key={`nv${i}`} x1={58+i*30} y1={72} x2={58+i*30} y2={170} stroke="#65a30d" strokeWidth="1" opacity="0.25"/>
+          ))}
+          {[0,1,2,3,4].map(i => (
+            <line key={`nh${i}`} x1={40} y1={85+i*20} x2={172} y2={85+i*20} stroke="#65a30d" strokeWidth="1" opacity="0.25"/>
+          ))}
+          <circle cx="288" cy="115" r="46" fill="white" opacity="0.88"/>
+          <circle cx="288" cy="115" r="46" fill="none" stroke="#84cc16" strokeWidth="2.5" opacity="0.6"/>
+          <path d="M288 69 L302 87 L283 100 L270 86 Z" fill="#1a2e05" opacity="0.6"/>
+          <path d="M288 69 L274 56 L260 68 L270 86 Z" fill="#1a2e05" opacity="0.5"/>
+          <path d="M302 87 L320 80 L326 98 L308 106 L283 100 Z" fill="#1a2e05" opacity="0.4"/>
+          <path d="M283 100 L308 106 L302 124 L284 128 L270 113 Z" fill="#1a2e05" opacity="0.35"/>
+          <line x1="220" y1="100" x2="240" y2="106" stroke="#84cc16" strokeWidth="3.5" strokeLinecap="round" opacity="0.7"/>
+          <line x1="214" y1="115" x2="238" y2="115" stroke="#84cc16" strokeWidth="3.5" strokeLinecap="round" opacity="0.7"/>
+          <line x1="220" y1="130" x2="240" y2="124" stroke="#84cc16" strokeWidth="3.5" strokeLinecap="round" opacity="0.7"/>
+          <text x="348" y="68" fontSize="18" fill="#84cc16" opacity="0.6">★</text>
+          <text x="48" y="55" fontSize="14" fill="#84cc16" opacity="0.5">★</text>
+        </svg>
+      );
+
+    case "adventure":
+      return (
+        <svg viewBox="0 0 400 200" className="w-full block">
+          {[[30,25],[80,15],[160,12],[290,20],[330,35],[375,18]].map(([x,y],i) => (
+            <circle key={i} cx={x} cy={y} r={i%2===0?2:1.5} fill="#92400e" opacity="0.45"/>
+          ))}
+          <path d="M-10 190 L85 55 L170 190 Z" fill="#a16207" opacity="0.32"/>
+          <path d="M70 190 L185 22 L300 190 Z" fill="#92400e" opacity="0.48"/>
+          <path d="M210 190 L310 65 L410 190 Z" fill="#a16207" opacity="0.32"/>
+          <path d="M185 22 L168 62 L202 62 Z" fill="white" opacity="0.75"/>
+          {[[80,185],[100,185],[285,183],[305,183]].map(([x,y],i) => (
+            <g key={i}>
+              <polygon points={`${x},${y-25} ${x-8},${y} ${x+8},${y}`} fill="#166534" opacity="0.4"/>
+              <polygon points={`${x},${y-38} ${x-6},${y-18} ${x+6},${y-18}`} fill="#166534" opacity="0.45"/>
+            </g>
+          ))}
+          <circle cx="320" cy="85" r="38" fill="#fef9c3" opacity="0.7"/>
+          <circle cx="320" cy="85" r="38" fill="none" stroke="#92400e" strokeWidth="2" strokeDasharray="4 3" opacity="0.6"/>
+          <polygon points="320,47 326,75 320,70 314,75" fill="#ef4444" opacity="0.8"/>
+          <polygon points="320,123 326,95 320,100 314,95" fill="#92400e" opacity="0.6"/>
+          <polygon points="358,85 330,79 335,85 330,91" fill="#92400e" opacity="0.6"/>
+          <polygon points="282,85 310,79 305,85 310,91" fill="#92400e" opacity="0.6"/>
+          <circle cx="320" cy="85" r="5" fill="#92400e" opacity="0.8"/>
+          <text x="320" y="44" fontSize="9" fontWeight="bold" textAnchor="middle" fill="#ef4444" opacity="0.85">N</text>
+          {[[85,175],[105,168],[125,160],[148,152]].map(([x,y],i) => (
+            <circle key={i} cx={x} cy={y} r="3.5" fill="#a16207" opacity="0.5"/>
+          ))}
+          <circle cx="148" cy="152" r="11" fill="#fbbf24" opacity="0.6"/>
+          <text x="148" y="157" fontSize="12" fontWeight="bold" textAnchor="middle" fill="#78350f" opacity="0.9">✕</text>
+        </svg>
+      );
+
+    case "bishounen":
+      return (
+        <svg viewBox="0 0 400 200" className="w-full block">
+          {[[38,38],[75,75],[95,28],[362,32],[342,72],[382,52],[55,162],[352,168],[28,118],[372,128]].map(([x,y],i) => (
+            <g key={i} opacity="0.45">
+              <line x1={x-8} y1={y} x2={x+8} y2={y} stroke="#7c3aed" strokeWidth="1.5"/>
+              <line x1={x} y1={y-8} x2={x} y2={y+8} stroke="#7c3aed" strokeWidth="1.5"/>
+              <circle cx={x} cy={y} r="2" fill="#c4b5fd"/>
+            </g>
+          ))}
+          <ellipse cx="200" cy="105" rx="32" ry="38" fill="#ddd6fe" opacity="0.6"/>
+          <path d="M168 82 Q180 42 200 55 Q220 42 232 82 Q222 58 200 62 Q178 58 168 82 Z" fill="#7c3aed" opacity="0.45"/>
+          <path d="M168 82 Q155 95 158 115" fill="none" stroke="#7c3aed" strokeWidth="6" strokeLinecap="round" opacity="0.35"/>
+          <path d="M232 82 Q245 95 242 115" fill="none" stroke="#7c3aed" strokeWidth="6" strokeLinecap="round" opacity="0.35"/>
+          <ellipse cx="186" cy="100" rx="10" ry="11" fill="white" opacity="0.92"/>
+          <ellipse cx="214" cy="100" rx="10" ry="11" fill="white" opacity="0.92"/>
+          <ellipse cx="186" cy="101" rx="6" ry="8" fill="#5b21b6" opacity="0.9"/>
+          <ellipse cx="214" cy="101" rx="6" ry="8" fill="#5b21b6" opacity="0.9"/>
+          <circle cx="184" cy="99" r="2.5" fill="white"/>
+          <circle cx="212" cy="99" r="2.5" fill="white"/>
+          <path d="M177 92 Q182 88 188 92" fill="none" stroke="#4c1d95" strokeWidth="1.8" opacity="0.7"/>
+          <path d="M212 92 Q218 88 224 92" fill="none" stroke="#4c1d95" strokeWidth="1.8" opacity="0.7"/>
+          <path d="M193 117 Q200 123 207 117" fill="none" stroke="#a78bfa" strokeWidth="1.8" opacity="0.8"/>
+          <path d="M173 68 L178 50 L190 62 L200 44 L210 62 L222 50 L227 68 Z" fill="#fbbf24" opacity="0.72"/>
+          <circle cx="200" cy="44" r="5" fill="#f59e0b" opacity="0.85"/>
+          <circle cx="178" cy="50" r="3.5" fill="#f59e0b" opacity="0.75"/>
+          <circle cx="222" cy="50" r="3.5" fill="#f59e0b" opacity="0.75"/>
+          {[[118,48],[282,42],[138,148],[262,142]].map(([x,y],i) => (
+            <g key={i} opacity="0.72">
+              <line x1={x-16} y1={y} x2={x+16} y2={y} stroke="#7c3aed" strokeWidth="2"/>
+              <line x1={x} y1={y-16} x2={x} y2={y+16} stroke="#7c3aed" strokeWidth="2"/>
+              <line x1={x-10} y1={y-10} x2={x+10} y2={y+10} stroke="#a78bfa" strokeWidth="1.5"/>
+              <line x1={x+10} y1={y-10} x2={x-10} y2={y+10} stroke="#a78bfa" strokeWidth="1.5"/>
+              <circle cx={x} cy={y} r="3.5" fill="#c4b5fd"/>
+            </g>
+          ))}
+        </svg>
+      );
+
+    case "family":
+      return (
+        <svg viewBox="0 0 400 200" className="w-full block">
+          <circle cx="65" cy="48" r="22" fill="#fbbf24" opacity="0.55"/>
+          {Array.from({ length: 8 }).map((_, i) => {
+            const a = (i * 45 * Math.PI) / 180;
+            return (
+              <line key={i}
+                x1={65+25*Math.cos(a)} y1={48+25*Math.sin(a)}
+                x2={65+36*Math.cos(a)} y2={48+36*Math.sin(a)}
+                stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" opacity="0.5"
+              />
+            );
+          })}
+          <circle cx="200" cy="118" r="85" fill="#fed7aa" opacity="0.22"/>
+          <rect x="120" y="115" width="160" height="80" fill="#fdba74" opacity="0.5"/>
+          <path d="M100 118 L200 48 L300 118 Z" fill="#f97316" opacity="0.5"/>
+          <rect x="115" y="115" width="170" height="7" fill="#ea580c" opacity="0.4"/>
+          <rect x="242" y="68" width="24" height="42" fill="#f97316" opacity="0.5"/>
+          <circle cx="252" cy="58" r="8" fill="white" opacity="0.5"/>
+          <circle cx="256" cy="46" r="7" fill="white" opacity="0.4"/>
+          <circle cx="260" cy="36" r="5.5" fill="white" opacity="0.3"/>
+          <rect x="178" y="148" width="44" height="47" rx="3" fill="#ea580c" opacity="0.5"/>
+          <circle cx="217" cy="173" r="4.5" fill="#fbbf24" opacity="0.75"/>
+          <rect x="130" y="128" width="42" height="36" rx="3" fill="#fef3c7" opacity="0.8"/>
+          <rect x="228" y="128" width="42" height="36" rx="3" fill="#fef3c7" opacity="0.8"/>
+          <line x1="151" y1="128" x2="151" y2="164" stroke="#f97316" strokeWidth="1.5" opacity="0.45"/>
+          <line x1="130" y1="146" x2="172" y2="146" stroke="#f97316" strokeWidth="1.5" opacity="0.45"/>
+          <line x1="249" y1="128" x2="249" y2="164" stroke="#f97316" strokeWidth="1.5" opacity="0.45"/>
+          <line x1="228" y1="146" x2="270" y2="146" stroke="#f97316" strokeWidth="1.5" opacity="0.45"/>
+          {[[340,55,12],[365,90,9],[348,125,7],[55,120,8],[35,88,10]].map(([x,y,s],i) => (
+            <path key={i}
+              d={`M${x},${y+s*0.5} C${x},${y-s*0.2} ${x-s},${y-s*0.2} ${x-s},${y+s*0.3} C${x-s},${y+s} ${x},${y+s*1.6} ${x},${y+s*1.6} C${x},${y+s*1.6} ${x+s},${y+s} ${x+s},${y+s*0.3} C${x+s},${y-s*0.2} ${x},${y-s*0.2} ${x},${y+s*0.5} Z`}
+              fill="#f97316" opacity={0.4+i*0.06}
+            />
+          ))}
+        </svg>
+      );
+
+    default:
+      return null;
+  }
+}
+
 export default function OtakuTypePage() {
   const [phase, setPhase] = useState<"intro" | "quiz" | "result">("intro");
   const [currentQ, setCurrentQ] = useState(0);
@@ -363,14 +665,13 @@ export default function OtakuTypePage() {
     return (
       <main className="mx-auto flex max-w-xl flex-col gap-6 py-8">
         <div className="overflow-hidden border border-dashed border-gray-500 bg-white">
-          <div
-            className="flex flex-col items-center justify-center gap-3 py-10"
-            style={{ backgroundColor: result.color }}
-          >
-            <span style={{ fontSize: 72, lineHeight: 1 }}>{result.emoji}</span>
-            <span className="border border-dashed border-gray-400 bg-white/70 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-gray-500">
-              {result.subtitle}
-            </span>
+          <div style={{ backgroundColor: result.color }}>
+            <TypeIllustration type={topType} />
+            <div className="flex justify-center pb-4 -mt-1">
+              <span className="border border-dashed border-gray-400 bg-white/70 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-gray-600">
+                {result.subtitle}
+              </span>
+            </div>
           </div>
           <div className="p-6">
             <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Your Otaku Type</p>

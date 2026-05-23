@@ -547,7 +547,7 @@ export default function CommentSection({
                         <CharacterSticker token={stickerToken} size="lg" />
                       </div>
                     ) : c.content ? (
-                      <RichContent content={c.content} />
+                      <RichContent content={c.content} disableMentions={mentionMode === "none"} />
                     ) : (
                       <p className="text-xs italic text-gray-400">(빈 댓글)</p>
                     )}
@@ -675,7 +675,7 @@ export default function CommentSection({
                               </div>
                             ) : r.content ? (
                               <div className="text-sm">
-                                <RichContent content={r.content} />
+                                <RichContent content={r.content} disableMentions={mentionMode === "none"} />
                               </div>
                             ) : (
                               <p className="text-xs italic text-gray-400">(빈 답글)</p>
