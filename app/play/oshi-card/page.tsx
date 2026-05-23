@@ -5,6 +5,8 @@ import { CSSProperties, PointerEvent, useEffect, useMemo, useRef, useState } fro
 import { Download, ImagePlus, RefreshCcw, Save, Share2, X } from "lucide-react";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { getOshiList, upsertOshi } from "@/lib/supabase/oshi";
+import { createOshiCardShare, fetchLatestOshiCardShareForUser, type OshiCardShare } from "@/lib/supabase/oshiCardShares";
+import CardImageCropModal from "@/components/profile/CardImageCropModal";
 import OshiCardStyles from "./OshiCardStyles";
 
 const WORK_OPTIONS = ["슈타게", "봇치 더 록", "리제로", "주술회전", "프리렌", "체인소 맨", "에반게리온", "메이드 인 어비스"];
@@ -115,6 +117,11 @@ type TiltState = {
   glareY: number;
 };
 
+type CropTarget = {
+  kind: "background" | "avatar";
+  src: string;
+};
+
 function toggleValue(list: string[], value: string, limit: number) {
   if (list.includes(value)) return list.filter((item) => item !== value);
   if (list.length >= limit) return list;
@@ -126,6 +133,15 @@ function readImageFile(file: File, onLoad: (dataUrl: string) => void) {
   const reader = new FileReader();
   reader.onload = () => onLoad(typeof reader.result === "string" ? reader.result : "");
   reader.readAsDataURL(file);
+}
+
+function blobToDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+    reader.onerror = () => reject(reader.error ?? new Error("이미지를 읽지 못했습니다."));
+    reader.readAsDataURL(blob);
+  });
 }
 
 
@@ -146,11 +162,12 @@ export default function OshiCardPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const oshiAvatarInputRef = useRef<HTMLInputElement>(null);
   const previewCardRef = useRef<HTMLDivElement>(null);
+  const skipNextShareUrlResetRef = useRef(false);
   const [nickname, setNickname] = useState("");
   const [oshi, setOshi] = useState("");
-  const [works, setWorks] = useState<string[]>(["슈타게", "봇치 더 록", "리제로"]);
+  const [works, setWorks] = useState<string[]>([]);
   const [customWork, setCustomWork] = useState("");
-  const [tags, setTags] = useState<string[]>(["순애파", "피폐물 좋아함", "작화충"]);
+  const [tags, setTags] = useState<string[]>([]);
   const [customTag, setCustomTag] = useState("");
   const [grade, setGrade] = useState(GRADE_OPTIONS[2]);
   const [copy, setCopy] = useState(CARD_COPY_OPTIONS[0]);
@@ -164,64 +181,144 @@ export default function OshiCardPage() {
   const [paletteId, setPaletteId] = useState(PALETTE_OPTIONS[0].id);
   const [imageDataUrl, setImageDataUrl] = useState("");
   const [oshiAvatarDataUrl, setOshiAvatarDataUrl] = useState("");
+  const [cropTarget, setCropTarget] = useState<CropTarget | null>(null);
+  const [shareUrl, setShareUrl] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [isHoveringCard, setIsHoveringCard] = useState(false);
   const [isTypeMenuOpen, setIsTypeMenuOpen] = useState(false);
   const [tilt, setTilt] = useState<TiltState>({ rotateX: 0, rotateY: 0, glareX: 50, glareY: 50 });
 
+  const resetCardForm = () => {
+    setNickname("");
+    setOshi("");
+    setWorks([]);
+    setTags([]);
+    setCustomWork("");
+    setCustomTag("");
+    setGrade(GRADE_OPTIONS[2]);
+    setTypeId(TYPE_OPTIONS[0].id);
+    setImageDataUrl("");
+    setOshiAvatarDataUrl("");
+    setShareUrl("");
+  };
+
+  const applyShareToForm = (share: OshiCardShare) => {
+    skipNextShareUrlResetRef.current = true;
+    setNickname(share.nickname ?? "");
+    setOshi(share.oshi ?? "");
+    setWorks(Array.isArray(share.works) ? share.works.slice(0, 5) : []);
+    setTags([]);
+    setCustomWork("");
+    setCustomTag("");
+    if (GRADE_OPTIONS.includes(share.grade)) setGrade(share.grade);
+    if (TYPE_OPTIONS.some((item) => item.id === share.type_id)) setTypeId(share.type_id);
+    setImageDataUrl(share.background_image_url ?? "");
+    setOshiAvatarDataUrl(share.oshi_avatar_url ?? "");
+    setShareUrl(`${window.location.origin}/play/oshi-card/view/${share.id}`);
+  };
+
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
-    const hasUrlParams = p.has("n") || p.has("o") || p.has("w") || p.has("tg") || p.has("g") || p.has("t");
+    const hasUrlParams = p.has("n") || p.has("o") || p.has("w") || p.has("g") || p.has("t");
     if (hasUrlParams) {
       if (p.has("n")) setNickname(p.get("n")!);
       if (p.has("o")) setOshi(p.get("o")!);
       if (p.has("w")) setWorks(p.get("w")!.split(",").filter(Boolean).slice(0, 5));
-      if (p.has("tg")) setTags(p.get("tg")!.split(",").filter(Boolean).slice(0, 6));
       if (p.has("g") && GRADE_OPTIONS.includes(p.get("g")!)) setGrade(p.get("g")!);
       if (p.has("t") && TYPE_OPTIONS.some((item) => item.id === p.get("t"))) setTypeId(p.get("t")!);
-    } else {
-      try {
-        const saved = localStorage.getItem("oshi-card-draft");
-        if (saved) {
-          const d = JSON.parse(saved);
-          if (d.nickname) setNickname(d.nickname);
-          if (d.oshi) setOshi(d.oshi);
-          if (Array.isArray(d.works)) setWorks(d.works.slice(0, 5));
-          if (Array.isArray(d.tags)) setTags(d.tags.slice(0, 6));
-          if (d.grade && GRADE_OPTIONS.includes(d.grade)) setGrade(d.grade);
-          if (d.typeId && TYPE_OPTIONS.some((item) => item.id === d.typeId)) setTypeId(d.typeId);
-        }
-      } catch {}
     }
   }, []);
 
   useEffect(() => {
-    try {
-      localStorage.setItem("oshi-card-draft", JSON.stringify({ nickname, oshi, works, tags, grade, typeId }));
-    } catch {}
-  }, [nickname, oshi, works, tags, grade, typeId]);
+    if (authUser === undefined) return;
+    const p = new URLSearchParams(window.location.search);
+    const hasUrlParams = p.has("n") || p.has("o") || p.has("w") || p.has("g") || p.has("t");
+    if (hasUrlParams) return;
+
+    if (!authUser) {
+      resetCardForm();
+      return;
+    }
+
+    let cancelled = false;
+    fetchLatestOshiCardShareForUser(authUser.id)
+      .then((share) => {
+        if (cancelled) return;
+        if (share) {
+          applyShareToForm(share);
+        } else {
+          resetCardForm();
+        }
+      })
+      .catch(() => {
+        if (!cancelled) resetCardForm();
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser]);
+
+  useEffect(() => {
+    if (skipNextShareUrlResetRef.current) {
+      skipNextShareUrlResetRef.current = false;
+      return;
+    }
+    setShareUrl("");
+  }, [nickname, oshi, works, grade, typeId, imageDataUrl, oshiAvatarDataUrl]);
+
+  useEffect(() => {
+    if (!message) return;
+    const timer = window.setTimeout(() => setMessage(""), 3200);
+    return () => window.clearTimeout(timer);
+  }, [message]);
 
   const cardType = useMemo(
     () => TYPE_OPTIONS.find((item) => item.id === typeId) ?? TYPE_OPTIONS[0],
     [typeId],
   );
   const palette = cardType;
-  const displayName = nickname.trim() || authUser?.user_metadata?.nickname || "이름 없는 오타쿠";
+  const displayName = nickname.trim() || authUser?.user_metadata?.nickname || "";
   const canSave = Boolean(authUser?.id && oshi.trim());
   const gradeStars = Math.max(1, GRADE_OPTIONS.indexOf(grade) + 1);
+
+  const openImageCrop = (file: File, kind: CropTarget["kind"]) => {
+    if (!file.type.startsWith("image/")) {
+      setMessage("이미지 파일만 업로드할 수 있습니다.");
+      return;
+    }
+    if (cropTarget?.src) URL.revokeObjectURL(cropTarget.src);
+    setCropTarget({ kind, src: URL.createObjectURL(file) });
+  };
+
+  const closeImageCrop = () => {
+    if (cropTarget?.src) URL.revokeObjectURL(cropTarget.src);
+    setCropTarget(null);
+  };
+
+  const applyImageCrop = async (blob: Blob) => {
+    if (!cropTarget) return;
+    const dataUrl = await blobToDataUrl(blob);
+    if (cropTarget.kind === "background") {
+      setImageDataUrl(dataUrl);
+    } else {
+      setOshiAvatarDataUrl(dataUrl);
+    }
+    closeImageCrop();
+  };
 
   const handleImagePick = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    readImageFile(file, setImageDataUrl);
+    openImageCrop(file, "background");
     event.target.value = "";
   };
 
   const handleOshiAvatarPick = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    readImageFile(file, setOshiAvatarDataUrl);
+    openImageCrop(file, "avatar");
     event.target.value = "";
   };
 
@@ -275,20 +372,78 @@ export default function OshiCardPage() {
     }
   };
 
+  const buildFallbackShareUrl = () => {
+    const params = new URLSearchParams();
+    if (nickname.trim()) params.set("n", nickname.trim());
+    if (oshi.trim()) params.set("o", oshi.trim());
+    if (works.length) params.set("w", works.join(","));
+    params.set("g", grade);
+    params.set("t", typeId);
+    return `${window.location.origin}/play/oshi-card/view?${params.toString()}`;
+  };
+
+  const handleSaveShareCard = async () => {
+    setBusy(true);
+    try {
+      const share = await createOshiCardShare({
+        ownerId: authUser?.id ?? null,
+        nickname,
+        oshi,
+        works,
+        grade,
+        typeId,
+        backgroundImageDataUrl: imageDataUrl,
+        oshiAvatarDataUrl,
+      });
+      const url = `${window.location.origin}/play/oshi-card/view/${share.id}`;
+      setShareUrl(url);
+      await navigator.clipboard.writeText(url).catch(() => undefined);
+      setMessage("카드를 30일 공유용으로 저장했고 링크를 복사했습니다.");
+    } catch (error) {
+      console.error("Failed to save oshi card share:", error);
+      setShareUrl(buildFallbackShareUrl());
+      setMessage("DB 저장에 실패했습니다. Supabase 마이그레이션 적용 여부를 확인해 주세요.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleShare = async () => {
     try {
-      const params = new URLSearchParams();
-      if (nickname.trim()) params.set("n", nickname.trim());
-      if (oshi.trim()) params.set("o", oshi.trim());
-      if (works.length) params.set("w", works.join(","));
-      if (tags.length) params.set("tg", tags.join(","));
-      params.set("g", grade);
-      params.set("t", typeId);
-      const url = `${window.location.origin}/play/oshi-card/view?${params.toString()}`;
-      await navigator.clipboard.writeText(url);
-      setMessage("공유 링크가 클립보드에 복사됐습니다.");
-    } catch {
-      setMessage("링크 복사에 실패했습니다.");
+      const url = shareUrl;
+      if (!url) {
+        setMessage("먼저 카드 저장을 눌러 30일 공유 링크를 만들어 주세요.");
+        return;
+      }
+      const shareTitle = `${displayName}의 덕질 프로필 카드`;
+      const shareText = `${displayName}의 덕질 타입은 ${cardType.label}. 너도 덕질 프로필 카드를 해봐.`;
+      let copied = false;
+
+      try {
+        await navigator.clipboard.writeText(url);
+        copied = true;
+      } catch {}
+
+      const canOpenNativeShare =
+        typeof navigator.share === "function" &&
+        (window.matchMedia("(pointer: coarse)").matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+
+      if (canOpenNativeShare) {
+        await navigator.share({ title: shareTitle, text: shareText, url });
+        setMessage(copied ? "30일짜리 공유 링크를 복사했고 SNS 공유 창을 열었습니다." : "30일짜리 SNS 공유 창을 열었습니다.");
+        return;
+      }
+      if (copied) {
+        setMessage("30일짜리 공유 링크가 클립보드에 복사됐습니다.");
+        return;
+      }
+      setMessage("클립보드 권한이 막혀 링크 복사에 실패했습니다.");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setMessage("공유 창을 닫았습니다.");
+        return;
+      }
+      setMessage("공유에 실패했습니다. 다시 시도해 주세요.");
     }
   };
 
@@ -362,7 +517,13 @@ export default function OshiCardPage() {
     <div className="relative z-10 h-full overflow-hidden rounded-[4.2%/3%] border-[4px] border-zinc-950 bg-zinc-100 text-zinc-950">
       <div className="absolute inset-[1.1%] overflow-hidden rounded-[1.2%]">
         {imageDataUrl ? (
-          <img src={imageDataUrl} alt="" className="h-full w-full object-cover object-top" />
+          editable ? (
+            <button type="button" onClick={() => fileInputRef.current?.click()} className="block h-full w-full">
+              <img src={imageDataUrl} alt="" className="h-full w-full object-cover object-top" />
+            </button>
+          ) : (
+            <img src={imageDataUrl} alt="" className="h-full w-full object-cover object-top" />
+          )
         ) : (
           <button
             type="button"
@@ -443,7 +604,7 @@ export default function OshiCardPage() {
             type="button"
             onClick={() => editable && oshiAvatarInputRef.current?.click()}
             className={`oshi-avatar-frame ${editable ? "" : "pointer-events-none"}`}
-            aria-label="최애캐 캐릭터 사진 업로드"
+            aria-label="최애 캐릭터 사진 업로드"
           >
             {oshiAvatarDataUrl ? (
               <img src={oshiAvatarDataUrl} alt="" className="h-full w-full object-cover" />
@@ -461,7 +622,7 @@ export default function OshiCardPage() {
                 value={oshi}
                 onChange={(event) => setOshi(event.target.value)}
                 maxLength={28}
-                placeholder="최애캐 캐릭터 닉네임"
+                placeholder="최애 캐릭터 닉네임"
                 className="mt-1.5 w-full rounded border border-white/70 bg-white/90 px-2 py-1 text-lg font-black text-zinc-950 outline-none"
               />
             ) : (
@@ -564,6 +725,208 @@ export default function OshiCardPage() {
     </div>
   );
 
+  const renderProfileCardFace = (editable: boolean) => (
+    <div className="relative z-10 h-full overflow-hidden rounded-[4.2%/3%] border-[4px] border-zinc-950 bg-zinc-100 text-white">
+      <div className="absolute inset-[1.1%] overflow-hidden rounded-[1.2%]">
+        {imageDataUrl ? (
+          editable ? (
+            <button type="button" onClick={() => fileInputRef.current?.click()} className="block h-full w-full">
+              <img src={imageDataUrl} alt="" className="h-full w-full object-cover object-top" />
+            </button>
+          ) : (
+            <img src={imageDataUrl} alt="" className="h-full w-full object-cover object-top" />
+          )
+        ) : (
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-[var(--card-accent)] via-[var(--card-bg)] to-[var(--card-sub)] px-6 text-center text-xs font-black text-white/85"
+          >
+            <ImagePlus size={28} />
+            배경 이미지 추가
+          </button>
+        )}
+      </div>
+
+      <div className="pointer-events-none absolute inset-[1.1%] rounded-[1.2%] bg-gradient-to-b from-black/35 via-transparent to-black/45" />
+      <div className="pointer-events-none absolute inset-x-[1.1%] bottom-[1.1%] h-[38%] rounded-b-[1.2%] oshi-bottom-fade" />
+
+      <header className="absolute left-[6%] right-[6%] top-[5%] z-[80] flex items-center justify-between gap-4">
+        {editable ? (
+          <input
+            value={nickname}
+            onChange={(event) => setNickname(event.target.value)}
+            maxLength={16}
+            placeholder={authUser?.user_metadata?.nickname || "닉네임"}
+            className="min-w-0 flex-1 rounded-lg border border-white/70 bg-black/45 px-3 py-2 text-xl font-black text-white shadow-[0_8px_24px_rgba(0,0,0,.32),inset_0_1px_0_rgba(255,255,255,.22)] outline-none backdrop-blur placeholder:text-white/65 focus:border-[var(--card-foil)] focus:ring-2 focus:ring-[var(--card-accent)]/60"
+          />
+        ) : (
+          <h2 className="oshi-title-stroke min-w-0 flex-1 text-2xl font-black text-white">
+            {displayName || "닉네임"}
+          </h2>
+        )}
+        {editable ? (
+          <div className="relative z-[90] w-[43%] shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsTypeMenuOpen((value) => !value)}
+              className="flex w-full items-center gap-2 rounded-lg border border-white/70 bg-black/45 px-2.5 py-2 text-left shadow-[0_8px_24px_rgba(0,0,0,.32),inset_0_1px_0_rgba(255,255,255,.22)] backdrop-blur hover:bg-black/55"
+            >
+              <span className="h-7 w-7 shrink-0 rounded-full bg-center bg-contain bg-no-repeat drop-shadow-[0_0_10px_var(--card-accent)]" style={typeLogoStyle(cardType)} />
+              <span className="min-w-0 flex-1 truncate text-xs font-black text-white">{cardType.label}</span>
+              <span className="text-xs font-black text-white/70" aria-hidden>▾</span>
+            </button>
+            {isTypeMenuOpen ? (
+              <div className="absolute right-0 top-[calc(100%+8px)] z-[120] max-h-56 w-64 overflow-y-auto rounded-lg border border-white/70 bg-zinc-950/95 p-1 shadow-2xl">
+                {TYPE_OPTIONS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setTypeId(item.id);
+                      setIsTypeMenuOpen(false);
+                    }}
+                    className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-black text-white hover:bg-white/15 ${
+                      item.id === typeId ? "bg-white/20" : ""
+                    }`}
+                  >
+                    <span className="h-7 w-7 shrink-0 rounded-full bg-center bg-contain bg-no-repeat" style={typeLogoStyle(item)} />
+                    <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="h-8 w-8 rounded-full bg-center bg-contain bg-no-repeat drop-shadow-[0_0_10px_var(--card-accent)]" style={typeLogoStyle(cardType)} />
+            <span className="oshi-title-stroke text-lg font-black text-white">{cardType.label}</span>
+          </div>
+        )}
+      </header>
+
+      <div className="absolute inset-x-[7%] bottom-[3.7%] z-20 flex max-h-[38%] flex-col justify-end gap-4">
+      <section className="flex items-center gap-4">
+        <button
+          type="button"
+          onClick={() => editable && oshiAvatarInputRef.current?.click()}
+          className={`oshi-avatar-circle ${editable ? "" : "pointer-events-none"}`}
+          aria-label="오시 캐릭터 사진 업로드"
+        >
+          {oshiAvatarDataUrl ? (
+            <img src={oshiAvatarDataUrl} alt="" />
+          ) : (
+            <ImagePlus className="m-auto text-white/90" size={22} />
+          )}
+          <span className="oshi-ex-badge" aria-hidden>EX</span>
+        </button>
+        <div className="min-w-0 flex-1 pb-1">
+          <span className="oshi-soft-badge px-3 py-1 text-xs font-black">
+            <span aria-hidden>✦</span> 최애캐
+          </span>
+          {editable ? (
+            <input
+              value={oshi}
+              onChange={(event) => setOshi(event.target.value)}
+              maxLength={28}
+              placeholder="오시 캐릭터"
+              className="oshi-main-input oshi-glow-text oshi-main-name mt-2 placeholder:text-white/60"
+            />
+          ) : (
+            <p className="oshi-glow-text oshi-main-name mt-2">
+              {oshi.trim() || "아직 고르는 중"}
+            </p>
+          )}
+        </div>
+      </section>
+
+      <section>
+        <div className="mb-2 flex items-center gap-2 pt-[10]">
+          <span className="oshi-soft-badge px-3 py-1 text-xs font-black">
+            <span aria-hidden>📖</span> 인생작
+          </span>
+          <span className="text-xs font-black text-white/70">{works.length}/5</span>
+        </div>
+        {editable ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {works.map((work) => (
+              <span key={work} className="oshi-soft-chip">
+                {work}
+                <button type="button" onClick={() => setWorks(works.filter((w) => w !== work))} className="ml-1 text-white/55 hover:text-white">
+                  ×
+                </button>
+              </span>
+            ))}
+            {works.length < 5 ? (
+              <>
+                <input
+                  value={customWork}
+                  onChange={(event) => setCustomWork(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addCustomWork();
+                    }
+                  }}
+                  maxLength={20}
+                  placeholder={works.length === 0 ? "작품명 입력 후 Enter" : "추가..."}
+                  className="min-w-[92px] max-w-full flex-1 rounded-md border border-white/35 bg-black/20 px-2 py-1 text-xs font-black text-white outline-none placeholder:text-white/55"
+                />
+                <button type="button" onClick={addCustomWork} className="oshi-soft-chip px-2">
+                  +
+                </button>
+              </>
+            ) : null}
+          </div>
+        ) : works.length ? (
+          <div className="flex flex-wrap gap-1.5">
+            {works.map((work) => (
+              <span key={work} className="oshi-soft-chip">
+                {work}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="oshi-title-stroke text-sm font-black italic text-white/75">인생작 미선택</p>
+        )}
+      </section>
+
+      <section>
+        <div className="oshi-grade-divider mb-3" />
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <span className="oshi-soft-badge px-3 py-1 text-xs font-black">
+              <span aria-hidden>🏅</span> 등급
+            </span>
+            {editable ? (
+              <select
+                value={grade}
+                onChange={(event) => setGrade(event.target.value)}
+                className="min-w-0 flex-1 rounded-md border border-white/35 bg-black/25 px-2 py-1 text-sm font-black text-white outline-none"
+              >
+                {GRADE_OPTIONS.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <p className="oshi-glow-text text-base font-black">{grade}</p>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-[2px]">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <span key={i} className={`oshi-star ${i < gradeStars ? "oshi-star-on" : "oshi-star-off"}`} aria-hidden>
+                ★
+              </span>
+            ))}
+          </div>
+        </div>
+      </section>
+      </div>
+    </div>
+  );
+
   return (
     <main className="w-full">
       <OshiCardStyles />
@@ -579,6 +942,21 @@ export default function OshiCardPage() {
 
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImagePick} />
       <input ref={oshiAvatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleOshiAvatarPick} />
+      {cropTarget ? (
+        <CardImageCropModal
+          imageSrc={cropTarget.src}
+          aspect={cropTarget.kind === "background" ? 734 / 1024 : 1}
+          title={cropTarget.kind === "background" ? "카드 배경 이미지 맞추기" : "오시 프로필 이미지 맞추기"}
+          description={
+            cropTarget.kind === "background"
+              ? "공유 카드 실제 비율에 맞춰 이동하거나 크롭하세요."
+              : "오시 프로필 영역에 맞춰 정사각형으로 이동하거나 크롭하세요."
+          }
+          outputSize={cropTarget.kind === "background" ? { width: 734, height: 1024 } : { width: 126, height: 126 }}
+          onConfirm={applyImageCrop}
+          onCancel={closeImageCrop}
+        />
+      ) : null}
 
       <section className="mt-5 grid gap-5 xl:grid-cols-2">
         <div className="border border-dashed border-gray-500 bg-white p-4">
@@ -632,7 +1010,7 @@ export default function OshiCardPage() {
             onDrop={(event) => {
               event.preventDefault();
               const file = event.dataTransfer.files?.[0];
-              if (file) readImageFile(file, setImageDataUrl);
+              if (file) openImageCrop(file, "background");
             }}
           >
             <div
@@ -640,7 +1018,7 @@ export default function OshiCardPage() {
               style={editorCardStyle}
               data-hovering="false"
             >
-              {renderCardFace(true)}
+              {renderProfileCardFace(true)}
               <div className="pointer-events-none absolute inset-0 z-20 holo-foil" />
               <div className="pointer-events-none absolute inset-0 z-40 rounded-[4.8%/3.4%] ring-2 ring-white/45" />
             </div>
@@ -661,7 +1039,7 @@ export default function OshiCardPage() {
               onPointerMove={handleTilt}
               onPointerLeave={resetTilt}
             >
-              {renderCardFace(false)}
+              {renderProfileCardFace(false)}
               <div
                 className="pointer-events-none absolute inset-0 z-20 holo-foil"
                 style={{
@@ -677,16 +1055,20 @@ export default function OshiCardPage() {
         </div>
       </section>
 
-      {message ? <p className="mt-3 text-xs font-bold text-gray-600">{message}</p> : null}
+      {message ? (
+        <div className="fixed bottom-5 left-1/2 z-[10000] -translate-x-1/2 rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-xs font-black text-white shadow-2xl">
+          {message}
+        </div>
+      ) : null}
 
       <section className="mt-5 grid gap-2 sm:grid-cols-3">
         <button
           type="button"
           disabled={busy}
-          onClick={handleDownload}
+          onClick={handleSaveShareCard}
           className="inline-flex items-center justify-center gap-2 border border-dashed border-gray-700 bg-gray-900 px-3 py-2 text-xs font-bold text-white hover:bg-gray-800 disabled:opacity-50"
         >
-          <Download size={15} />
+          <Save size={15} />
           카드 저장
         </button>
         <button
@@ -700,25 +1082,19 @@ export default function OshiCardPage() {
         </button>
         <button
           type="button"
-          disabled={busy || !canSave}
-          onClick={handleSaveProfile}
+          disabled={busy}
+          onClick={handleDownload}
           className="inline-flex items-center justify-center gap-2 border border-dashed border-pink-500 bg-pink-50 px-3 py-2 text-xs font-bold text-pink-700 hover:bg-pink-100 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <Save size={15} />
-          프로필 저장
+          <Download size={15} />
+          이미지 저장
         </button>
       </section>
 
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        {!authUser ? (
-          <Link href="/auth" className="border border-dashed border-gray-400 bg-white p-3 text-center text-xs font-bold text-gray-600 hover:bg-gray-100">
-            로그인하면 최애캐를 프로필에 저장할 수 있습니다.
-          </Link>
-        ) : (
-          <Link href="/profile?tab=oshi" className="border border-dashed border-gray-400 bg-white p-3 text-center text-xs font-bold text-gray-600 hover:bg-gray-100">
-            프로필에서 최애캐/카드 더 꾸미기
-          </Link>
-        )}
+        <p className="border border-dashed border-gray-400 bg-white p-3 text-center text-xs font-bold text-gray-600">
+          카드 저장을 누르면 로그인 여부와 상관없이 30일짜리 공유 링크가 생성됩니다.
+        </p>
         <p className="border border-dashed border-gray-400 bg-white p-3 text-center text-xs font-bold text-gray-600">
           기본 반짝임은 양쪽에 유지되고, hover 반응은 오른쪽만 켜집니다.
         </p>

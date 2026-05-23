@@ -35,6 +35,13 @@ const CSS = `
 }
 .oshi-holo-card[data-hovering="true"] .holo-foil { opacity: .56; filter: brightness(1.08) contrast(1.36) saturate(1.6); }
 .oshi-holo-card[data-hovering="true"] .holo-glare { opacity: .34; }
+.oshi-bottom-fade {
+  background:
+    linear-gradient(180deg, transparent 0%, rgba(0,0,0,.18) 12%, rgba(0,0,0,.74) 54%, rgba(0,0,0,.94) 100%),
+    radial-gradient(110% 80% at 18% 32%, color-mix(in srgb, var(--card-accent) 42%, transparent) 0%, transparent 58%),
+    radial-gradient(90% 70% at 88% 74%, color-mix(in srgb, var(--card-sub) 38%, transparent) 0%, transparent 62%);
+  mix-blend-mode: normal;
+}
 .oshi-title-stroke {
   text-shadow:
     -2px -2px 0 #111827, 2px -2px 0 #111827,
@@ -42,6 +49,94 @@ const CSS = `
      0   -2px 0 #111827, 0    2px 0 #111827,
     -2px  0   0 #111827, 2px  0   0 #111827,
      0    2px 6px rgba(0,0,0,.55);
+}
+.oshi-glow-text {
+  color: #fff;
+  text-shadow:
+    -2px -2px 0 color-mix(in srgb, var(--card-accent) 72%, #111827),
+     2px -2px 0 color-mix(in srgb, var(--card-accent) 72%, #111827),
+    -2px  2px 0 color-mix(in srgb, var(--card-accent) 72%, #111827),
+     2px  2px 0 color-mix(in srgb, var(--card-accent) 72%, #111827),
+     0   -2px 0 color-mix(in srgb, var(--card-accent) 72%, #111827),
+     0    2px 0 color-mix(in srgb, var(--card-accent) 72%, #111827),
+    -2px  0   0 color-mix(in srgb, var(--card-accent) 72%, #111827),
+     2px  0   0 color-mix(in srgb, var(--card-accent) 72%, #111827),
+    0 0 10px var(--card-accent),
+    0 0 24px color-mix(in srgb, var(--card-accent) 72%, transparent);
+}
+.oshi-soft-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.42);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--card-accent) 68%, rgba(0,0,0,.2)), rgba(255,255,255,.12));
+  box-shadow: 0 4px 14px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.28);
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,.65);
+}
+.oshi-avatar-circle {
+  position: relative;
+  display: flex;
+  width: 80px;
+  height: 80px;
+  flex: 0 0 auto;
+  overflow: visible;
+  border-radius: 999px;
+  background: rgba(0,0,0,.5);
+  box-shadow: 0 10px 26px rgba(0,0,0,.55), 0 0 0 3px color-mix(in srgb, var(--card-accent) 72%, white 28%);
+}
+.oshi-avatar-circle > img, .oshi-avatar-circle > svg {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  object-fit: cover;
+}
+.oshi-avatar-circle::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: inherit;
+  border: 1px solid rgba(255,255,255,.55);
+  pointer-events: none;
+}
+.oshi-main-name {
+  font-size: 42px;
+  line-height: 1;
+  font-weight: 1000;
+  letter-spacing: 0;
+}
+.oshi-main-input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-bottom: 2px solid rgba(255,255,255,.45);
+  background: transparent;
+  outline: none;
+}
+.oshi-soft-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 7px;
+  border: 1px solid rgba(255,255,255,.48);
+  background: rgba(18,18,24,.42);
+  padding: 4px 9px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  text-shadow: 0 1px 2px rgba(0,0,0,.75);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.14);
+}
+.oshi-soft-chip::before {
+  content: "✦";
+  color: var(--card-foil);
+  text-shadow: 0 0 7px var(--card-accent);
+}
+.oshi-grade-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.34), transparent);
 }
 .oshi-info-plate {
   border-radius: 12px;

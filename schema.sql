@@ -168,6 +168,22 @@ CREATE TABLE public.notifications (
   CONSTRAINT notifications_receiver_id_fkey FOREIGN KEY (receiver_id) REFERENCES auth.users(id),
   CONSTRAINT notifications_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES auth.users(id)
 );
+CREATE TABLE public.oshi_card_shares (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  owner_id uuid,
+  nickname text,
+  oshi text,
+  works ARRAY NOT NULL DEFAULT '{}'::text[],
+  grade text NOT NULL,
+  type_id text NOT NULL,
+  background_image_url text,
+  oshi_avatar_url text,
+  expires_at timestamp with time zone NOT NULL DEFAULT (now() + '30 days'::interval),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT oshi_card_shares_pkey PRIMARY KEY (id),
+  CONSTRAINT oshi_card_shares_expires_30d CHECK (expires_at <= created_at + '30 days 00:05:00'::interval),
+  CONSTRAINT oshi_card_shares_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.post_reactions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   post_id uuid NOT NULL,
