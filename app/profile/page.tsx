@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useRef } from "react";
+import { Suspense, useCallback, useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -99,7 +99,7 @@ const RARITY_LABELS: Record<string, string> = {
   legendary: "LEGENDARY",
 };
 
-export default function ProfilePage() {
+function ProfilePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const user = useAuthUser();
@@ -2530,5 +2530,13 @@ export default function ProfilePage() {
         </div>
       )}
     </main>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={<main className="w-full p-4 text-sm font-bold text-gray-500">프로필을 불러오는 중...</main>}>
+      <ProfilePageContent />
+    </Suspense>
   );
 }
