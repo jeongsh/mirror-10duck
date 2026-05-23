@@ -4,9 +4,11 @@ import Link from "next/link";
 import { CSSProperties, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Download, ImagePlus, RefreshCcw, Save, Share2, X } from "lucide-react";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
+import { supabase } from "@/lib/supabase/client";
 import { getOshiList, upsertOshi } from "@/lib/supabase/oshi";
 import { createOshiCardShare, fetchLatestOshiCardShareForUser, type OshiCardShare } from "@/lib/supabase/oshiCardShares";
 import CardImageCropModal from "@/components/profile/CardImageCropModal";
+import type { OfficialWork } from "@/types/official";
 import OshiCardStyles from "./OshiCardStyles";
 
 const WORK_OPTIONS = ["슈타게", "봇치 더 록", "리제로", "주술회전", "프리렌", "체인소 맨", "에반게리온", "메이드 인 어비스"];
@@ -53,6 +55,14 @@ const TYPE_OPTION_DEFS = [
   { id: "dark", label: "흑역사 봉인형" },
   { id: "fairy", label: "최애 숭배형" },
 ];
+
+const OFFICIAL_WORK_CATEGORY_LABELS: Record<OfficialWork["category"], string> = {
+  anime: "애니",
+  manga: "만화",
+  light_novel: "라노벨",
+  webtoon: "웹툰",
+  other: "기타",
+};
 
 function hexToRgb(hex: string) {
   const normalized = hex.replace("#", "");
@@ -186,6 +196,8 @@ export default function OshiCardPage() {
   const [oshi, setOshi] = useState("");
   const [works, setWorks] = useState<string[]>([]);
   const [customWork, setCustomWork] = useState("");
+  const [officialWorks, setOfficialWorks] = useState<OfficialWork[]>([]);
+  const [officialWorksLoading, setOfficialWorksLoading] = useState(true);
   const [tags, setTags] = useState<string[]>([]);
   const [customTag, setCustomTag] = useState("");
   const [grade, setGrade] = useState(GRADE_OPTIONS[2]);
@@ -295,6 +307,36 @@ export default function OshiCardPage() {
   }, [message]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const fetchOfficialWorks = async () => {
+      setOfficialWorksLoading(true);
+      const { data, error } = await supabase
+        .from("official_works")
+        .select("id, slug, title, original_title, category, synopsis, cover_image_url, status, sort_order, created_at, updated_at")
+        .eq("status", "PUBLISHED")
+        .order("sort_order", { ascending: true })
+        .order("title", { ascending: true })
+        .limit(300);
+
+      if (cancelled) return;
+      if (error) {
+        console.warn("[oshi-card] failed to fetch official works:", error);
+        setOfficialWorks([]);
+      } else {
+        setOfficialWorks((data ?? []) as OfficialWork[]);
+      }
+      setOfficialWorksLoading(false);
+    };
+
+    void fetchOfficialWorks();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isDeviceTiltEnabled) return;
     const onOrientation = (event: DeviceOrientationEvent) => {
       const beta = event.beta ?? 45;
@@ -322,6 +364,19 @@ export default function OshiCardPage() {
   const displayName = nickname.trim() || authUser?.user_metadata?.nickname || "";
   const canSave = Boolean(authUser?.id && oshi.trim());
   const gradeStars = Math.max(1, GRADE_OPTIONS.indexOf(grade) + 1);
+  const officialWorkSearchResults = useMemo(() => {
+    const query = customWork.trim().toLowerCase();
+    if (!query) return officialWorks.filter((work) => !works.includes(work.title)).slice(0, 6);
+
+    return officialWorks
+      .filter((work) => {
+        if (works.includes(work.title)) return false;
+        return [work.title, work.original_title, work.slug]
+          .filter(Boolean)
+          .some((value) => value!.toLowerCase().includes(query));
+      })
+      .slice(0, 8);
+  }, [customWork, officialWorks, works]);
 
   const openImageCrop = (file: File, kind: CropTarget["kind"]) => {
     if (!file.type.startsWith("image/")) {
@@ -550,11 +605,15 @@ export default function OshiCardPage() {
     }
   };
 
-  const addCustomWork = () => {
-    const value = customWork.trim();
-    if (!value || works.includes(value) || works.length >= 5) return;
-    setWorks((prev) => [...prev, value]);
+  const addOfficialWork = (work: OfficialWork) => {
+    if (works.includes(work.title) || works.length >= 5) return;
+    setWorks((prev) => [...prev, work.title]);
     setCustomWork("");
+  };
+
+  const addCustomWork = () => {
+    const firstResult = officialWorkSearchResults[0];
+    if (firstResult) addOfficialWork(firstResult);
   };
 
   const addCustomTag = () => {
@@ -731,13 +790,8 @@ export default function OshiCardPage() {
                 <input
                   value={customWork}
                   onChange={(event) => setCustomWork(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      addCustomWork();
-                    }
-                  }}
-                  maxLength={20}
+                  type="search"
+                  maxLength={40}
                   placeholder={works.length === 0 ? "작품명 입력 후 Enter" : "추가..."}
                   className="min-w-[72px] flex-1 rounded border border-white/60 bg-white/15 px-2 py-0.5 text-[11px] font-black text-white outline-none placeholder:font-normal placeholder:text-white/50"
                 />
@@ -930,24 +984,47 @@ export default function OshiCardPage() {
               </span>
             ))}
             {works.length < 5 ? (
-              <>
+              <div className="relative min-w-[150px] flex-1">
                 <input
                   value={customWork}
                   onChange={(event) => setCustomWork(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      addCustomWork();
-                    }
-                  }}
-                  maxLength={20}
-                  placeholder={works.length === 0 ? "작품명 입력 후 Enter" : "추가..."}
-                  className="min-w-[92px] max-w-full flex-1 rounded-md border border-white/35 bg-black/20 px-2 py-1 text-xs font-black text-white outline-none placeholder:text-white/55"
+                  type="search"
+                  maxLength={40}
+                  placeholder="공식 작품 검색"
+                  className="w-full rounded-md border border-white/35 bg-black/25 px-2 py-1 text-xs font-black text-white outline-none placeholder:text-white/55 focus:border-[var(--card-foil)]"
                 />
-                <button type="button" onClick={addCustomWork} className="oshi-soft-chip px-2">
-                  +
-                </button>
-              </>
+                {customWork.trim() ? (
+                  <div className="absolute bottom-[calc(100%+6px)] left-0 right-0 z-[140] max-h-48 overflow-y-auto rounded-lg border border-white/45 bg-zinc-950/95 p-1 shadow-2xl backdrop-blur">
+                    {officialWorksLoading ? (
+                      <p className="px-2 py-2 text-[11px] font-black text-white/55">작품 목록을 불러오는 중...</p>
+                    ) : officialWorkSearchResults.length === 0 ? (
+                      <p className="px-2 py-2 text-[11px] font-black text-white/55">공식 작품 검색 결과가 없습니다.</p>
+                    ) : (
+                      officialWorkSearchResults.map((work) => (
+                        <button
+                          key={work.id}
+                          type="button"
+                          onClick={() => addOfficialWork(work)}
+                          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-white/15"
+                        >
+                          <span className="h-9 w-7 shrink-0 overflow-hidden rounded border border-white/20 bg-white/10">
+                            {work.cover_image_url ? (
+                              <img src={work.cover_image_url} alt="" className="h-full w-full object-cover" />
+                            ) : null}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[11px] font-black text-white">{work.title}</span>
+                            <span className="block truncate text-[9px] font-black text-white/45">
+                              {OFFICIAL_WORK_CATEGORY_LABELS[work.category]}
+                              {work.original_title ? ` · ${work.original_title}` : ""}
+                            </span>
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                ) : null}
+              </div>
             ) : null}
           </div>
         ) : works.length ? (
