@@ -33,7 +33,7 @@ export const CREATE_NAV_GROUPS: NavGroup[] = [
         href: "/play/otaku-type",
         label: "오타쿠 성향 테스트",
         description: "웃긴 결과명과 프로필 배지로 가입 전환을 만든다.",
-        status: "planned",
+        status: "live",
       },
       {
         href: "/play/timeline",
