@@ -3,8 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
-import { useAuthUser } from "@/lib/supabase/useAuthUser";
-import { fetchFollowedOfficialWorkIds } from "@/lib/supabase/officialWorkFollows";
 import { Board, CommunityPost, postAggregateDefaults } from "@/types/community";
 
 function buildPostHref(post: CommunityPost, boardSlugById: Map<string, string>): string {
@@ -20,32 +18,10 @@ function truncateNickname(nickname: string, maxLength: number = 6): string {
 }
 
 export default function HomeContent() {
-  const authUser = useAuthUser();
   const [boards, setBoards] = useState<Board[]>([]);
   const [hotPosts, setHotPosts] = useState<CommunityPost[]>([]);
   const [postBoards, setPostBoards] = useState<Board[]>([]);
-  const [interestCount, setInterestCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!authUser?.id) {
-      setInterestCount(null);
-      return;
-    }
-
-    let cancelled = false;
-    fetchFollowedOfficialWorkIds(authUser.id)
-      .then((ids) => {
-        if (!cancelled) setInterestCount(ids.size);
-      })
-      .catch(() => {
-        if (!cancelled) setInterestCount(null);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [authUser?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -115,27 +91,6 @@ export default function HomeContent() {
 
   return (
     <section className="flex w-full flex-col gap-6">
-      {authUser && interestCount !== null && interestCount < 3 ? (
-        <div className="border border-dashed border-pink-400 bg-pink-50 p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-bold text-pink-900">
-                관심작을 {3 - interestCount}개 더 고르면 개인화 준비가 끝납니다.
-              </p>
-              <p className="mt-1 text-xs text-pink-700">
-                선택한 작품은 캘린더, 신작 알림, 공개 프로필 기준으로 사용됩니다.
-              </p>
-            </div>
-            <Link
-              href="/onboarding/interests"
-              className="inline-flex shrink-0 border border-dashed border-pink-500 bg-white px-3 py-2 text-xs font-bold text-pink-700 hover:bg-pink-100"
-            >
-              관심작 고르기
-            </Link>
-          </div>
-        </div>
-      ) : null}
-
       <div className="border border-dashed border-gray-500 bg-white/70 p-4">
         <div className="mb-4 flex items-end justify-between border-b border-dashed border-gray-400 pb-2">
           <h2 className="text-xl font-bold text-gray-800">실시간 베스트</h2>

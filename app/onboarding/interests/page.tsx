@@ -12,8 +12,6 @@ import {
 } from "@/lib/supabase/officialWorkFollows";
 import type { OfficialWork } from "@/types/official";
 
-const MIN_INTEREST_COUNT = 3;
-
 export default function InterestOnboardingPage() {
   const router = useRouter();
   const user = useAuthUser();
@@ -87,11 +85,6 @@ export default function InterestOnboardingPage() {
 
   const save = async () => {
     if (!user) return;
-    if (selectedIds.size < MIN_INTEREST_COUNT) {
-      setMessage(`관심작을 ${MIN_INTEREST_COUNT}개 이상 골라주세요.`);
-      return;
-    }
-
     setSaving(true);
     setMessage("");
     try {
@@ -161,7 +154,7 @@ export default function InterestOnboardingPage() {
           <div>
             <h1 className="text-2xl font-extrabold text-gray-950">관심작을 골라주세요</h1>
             <p className="mt-1 text-sm text-gray-600">
-              최소 {MIN_INTEREST_COUNT}개를 고르면 오늘 일정, 신작 알림, 공개 프로필의 기준으로 씁니다.
+              원하면 지금 골라도 되고, 나중에 프로필에서 언제든 설정할 수 있습니다.
             </p>
           </div>
           <div className="border border-dashed border-gray-400 bg-white px-4 py-2 text-sm font-bold text-gray-800">
@@ -267,7 +260,7 @@ export default function InterestOnboardingPage() {
 
           <button
             type="button"
-            disabled={saving || selectedIds.size < MIN_INTEREST_COUNT}
+            disabled={saving}
             onClick={() => void save()}
             className="mt-4 w-full border border-dashed border-gray-800 bg-gray-900 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
           >

@@ -228,7 +228,7 @@ export default function GlobalNavigation() {
                     레벨 & 경험치
                   </Link>
                   <Link
-                    href="/onboarding/interests"
+                    href="/profile?tab=profile"
                     className="block border-b border-dashed border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                     onClick={() => setShowMenu(false)}
                   >
