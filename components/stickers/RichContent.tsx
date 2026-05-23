@@ -1,25 +1,45 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { splitMentionText } from "@/lib/community/mentionEditor";
 import { splitContentSegments } from "@/lib/stickers/token";
 import CharacterSticker from "./CharacterSticker";
+import { supabase } from "@/lib/supabase/client";
+
+function MentionLink({ handle }: { handle: string }) {
+  const [label, setLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase
+      .from("profiles")
+      .select("nickname, display_name")
+      .ilike("handle", handle)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          const p = data as { nickname?: string | null; display_name?: string | null };
+          setLabel(p.display_name || p.nickname || null);
+        }
+      });
+  }, [handle]);
+
+  return (
+    <Link
+      href={`/user/${encodeURIComponent(handle)}`}
+      className="font-semibold text-blue-600 hover:underline"
+    >
+      @{label ?? handle}
+    </Link>
+  );
+}
 
 function renderTextWithMentions(text: string, keyPrefix: string) {
   const parts = splitMentionText(text);
   if (parts.length === 0) return text;
   return parts.map((part, index) => {
     if (part.type === "mention") {
-      return (
-        <Link
-          key={`${keyPrefix}-m-${index}`}
-          href={`/user/${encodeURIComponent(part.handle)}`}
-          className="font-semibold text-blue-600 hover:underline"
-        >
-          @{part.handle}
-        </Link>
-      );
+      return <MentionLink key={`${keyPrefix}-m-${index}`} handle={part.handle} />;
     }
     return <span key={`${keyPrefix}-t-${index}`}>{part.value}</span>;
   });

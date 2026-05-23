@@ -270,6 +270,19 @@ export default function CommentSection({
             actorId: viewerId,
             linkUrl,
           });
+          // 답글인 경우 상대방이 팔로우 목록에 없어도 멘션 알림 전송
+          if (replyTo) {
+            const parent = comments.find((c) => c.id === replyTo);
+            if (parent?.author_id && parent.author_id !== viewerId) {
+              await processMentionForUser({
+                mentionedUserId: parent.author_id,
+                sourceType: "comment",
+                sourceId: insertedComment.id,
+                actorId: viewerId,
+                linkUrl,
+              });
+            }
+          }
         }
       }
     }
@@ -346,7 +359,7 @@ export default function CommentSection({
       }
     }
 
-    if (!isNews && viewerId && insertedComment?.id && mentionMode === "reply-only" && replyTo) {
+    if (!isNews && viewerId && insertedComment?.id && (mentionMode === "reply-only" || mentionMode === "typed") && replyTo) {
       const parent = comments.find((c) => c.id === replyTo);
       if (parent?.author_id && parent.author_id !== viewerId) {
         const linkUrl =

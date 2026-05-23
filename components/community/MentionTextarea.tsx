@@ -74,6 +74,7 @@ export default function MentionTextarea({
   const [candidates, setCandidates] = useState<MentionCandidate[]>([]);
   const [loadingCandidates, setLoadingCandidates] = useState(false);
   const [trigger, setTrigger] = useState<ReturnType<typeof getMentionTrigger>>(null);
+  const triggerWasOpenRef = useRef(false);
   const [caretIndex, setCaretIndex] = useState(0);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
@@ -109,6 +110,20 @@ export default function MentionTextarea({
       cancelled = true;
     };
   }, [userId]);
+
+  // 드롭다운이 새로 열릴 때마다 팔로우 목록 갱신 (팔로우 직후 바로 태그 가능)
+  useEffect(() => {
+    const isOpen = Boolean(trigger);
+    if (!isOpen) {
+      triggerWasOpenRef.current = false;
+      return;
+    }
+    if (triggerWasOpenRef.current || !userId) return;
+    triggerWasOpenRef.current = true;
+    void fetchFollowedMentionCandidates(userId).then((rows) => {
+      setCandidates(rows);
+    });
+  }, [trigger, userId]);
 
   const filtered = useMemo(() => {
     if (!trigger) return [];

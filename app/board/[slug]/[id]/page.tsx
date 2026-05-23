@@ -496,6 +496,7 @@ export default function BoardPostDetailPage() {
           viewerId={userId || null}
           viewerEmail={userEmail || null}
           allowAnonymous={board?.allow_anonymous ?? false}
+          mentionMode="typed"
           onThreadChanged={refetchPost}
           onOpenUserAction={(authorId) => setSelectedUserId(authorId)}
         />

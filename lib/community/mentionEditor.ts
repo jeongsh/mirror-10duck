@@ -35,7 +35,7 @@ export function buildMentionTokenElement(row: MentionCandidate): HTMLSpanElement
   span.setAttribute("contenteditable", "false");
   span.className =
     "mention-token inline cursor-pointer rounded-sm bg-blue-50 px-0.5 font-semibold text-blue-600 hover:underline";
-  span.textContent = `@${row.handle}`;
+  span.textContent = `@${row.label}`;
   return span;
 }
 
