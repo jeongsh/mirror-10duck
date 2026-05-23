@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { CSSProperties, PointerEvent, useEffect, useMemo, useState } from "react";
+import { CSSProperties, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ImagePlus } from "lucide-react";
 import { TYPE_OPTIONS, GRADE_OPTIONS, type CardType } from "../_config";
 import OshiCardStyles from "../OshiCardStyles";
 import { fetchOshiCardShare } from "@/lib/supabase/oshiCardShares";
 
 type TiltState = { rotateX: number; rotateY: number; glareX: number; glareY: number };
+type DeviceOrientationWithPermission = typeof DeviceOrientationEvent & {
+  requestPermission?: () => Promise<"granted" | "denied">;
+};
 
 function typeLogoStyle(cardType: CardType): CSSProperties {
   return { backgroundImage: `url(/viral/type-logos/${cardType.id}.svg)` };
@@ -28,6 +31,7 @@ function oshiNameStyle(name: string): CSSProperties {
 }
 
 export default function OshiCardViewPage() {
+  const orientationPermissionRef = useRef<"unknown" | "granted" | "denied">("unknown");
   const [nickname, setNickname] = useState("");
   const [oshi, setOshi] = useState("");
   const [works, setWorks] = useState<string[]>([]);
@@ -37,6 +41,7 @@ export default function OshiCardViewPage() {
   const [oshiAvatarUrl, setOshiAvatarUrl] = useState("");
   const [isExpired, setIsExpired] = useState(false);
   const [isHoveringCard, setIsHoveringCard] = useState(false);
+  const [isDeviceTiltEnabled, setIsDeviceTiltEnabled] = useState(false);
   const [tilt, setTilt] = useState<TiltState>({ rotateX: 0, rotateY: 0, glareX: 50, glareY: 50 });
 
   useEffect(() => {
@@ -67,6 +72,26 @@ export default function OshiCardViewPage() {
     if (p.has("g") && GRADE_OPTIONS.includes(p.get("g")!)) setGrade(p.get("g")!);
     if (p.has("t") && TYPE_OPTIONS.some((item) => item.id === p.get("t"))) setTypeId(p.get("t")!);
   }, []);
+
+  useEffect(() => {
+    if (!isDeviceTiltEnabled) return;
+    const onOrientation = (event: DeviceOrientationEvent) => {
+      const beta = event.beta ?? 45;
+      const gamma = event.gamma ?? 0;
+      const betaOffset = Math.max(-35, Math.min(35, beta - 45));
+      const gammaOffset = Math.max(-35, Math.min(35, gamma));
+      setIsHoveringCard(true);
+      setTilt({
+        rotateX: Math.max(-12, Math.min(12, -betaOffset / 2.9)),
+        rotateY: Math.max(-12, Math.min(12, gammaOffset / 2.9)),
+        glareX: Math.max(0, Math.min(100, 50 + gammaOffset * 1.15)),
+        glareY: Math.max(0, Math.min(100, 50 + betaOffset * 1.05)),
+      });
+    };
+
+    window.addEventListener("deviceorientation", onOrientation);
+    return () => window.removeEventListener("deviceorientation", onOrientation);
+  }, [isDeviceTiltEnabled]);
 
   const cardType = useMemo(
     () => TYPE_OPTIONS.find((item) => item.id === typeId) ?? TYPE_OPTIONS[0],
@@ -110,11 +135,32 @@ export default function OshiCardViewPage() {
     setTilt({ rotateX: 0, rotateY: 0, glareX: 50, glareY: 50 });
   };
 
+  const requestDeviceTilt = async () => {
+    if (orientationPermissionRef.current === "denied" || typeof window === "undefined") return;
+    const DeviceOrientation = window.DeviceOrientationEvent as DeviceOrientationWithPermission | undefined;
+    if (!DeviceOrientation) return;
+
+    if (typeof DeviceOrientation.requestPermission === "function" && orientationPermissionRef.current === "unknown") {
+      const result = await DeviceOrientation.requestPermission().catch(() => "denied" as const);
+      orientationPermissionRef.current = result === "granted" ? "granted" : "denied";
+      if (result !== "granted") return;
+    } else if (orientationPermissionRef.current === "unknown") {
+      orientationPermissionRef.current = "granted";
+    }
+
+    setIsDeviceTiltEnabled(true);
+  };
+
+  const handleCardPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    handleTilt(event);
+    void requestDeviceTilt();
+  };
+
   const renderCardFace = () => (
     <div className="relative z-10 h-full overflow-hidden rounded-[4.2%/3%] border-[4px] border-zinc-950 bg-zinc-100 text-white">
       <div className="absolute inset-[1.1%] overflow-hidden rounded-[1.2%]">
         {backgroundImageUrl ? (
-          <img src={backgroundImageUrl} alt="" className="h-full w-full object-cover object-top" />
+          <img src={backgroundImageUrl} alt="" draggable={false} className="pointer-events-none h-full w-full select-none object-cover object-top" />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-[var(--card-accent)] via-[var(--card-bg)] to-[var(--card-sub)] px-6 text-center text-xs font-black text-white/85">
             <ImagePlus size={28} />
@@ -137,7 +183,7 @@ export default function OshiCardViewPage() {
       <section className="flex items-center gap-4">
         <div className="oshi-avatar-circle pointer-events-none">
           {oshiAvatarUrl ? (
-            <img src={oshiAvatarUrl} alt="" />
+            <img src={oshiAvatarUrl} alt="" draggable={false} />
           ) : (
             <ImagePlus className="m-auto text-white/90" size={22} />
           )}
@@ -234,7 +280,11 @@ export default function OshiCardViewPage() {
               className="oshi-holo-card relative mx-auto aspect-[734/1024] w-full max-w-[420px] overflow-hidden rounded-[4.8%/3.4%] bg-zinc-100 p-[0.9%] text-white shadow-2xl transition-transform duration-150 ease-out"
               style={cardStyle}
               data-hovering={isHoveringCard ? "true" : "false"}
+              data-auto-shimmer="true"
+              onPointerDown={handleCardPointerDown}
               onPointerMove={handleTilt}
+              onPointerUp={resetTilt}
+              onPointerCancel={resetTilt}
               onPointerLeave={resetTilt}
             >
               {renderCardFace()}

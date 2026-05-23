@@ -1,5 +1,7 @@
 const CSS = `
 .oshi-holo-card {
+  -webkit-touch-callout: none;
+  user-select: none;
   background:
     linear-gradient(115deg, transparent 0%, rgba(255,255,255,.20) var(--glare-x), transparent 58%),
     radial-gradient(farthest-corner circle at var(--glare-x) var(--glare-y), rgba(255,255,255,.34) 0%, rgba(255,255,255,.10) 22%, transparent 44%),
@@ -35,6 +37,24 @@ const CSS = `
 }
 .oshi-holo-card[data-hovering="true"] .holo-foil { opacity: .56; filter: brightness(1.08) contrast(1.36) saturate(1.6); }
 .oshi-holo-card[data-hovering="true"] .holo-glare { opacity: .34; }
+@keyframes oshi-mobile-foil {
+  0%, 100% { filter: brightness(.92) contrast(1.18) saturate(1.35); }
+  50% { filter: brightness(1.14) contrast(1.36) saturate(1.7); }
+}
+@keyframes oshi-mobile-glare {
+  0%, 100% { opacity: .16; background-position: 22% 50%, 22% 50%; }
+  50% { opacity: .34; background-position: 78% 50%, 78% 50%; }
+}
+@media (hover: none) {
+  .oshi-holo-card[data-auto-shimmer="true"] .holo-foil {
+    opacity: .36 !important;
+    animation: oshi-mobile-foil 3.8s ease-in-out infinite;
+  }
+  .oshi-holo-card[data-auto-shimmer="true"] .holo-glare {
+    opacity: .24 !important;
+    animation: oshi-mobile-glare 3.8s ease-in-out infinite;
+  }
+}
 .oshi-bottom-fade {
   background:
     linear-gradient(180deg, transparent 0%, rgba(0,0,0,.18) 12%, rgba(0,0,0,.74) 54%, rgba(0,0,0,.94) 100%),
@@ -88,6 +108,9 @@ const CSS = `
   box-shadow: 0 10px 26px rgba(0,0,0,.55), 0 0 0 3px color-mix(in srgb, var(--card-accent) 72%, white 28%);
 }
 .oshi-avatar-circle > img, .oshi-avatar-circle > svg {
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
   width: 100%;
   height: 100%;
   border-radius: 999px;
