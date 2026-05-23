@@ -157,6 +157,20 @@ function typeLogoStyle(cardType: CardType): CSSProperties {
   };
 }
 
+function textWidthScore(text: string) {
+  return [...text.trim()].reduce((sum, ch) => {
+    if (/[A-Za-z0-9]/.test(ch)) return sum + 0.65;
+    if (/\s/.test(ch)) return sum + 0.35;
+    return sum + 1;
+  }, 0);
+}
+
+function oshiNameStyle(name: string): CSSProperties {
+  const score = textWidthScore(name);
+  const size = score <= 5 ? 42 : score <= 7 ? 38 : score <= 9 ? 34 : score <= 12 ? 30 : 26;
+  return { "--oshi-name-size": `${size}px` } as CSSProperties;
+}
+
 export default function OshiCardPage() {
   const authUser = useAuthUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -385,6 +399,15 @@ export default function OshiCardPage() {
   const handleSaveShareCard = async () => {
     setBusy(true);
     try {
+      let ogImageDataUrl = "";
+      try {
+        const ogBlob = await exportBlob();
+        ogImageDataUrl = await blobToDataUrl(ogBlob);
+        setBusy(true);
+      } catch (error) {
+        console.warn("OG image capture skipped:", error);
+      }
+
       const share = await createOshiCardShare({
         ownerId: authUser?.id ?? null,
         nickname,
@@ -394,6 +417,7 @@ export default function OshiCardPage() {
         typeId,
         backgroundImageDataUrl: imageDataUrl,
         oshiAvatarDataUrl,
+        ogImageDataUrl,
       });
       const url = `${window.location.origin}/play/oshi-card/view/${share.id}`;
       setShareUrl(url);
@@ -831,9 +855,10 @@ export default function OshiCardPage() {
               maxLength={28}
               placeholder="오시 캐릭터"
               className="oshi-main-input oshi-glow-text oshi-main-name mt-2 placeholder:text-white/60"
+              style={oshiNameStyle(oshi)}
             />
           ) : (
-            <p className="oshi-glow-text oshi-main-name mt-2">
+            <p className="oshi-glow-text oshi-main-name mt-2" style={oshiNameStyle(oshi)}>
               {oshi.trim() || "아직 고르는 중"}
             </p>
           )}

@@ -14,6 +14,7 @@ create table if not exists public.oshi_card_shares (
   type_id text not null,
   background_image_url text,
   oshi_avatar_url text,
+  og_image_url text,
   expires_at timestamptz not null default (now() + interval '30 days'),
   created_at timestamptz not null default now(),
   constraint oshi_card_shares_expires_30d check (expires_at <= created_at + interval '30 days' + interval '5 minutes')
@@ -21,6 +22,9 @@ create table if not exists public.oshi_card_shares (
 
 alter table public.oshi_card_shares
   add column if not exists owner_id uuid references auth.users(id) on delete set null;
+
+alter table public.oshi_card_shares
+  add column if not exists og_image_url text;
 
 create index if not exists oshi_card_shares_expires_at_idx
   on public.oshi_card_shares (expires_at);

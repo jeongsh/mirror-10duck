@@ -102,7 +102,7 @@ const CSS = `
   pointer-events: none;
 }
 .oshi-main-name {
-  font-size: 42px;
+  font-size: var(--oshi-name-size, 42px);
   line-height: 1;
   font-weight: 1000;
   letter-spacing: 0;

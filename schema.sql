@@ -178,6 +178,7 @@ CREATE TABLE public.oshi_card_shares (
   type_id text NOT NULL,
   background_image_url text,
   oshi_avatar_url text,
+  og_image_url text,
   expires_at timestamp with time zone NOT NULL DEFAULT (now() + '30 days'::interval),
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT oshi_card_shares_pkey PRIMARY KEY (id),

@@ -13,6 +13,20 @@ function typeLogoStyle(cardType: CardType): CSSProperties {
   return { backgroundImage: `url(/viral/type-logos/${cardType.id}.svg)` };
 }
 
+function textWidthScore(text: string) {
+  return [...text.trim()].reduce((sum, ch) => {
+    if (/[A-Za-z0-9]/.test(ch)) return sum + 0.65;
+    if (/\s/.test(ch)) return sum + 0.35;
+    return sum + 1;
+  }, 0);
+}
+
+function oshiNameStyle(name: string): CSSProperties {
+  const score = textWidthScore(name);
+  const size = score <= 5 ? 42 : score <= 7 ? 38 : score <= 9 ? 34 : score <= 12 ? 30 : 26;
+  return { "--oshi-name-size": `${size}px` } as CSSProperties;
+}
+
 export default function OshiCardViewPage() {
   const [nickname, setNickname] = useState("");
   const [oshi, setOshi] = useState("");
@@ -133,7 +147,7 @@ export default function OshiCardViewPage() {
           <span className="oshi-soft-badge px-3 py-1 text-xs font-black">
             <span aria-hidden>✦</span> 최애캐
           </span>
-          <p className="oshi-glow-text oshi-main-name mt-2 break-keep">
+          <p className="oshi-glow-text oshi-main-name mt-2" style={oshiNameStyle(oshi)}>
             {oshi.trim() || "아직 고르는 중"}
           </p>
         </div>

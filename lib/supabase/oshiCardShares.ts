@@ -13,6 +13,7 @@ export type OshiCardShare = {
   type_id: string;
   background_image_url: string | null;
   oshi_avatar_url: string | null;
+  og_image_url: string | null;
   expires_at: string;
   created_at: string;
 };
@@ -26,6 +27,7 @@ export type CreateOshiCardShareInput = {
   typeId: string;
   backgroundImageDataUrl?: string;
   oshiAvatarDataUrl?: string;
+  ogImageDataUrl?: string;
 };
 
 function dataUrlToBlob(dataUrl: string): Blob {
@@ -61,12 +63,12 @@ function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality: numb
 
 async function compressDataUrl(
   dataUrl: string,
-  kind: "background" | "avatar",
+  kind: "background" | "avatar" | "og",
 ): Promise<{ blob: Blob; mimeType: string; ext: string }> {
   const sourceBlob = dataUrlToBlob(dataUrl);
   const image = await loadImageFromBlob(sourceBlob);
-  const maxWidth = kind === "background" ? 734 : 126;
-  const maxHeight = kind === "background" ? 1024 : 126;
+  const maxWidth = kind === "avatar" ? 126 : 734;
+  const maxHeight = kind === "avatar" ? 126 : 1024;
   const ratio = Math.min(1, maxWidth / image.naturalWidth, maxHeight / image.naturalHeight);
   const width = Math.max(1, Math.round(image.naturalWidth * ratio));
   const height = Math.max(1, Math.round(image.naturalHeight * ratio));
@@ -81,6 +83,11 @@ async function compressDataUrl(
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(image, 0, 0, width, height);
 
+  if (kind === "og") {
+    const jpeg = await canvasToBlob(canvas, "image/jpeg", 0.88);
+    if (jpeg) return { blob: jpeg, mimeType: "image/jpeg", ext: "jpg" };
+  }
+
   const webp = await canvasToBlob(canvas, "image/webp", kind === "background" ? 0.82 : 0.86);
   if (webp) return { blob: webp, mimeType: "image/webp", ext: "webp" };
 
@@ -90,7 +97,7 @@ async function compressDataUrl(
   return { blob: sourceBlob, mimeType: sourceBlob.type || "image/png", ext: "png" };
 }
 
-async function uploadDataUrl(shareId: string, kind: "background" | "avatar", dataUrl?: string) {
+async function uploadDataUrl(shareId: string, kind: "background" | "avatar" | "og", dataUrl?: string) {
   if (!dataUrl) return null;
   if (!dataUrl.startsWith("data:")) return dataUrl;
 
@@ -114,9 +121,10 @@ export async function createOshiCardShare(input: CreateOshiCardShareInput): Prom
   const id = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + SHARE_TTL_MS).toISOString();
 
-  const [backgroundImageUrl, oshiAvatarUrl] = await Promise.all([
+  const [backgroundImageUrl, oshiAvatarUrl, ogImageUrl] = await Promise.all([
     uploadDataUrl(id, "background", input.backgroundImageDataUrl),
     uploadDataUrl(id, "avatar", input.oshiAvatarDataUrl),
+    uploadDataUrl(id, "og", input.ogImageDataUrl),
   ]);
 
   const { data, error } = await supabase
@@ -131,6 +139,7 @@ export async function createOshiCardShare(input: CreateOshiCardShareInput): Prom
       type_id: input.typeId,
       background_image_url: backgroundImageUrl,
       oshi_avatar_url: oshiAvatarUrl,
+      og_image_url: ogImageUrl,
       expires_at: expiresAt,
     })
     .select()
