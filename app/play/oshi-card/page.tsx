@@ -418,6 +418,7 @@ export default function OshiCardPage() {
   };
 
   const handleTilt = (event: PointerEvent<HTMLDivElement>) => {
+    if (isDeviceTiltEnabled) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const x = (event.clientX - rect.left) / rect.width;
     const y = (event.clientY - rect.top) / rect.height;
@@ -431,6 +432,7 @@ export default function OshiCardPage() {
   };
 
   const resetTilt = () => {
+    if (isDeviceTiltEnabled) return;
     setIsHoveringCard(false);
     setTilt({ rotateX: 0, rotateY: 0, glareX: 50, glareY: 50 });
   };
@@ -452,7 +454,7 @@ export default function OshiCardPage() {
   };
 
   const handleCardPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    handleTilt(event);
+    if (!isDeviceTiltEnabled) handleTilt(event);
     void requestDeviceTilt();
   };
 
