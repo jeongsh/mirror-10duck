@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 
 /* ============================================================
@@ -34,7 +35,6 @@ import Link from "next/link";
 
 type AxisType = "S/N" | "D/C" | "M/L";
 type AxisChoice = "S" | "N" | "D" | "C" | "M" | "L";
-type MoodType = "excited" | "happy" | "shock" | "focus" | "calm";
 type ResultCode = "SDM" | "SDL" | "SCM" | "SCL" | "NDM" | "NDL" | "NCM" | "NCL";
 
 interface LevelOption {
@@ -48,7 +48,7 @@ interface LevelQuestion {
   num: number;
   axis: AxisType;
   text: string;
-  Visual: () => React.JSX.Element;
+  image: string;
   options: LevelOption[];
 }
 
@@ -165,469 +165,87 @@ const LO_AXIS: Record<AxisType, AxisChoice> = {
   "M/L": "L",
 };
 
-// ─── SVG 헬퍼 컴포넌트 ──────────────────────────────────────
-
-function AnimeFace({ cx, cy, r, hair, mood }: {
-  cx: number; cy: number; r: number; hair: string; mood: MoodType;
-}) {
-  const eyeY = cy - r * 0.05;
-  const eyeDx = r * 0.42;
-  const eyeR = r * 0.26;
-  let eyes: React.ReactNode, mouth: React.ReactNode, brow: React.ReactNode = null;
-
-  if (mood === "excited") {
-    eyes = (
-      <>
-        <g>
-          <ellipse cx={cx - eyeDx} cy={eyeY} rx={eyeR} ry={eyeR * 1.2} fill="#2c2c3a" />
-          <circle cx={cx - eyeDx - eyeR * 0.3} cy={eyeY - eyeR * 0.4} r={eyeR * 0.4} fill="#fff" />
-          <circle cx={cx - eyeDx + eyeR * 0.3} cy={eyeY + eyeR * 0.2} r={eyeR * 0.22} fill="#fff" opacity={0.8} />
-        </g>
-        <g>
-          <ellipse cx={cx + eyeDx} cy={eyeY} rx={eyeR} ry={eyeR * 1.2} fill="#2c2c3a" />
-          <circle cx={cx + eyeDx - eyeR * 0.3} cy={eyeY - eyeR * 0.4} r={eyeR * 0.4} fill="#fff" />
-          <circle cx={cx + eyeDx + eyeR * 0.3} cy={eyeY + eyeR * 0.2} r={eyeR * 0.22} fill="#fff" opacity={0.8} />
-        </g>
-      </>
-    );
-    mouth = <path d={`M ${cx - r * 0.3} ${cy + r * 0.45} Q ${cx} ${cy + r * 0.85} ${cx + r * 0.3} ${cy + r * 0.45}`} fill="#c0392b" stroke="#2c2c3a" strokeWidth={1.5} strokeLinejoin="round" />;
-  } else if (mood === "happy") {
-    eyes = (
-      <>
-        <path d={`M ${cx - eyeDx - eyeR * 0.7} ${eyeY} Q ${cx - eyeDx} ${eyeY - eyeR} ${cx - eyeDx + eyeR * 0.7} ${eyeY}`} fill="none" stroke="#2c2c3a" strokeWidth={3.5} strokeLinecap="round" />
-        <path d={`M ${cx + eyeDx - eyeR * 0.7} ${eyeY} Q ${cx + eyeDx} ${eyeY - eyeR} ${cx + eyeDx + eyeR * 0.7} ${eyeY}`} fill="none" stroke="#2c2c3a" strokeWidth={3.5} strokeLinecap="round" />
-      </>
-    );
-    mouth = <path d={`M ${cx - r * 0.28} ${cy + r * 0.5} Q ${cx} ${cy + r * 0.8} ${cx + r * 0.28} ${cy + r * 0.5}`} fill="none" stroke="#2c2c3a" strokeWidth={2.5} strokeLinecap="round" />;
-  } else if (mood === "shock") {
-    eyes = (
-      <>
-        <circle cx={cx - eyeDx} cy={eyeY} r={eyeR * 0.55} fill="#2c2c3a" />
-        <circle cx={cx - eyeDx - eyeR * 0.15} cy={eyeY - eyeR * 0.15} r={eyeR * 0.2} fill="#fff" />
-        <circle cx={cx + eyeDx} cy={eyeY} r={eyeR * 0.55} fill="#2c2c3a" />
-        <circle cx={cx + eyeDx - eyeR * 0.15} cy={eyeY - eyeR * 0.15} r={eyeR * 0.2} fill="#fff" />
-      </>
-    );
-    mouth = <ellipse cx={cx} cy={cy + r * 0.5} rx={r * 0.16} ry={r * 0.22} fill="#c0392b" stroke="#2c2c3a" strokeWidth={1.5} />;
-    brow = (
-      <>
-        <path d={`M ${cx - eyeDx - eyeR * 0.6} ${eyeY - eyeR * 1.5} L ${cx - eyeDx + eyeR * 0.6} ${eyeY - eyeR * 1.7}`} stroke="#2c2c3a" strokeWidth={2.5} strokeLinecap="round" />
-        <path d={`M ${cx + eyeDx - eyeR * 0.6} ${eyeY - eyeR * 1.7} L ${cx + eyeDx + eyeR * 0.6} ${eyeY - eyeR * 1.5}`} stroke="#2c2c3a" strokeWidth={2.5} strokeLinecap="round" />
-      </>
-    );
-  } else if (mood === "focus") {
-    eyes = (
-      <>
-        <g>
-          <ellipse cx={cx - eyeDx} cy={eyeY} rx={eyeR * 0.85} ry={eyeR * 0.7} fill="#2c2c3a" />
-          <circle cx={cx - eyeDx + eyeR * 0.2} cy={eyeY - eyeR * 0.2} r={eyeR * 0.22} fill="#fff" />
-        </g>
-        <g>
-          <ellipse cx={cx + eyeDx} cy={eyeY} rx={eyeR * 0.85} ry={eyeR * 0.7} fill="#2c2c3a" />
-          <circle cx={cx + eyeDx + eyeR * 0.2} cy={eyeY - eyeR * 0.2} r={eyeR * 0.22} fill="#fff" />
-        </g>
-      </>
-    );
-    mouth = <path d={`M ${cx - r * 0.22} ${cy + r * 0.55} L ${cx + r * 0.22} ${cy + r * 0.55}`} stroke="#2c2c3a" strokeWidth={2.5} strokeLinecap="round" />;
-    brow = (
-      <>
-        <path d={`M ${cx - eyeDx - eyeR * 0.6} ${eyeY - eyeR * 1.4} L ${cx - eyeDx + eyeR * 0.6} ${eyeY - eyeR * 1.1}`} stroke="#2c2c3a" strokeWidth={2.5} strokeLinecap="round" />
-        <path d={`M ${cx + eyeDx - eyeR * 0.6} ${eyeY - eyeR * 1.1} L ${cx + eyeDx + eyeR * 0.6} ${eyeY - eyeR * 1.4}`} stroke="#2c2c3a" strokeWidth={2.5} strokeLinecap="round" />
-      </>
-    );
-  } else {
-    eyes = (
-      <>
-        <ellipse cx={cx - eyeDx} cy={eyeY} rx={eyeR * 0.75} ry={eyeR * 0.9} fill="#2c2c3a" />
-        <circle cx={cx - eyeDx - eyeR * 0.2} cy={eyeY - eyeR * 0.3} r={eyeR * 0.28} fill="#fff" />
-        <ellipse cx={cx + eyeDx} cy={eyeY} rx={eyeR * 0.75} ry={eyeR * 0.9} fill="#2c2c3a" />
-        <circle cx={cx + eyeDx - eyeR * 0.2} cy={eyeY - eyeR * 0.3} r={eyeR * 0.28} fill="#fff" />
-      </>
-    );
-    mouth = <path d={`M ${cx - r * 0.2} ${cy + r * 0.55} Q ${cx} ${cy + r * 0.72} ${cx + r * 0.2} ${cy + r * 0.55}`} fill="none" stroke="#2c2c3a" strokeWidth={2.5} strokeLinecap="round" />;
-  }
-
-  return (
-    <g>
-      <ellipse cx={cx} cy={cy + r * 0.08} rx={r} ry={r * 1.05} fill="#FFE3C8" />
-      <path d={`M ${cx - r} ${cy - r * 0.1} Q ${cx - r * 1.05} ${cy - r * 1.15} ${cx - r * 0.25} ${cy - r * 1.1} Q ${cx} ${cy - r * 1.45} ${cx + r * 0.3} ${cy - r * 1.05} Q ${cx + r * 1.1} ${cy - r * 1.15} ${cx + r} ${cy - r * 0.05} Q ${cx + r * 0.7} ${cy - r * 0.55} ${cx + r * 0.35} ${cy - r * 0.7} Q ${cx} ${cy - r * 0.95} ${cx - r * 0.35} ${cy - r * 0.65} Q ${cx - r * 0.72} ${cy - r * 0.5} ${cx - r} ${cy - r * 0.1} Z`} fill={hair} />
-      <ellipse cx={cx - r * 0.55} cy={cy + r * 0.42} rx={r * 0.2} ry={r * 0.13} fill="#FF9E9E" opacity={0.75} />
-      <ellipse cx={cx + r * 0.55} cy={cy + r * 0.42} rx={r * 0.2} ry={r * 0.13} fill="#FF9E9E" opacity={0.75} />
-      {brow}{eyes}{mouth}
-    </g>
-  );
-}
-
-function SpeedLines({ cx, cy, n, r1, r2, c }: { cx: number; cy: number; n: number; r1: number; r2: number; c: string }) {
-  return (
-    <g opacity={0.55}>
-      {Array.from({ length: n }, (_, i) => {
-        const a = (i / n) * Math.PI * 2;
-        return <line key={i} x1={cx + Math.cos(a) * r1} y1={cy + Math.sin(a) * r1} x2={cx + Math.cos(a) * r2} y2={cy + Math.sin(a) * r2} stroke={c} strokeWidth={2.5} strokeLinecap="round" />;
-      })}
-    </g>
-  );
-}
-
-function Sparkle({ x, y, s, c }: { x: number; y: number; s: number; c: string }) {
-  return <path d={`M ${x} ${y - s} Q ${x + s * 0.18} ${y - s * 0.18} ${x + s} ${y} Q ${x + s * 0.18} ${y + s * 0.18} ${x} ${y + s} Q ${x - s * 0.18} ${y + s * 0.18} ${x - s} ${y} Q ${x - s * 0.18} ${y - s * 0.18} ${x} ${y - s} Z`} fill={c} />;
-}
-
-function Speech({ x, y, w, h, tailX, tailY, fill = "#fff" }: {
-  x: number; y: number; w: number; h: number; tailX: number; tailY: number; fill?: string;
-}) {
-  return (
-    <g>
-      <rect x={x} y={y} width={w} height={h} rx={h * 0.32} fill={fill} stroke="#2c2c3a" strokeWidth={2} />
-      <path d={`M ${x + w * 0.3} ${y + h} L ${tailX} ${tailY} L ${x + w * 0.5} ${y + h} Z`} fill={fill} stroke="#2c2c3a" strokeWidth={2} strokeLinejoin="round" />
-    </g>
-  );
-}
-
-// ─── 문제 일러스트 ────────────────────────────────────────────
-
-function Q1Visual() {
-  const colors = ["#AFA9EC", "#7F77DD", "#534AB7", "#9C95E8"];
-  return (
-    <svg viewBox="0 0 340 180" className="w-full h-auto block">
-      <rect width={340} height={180} rx={8} fill="#EEEDFE" />
-      <SpeedLines cx={95} cy={95} n={16} r1={40} r2={110} c="#C9C3F2" />
-      <Sparkle x={245} y={38} s={9} c="#FFD24A" /><Sparkle x={295} y={70} s={7} c="#7F77DD" /><Sparkle x={270} y={130} s={6} c="#FFD24A" />
-      <g>{[0, 1, 2, 3].map((i) => (<g key={i}><rect x={175 + i * 38} y={30 + (i % 2) * 8} width={30} height={48 - (i % 2) * 8} rx={3} fill={colors[i]} stroke="#3C3489" strokeWidth={1.5} /><text x={190 + i * 38} y={60 + (i % 2) * 4} textAnchor="middle" fontSize={9} fill="#fff" fontFamily="sans-serif">S{i + 1}</text></g>))}</g>
-      <AnimeFace cx={95} cy={88} r={40} hair="#6B5BC7" mood="excited" />
-      <Speech x={120} y={18} w={150} h={40} tailX={150} tailY={68} />
-      <text x={195} y={34} textAnchor="middle" fontSize={11} fill="#3C3489" fontWeight="bold" fontFamily="sans-serif">드디어 정주행 타임!</text>
-      <text x={195} y={49} textAnchor="middle" fontSize={10} fill="#534AB7" fontFamily="sans-serif">오늘은 쉬지 않는다</text>
-      <text x={240} y={160} textAnchor="middle" fontSize={11} fill="#3C3489" fontWeight="bold" fontFamily="sans-serif">📋 정주행 리스트 4편</text>
-    </svg>
-  );
-}
-
-function Q2Visual() {
-  return (
-    <svg viewBox="0 0 340 180" className="w-full h-auto block">
-      <rect width={340} height={180} rx={8} fill="#FAECE7" />
-      <SpeedLines cx={265} cy={95} n={18} r1={42} r2={120} c="#F0BBA8" />
-      <Sparkle x={40} y={30} s={7} c="#D85A30" />
-      <g>
-        <rect x={20} y={22} width={170} height={58} rx={8} fill="#fff" stroke="#2c2c3a" strokeWidth={2} />
-        <text x={105} y={44} textAnchor="middle" fontSize={11} fill="#D85A30" fontWeight="bold" fontFamily="sans-serif">★★☆☆☆ 악평 리뷰</text>
-        <text x={105} y={62} textAnchor="middle" fontSize={10} fill="#993C1D" fontFamily="sans-serif">스토리가 허술하네요</text>
-      </g>
-      <AnimeFace cx={265} cy={88} r={42} hair="#3A3550" mood="focus" />
-      <Speech x={95} y={108} w={205} h={52} tailX={250} tailY={160} fill="#FFF3E0" />
-      <text x={197} y={128} textAnchor="middle" fontSize={11} fill="#993C1D" fontWeight="bold" fontFamily="sans-serif">↩ 반박 댓글을 작성하겠습니다</text>
-      <text x={197} y={146} textAnchor="middle" fontSize={10} fill="#D85A30" fontFamily="sans-serif">논리적 근거 15개 준비 완료 💢</text>
-      <text x={300} y={44} fontSize={20}>💢</text>
-    </svg>
-  );
-}
-
-function Q3Visual() {
-  return (
-    <svg viewBox="0 0 340 180" className="w-full h-auto block">
-      <rect width={340} height={180} rx={8} fill="#E1F5EE" />
-      <SpeedLines cx={85} cy={95} n={16} r1={38} r2={105} c="#A8DFCD" />
-      <Sparkle x={150} y={32} s={10} c="#FFD24A" /><Sparkle x={175} y={55} s={7} c="#1D9E75" /><Sparkle x={130} y={58} s={6} c="#FFD24A" />
-      <AnimeFace cx={85} cy={86} r={42} hair="#1D9E75" mood="excited" />
-      <g>
-        <rect x={200} y={40} width={100} height={105} rx={8} fill="#fff" stroke="#2c2c3a" strokeWidth={2} />
-        <rect x={212} y={52} width={76} height={62} rx={4} fill="#9FE1CB" />
-        <circle cx={250} cy={83} r={16} fill="#5DCAA5" />
-        <path d="M 250 70 L 254 80 L 264 80 L 256 86 L 259 96 L 250 90 L 241 96 L 244 86 L 236 80 L 246 80 Z" fill="#FFD24A" />
-        <text x={250} y={128} textAnchor="middle" fontSize={9} fill="#0F6E56" fontWeight="bold" fontFamily="sans-serif">한정판 피규어</text>
-        <text x={250} y={140} textAnchor="middle" fontSize={10} fill="#D85A30" fontWeight="bold" fontFamily="sans-serif">¥32,000</text>
-      </g>
-      <Speech x={95} y={16} w={150} h={42} tailX={140} tailY={68} />
-      <text x={170} y={33} textAnchor="middle" fontSize={11} fill="#0F6E56" fontWeight="bold" fontFamily="sans-serif">지금 안 사면 후회한다!</text>
-      <text x={170} y={49} textAnchor="middle" fontSize={10} fill="#1D9E75" fontFamily="sans-serif">생각은 나중에 🛒</text>
-    </svg>
-  );
-}
-
-function Q4Visual() {
-  return (
-    <svg viewBox="0 0 340 180" className="w-full h-auto block">
-      <rect width={340} height={180} rx={8} fill="#E6F1FB" />
-      <SpeedLines cx={255} cy={100} n={14} r1={40} r2={100} c="#AEC9EC" />
-      <AnimeFace cx={72} cy={72} r={38} hair="#E6A23C" mood="happy" />
-      <AnimeFace cx={255} cy={90} r={40} hair="#1F6FB5" mood="focus" />
-      <Speech x={108} y={18} w={158} h={40} tailX={118} tailY={62} />
-      <text x={187} y={34} textAnchor="middle" fontSize={10} fill="#185FA5" fontFamily="sans-serif">추천 애니 있어? 😊</text>
-      <text x={187} y={49} textAnchor="middle" fontSize={9} fill="#378ADD" fontFamily="sans-serif">친구의 질문</text>
-      <g>
-        <rect x={120} y={92} width={135} height={76} rx={8} fill="#fff" stroke="#2c2c3a" strokeWidth={2} />
-        <text x={187} y={110} textAnchor="middle" fontSize={10} fill="#185FA5" fontWeight="bold" fontFamily="sans-serif">📋 맞춤 추천 리스트</text>
-        <text x={187} y={126} textAnchor="middle" fontSize={9} fill="#0C447C" fontFamily="sans-serif">• 액션파라면: OO</text>
-        <text x={187} y={140} textAnchor="middle" fontSize={9} fill="#0C447C" fontFamily="sans-serif">• 힐링 원하면: OO</text>
-        <text x={187} y={154} textAnchor="middle" fontSize={9} fill="#0C447C" fontFamily="sans-serif">• 장편 OK면: OO</text>
-      </g>
-      <Sparkle x={300} y={55} s={8} c="#378ADD" />
-    </svg>
-  );
-}
-
-function Q5Visual() {
-  return (
-    <svg viewBox="0 0 340 180" className="w-full h-auto block">
-      <rect width={340} height={180} rx={8} fill="#FBEAF0" />
-      <SpeedLines cx={170} cy={150} n={20} r1={30} r2={90} c="#EFC2D3" />
-      <Sparkle x={40} y={40} s={8} c="#D4537E" /><Sparkle x={300} y={40} s={8} c="#D4537E" />
-      <g>
-        <rect x={35} y={18} width={270} height={46} rx={8} fill="#fff" stroke="#2c2c3a" strokeWidth={2} />
-        <text x={170} y={38} textAnchor="middle" fontSize={12} fill="#993556" fontWeight="bold" fontFamily="sans-serif">🎤 오프라인 팬미팅 티켓팅</text>
-        <text x={170} y={54} textAnchor="middle" fontSize={10} fill="#D4537E" fontFamily="sans-serif">2025.XX.XX 12:00 OPEN</text>
-      </g>
-      <AnimeFace cx={170} cy={108} r={38} hair="#D4537E" mood="focus" />
-      <g>
-        <rect x={95} y={148} width={150} height={26} rx={13} fill="#D4537E" stroke="#2c2c3a" strokeWidth={2} />
-        <text x={170} y={165} textAnchor="middle" fontSize={11} fill="#fff" fontWeight="bold" fontFamily="sans-serif">🕐 29:47 — 대기 중</text>
-      </g>
-      <text x={232} y={92} fontSize={18}>🔥</text><text x={108} y={92} fontSize={18}>🔥</text>
-    </svg>
-  );
-}
-
-function Q6Visual() {
-  const top = ["🎎", "🗡️", "📦", "🎭", "🌸"];
-  const bot = ["📚", "🎵", "🖼️", "✨", "🏆"];
-  return (
-    <svg viewBox="0 0 340 180" className="w-full h-auto block">
-      <rect width={340} height={180} rx={8} fill="#EEEDFE" />
-      <SpeedLines cx={280} cy={55} n={14} r1={30} r2={75} c="#C9C3F2" />
-      <rect x={20} y={92} width={300} height={74} rx={6} fill="#AFA9EC" opacity={0.35} />
-      <g>
-        {top.map((e, i) => (<g key={`t${i}`}><rect x={28 + i * 48} y={42} width={40} height={40} rx={6} fill="#fff" stroke="#7F77DD" strokeWidth={1.5} /><text x={48 + i * 48} y={70} textAnchor="middle" fontSize={20}>{e}</text></g>))}
-        {bot.map((e, i) => (<g key={`b${i}`}><rect x={52 + i * 48} y={100} width={40} height={40} rx={6} fill="#fff" stroke="#7F77DD" strokeWidth={1.5} /><text x={72 + i * 48} y={128} textAnchor="middle" fontSize={20}>{e}</text></g>))}
-      </g>
-      <AnimeFace cx={280} cy={52} r={30} hair="#6B5BC7" mood="excited" />
-      <Speech x={150} y={12} w={160} h={38} tailX={210} tailY={52} />
-      <text x={230} y={28} textAnchor="middle" fontSize={11} fill="#3C3489" fontWeight="bold" fontFamily="sans-serif">행복한 나의 성채 💜</text>
-      <text x={230} y={42} textAnchor="middle" fontSize={9} fill="#534AB7" fontFamily="sans-serif">더 늘릴 계획 수립 중</text>
-      <Sparkle x={45} y={30} s={7} c="#7F77DD" />
-    </svg>
-  );
-}
-
-function Q7Visual() {
-  return (
-    <svg viewBox="0 0 340 180" className="w-full h-auto block">
-      <rect width={340} height={180} rx={8} fill="#FAEEDA" />
-      <SpeedLines cx={78} cy={100} n={16} r1={38} r2={100} c="#EAD09A" />
-      <AnimeFace cx={78} cy={90} r={40} hair="#7A5A2E" mood="focus" />
-      <g>
-        <rect x={150} y={22} width={170} height={100} rx={8} fill="#fff" stroke="#2c2c3a" strokeWidth={2} />
-        <rect x={160} y={32} width={58} height={44} rx={4} fill="#FAC775" />
-        <text x={189} y={60} textAnchor="middle" fontSize={22}>📺</text>
-        <text x={232} y={44} fontSize={9} fill="#BA7517" fontFamily="sans-serif">기대 장면: 없음</text>
-        <text x={232} y={60} fontSize={9} fill="#854F0B" fontFamily="sans-serif">감독 교체: 확인중</text>
-        <text x={232} y={76} fontSize={9} fill="#BA7517" fontFamily="sans-serif">원작 변경점: 37개</text>
-        <line x1={160} y1={88} x2={310} y2={88} stroke="#FAC775" strokeWidth={1.5} />
-        <text x={235} y={106} textAnchor="middle" fontSize={10} fill="#854F0B" fontWeight="bold" fontFamily="sans-serif">🔍 심층 분석 중...</text>
-      </g>
-      <Speech x={28} y={118} w={165} h={46} tailX={90} tailY={164} fill="#FFF3E0" />
-      <text x={110} y={138} textAnchor="middle" fontSize={10} fill="#854F0B" fontWeight="bold" fontFamily="sans-serif">왜 별로지? 이유를 찾자</text>
-      <text x={110} y={153} textAnchor="middle" fontSize={9} fill="#BA7517" fontFamily="sans-serif">스태프롤부터 정독...</text>
-      <text x={112} y={55} fontSize={16}>🤔</text>
-    </svg>
-  );
-}
-
-function Q8Visual() {
-  return (
-    <svg viewBox="0 0 340 180" className="w-full h-auto block">
-      <rect width={340} height={180} rx={8} fill="#EAF3DE" />
-      <SpeedLines cx={245} cy={90} n={16} r1={42} r2={110} c="#C3DCA0" />
-      <AnimeFace cx={80} cy={82} r={38} hair="#A8772E" mood="calm" />
-      <AnimeFace cx={245} cy={80} r={40} hair="#3B6D11" mood="excited" />
-      <g>
-        <rect x={100} y={118} width={155} height={48} rx={8} fill="#fff" stroke="#2c2c3a" strokeWidth={2} />
-        <text x={177} y={138} textAnchor="middle" fontSize={10} fill="#3B6D11" fontWeight="bold" fontFamily="sans-serif">설명 중: 1시간 24분 🕐</text>
-        <text x={177} y={154} textAnchor="middle" fontSize={9} fill="#639922" fontFamily="sans-serif">아직 2쿨 남았습니다</text>
-      </g>
-      <Speech x={100} y={14} w={165} h={44} tailX={180} tailY={60} />
-      <text x={182} y={32} textAnchor="middle" fontSize={10} fill="#3B6D11" fontWeight="bold" fontFamily="sans-serif">이 작품 진짜 명작인데요!</text>
-      <text x={182} y={48} textAnchor="middle" fontSize={9} fill="#639922" fontFamily="sans-serif">일단 1쿨부터 설명하면...</text>
-      <text x={50} y={60} fontSize={15}>💧</text>
-      <Sparkle x={290} y={50} s={7} c="#639922" />
-    </svg>
-  );
-}
-
-function Q9Visual() {
-  return (
-    <svg viewBox="0 0 340 180" className="w-full h-auto block">
-      <rect width={340} height={180} rx={8} fill="#FCEBEB" />
-      <SpeedLines cx={80} cy={95} n={18} r1={40} r2={115} c="#EFC0C0" />
-      <g>
-        <rect x={155} y={20} width={165} height={56} rx={8} fill="#fff" stroke="#2c2c3a" strokeWidth={2} />
-        <text x={237} y={44} textAnchor="middle" fontSize={13} fill="#A32D2D" fontWeight="bold" fontFamily="sans-serif">💔 THE END</text>
-        <text x={237} y={62} textAnchor="middle" fontSize={9} fill="#E24B4A" fontFamily="sans-serif">이게 무슨 엔딩이야...</text>
-      </g>
-      <AnimeFace cx={80} cy={84} r={40} hair="#7C2A6A" mood="focus" />
-      <g>
-        <rect x={135} y={92} width={185} height={74} rx={8} fill="#fff" stroke="#2c2c3a" strokeWidth={2} />
-        <text x={227} y={114} textAnchor="middle" fontSize={11} fill="#3C3489" fontWeight="bold" fontFamily="sans-serif">✍️ 팬픽 작성 모드</text>
-        <line x1={150} y1={124} x2={305} y2={124} stroke="#AFA9EC" strokeWidth={1.5} />
-        <text x={227} y={140} textAnchor="middle" fontSize={9} fill="#534AB7" fontFamily="sans-serif">제1장. 진짜 결말은...</text>
-        <text x={227} y={155} textAnchor="middle" fontSize={9} fill="#534AB7" fontFamily="sans-serif">내가 원하는 대로 완성 💜</text>
-      </g>
-      <Sparkle x={45} y={40} s={8} c="#D4537E" />
-      <text x={112} y={56} fontSize={15}>🔥</text>
-    </svg>
-  );
-}
-
-function Q10Visual() {
-  return (
-    <svg viewBox="0 0 340 180" className="w-full h-auto block">
-      <rect width={340} height={180} rx={8} fill="#E1F5EE" />
-      <SpeedLines cx={170} cy={90} n={22} r1={46} r2={130} c="#A8DFCD" />
-      <AnimeFace cx={82} cy={90} r={40} hair="#1D9E75" mood="excited" />
-      <AnimeFace cx={258} cy={90} r={40} hair="#0F6E56" mood="shock" />
-      <path d="M 150 78 L 162 88 L 154 92 L 168 104 L 156 96 L 164 92 L 152 82 Z" fill="#FFD24A" stroke="#BA7517" strokeWidth={1} />
-      <path d="M 190 78 L 178 88 L 186 92 L 172 104 L 184 96 L 176 92 L 188 82 Z" fill="#FFD24A" stroke="#BA7517" strokeWidth={1} />
-      <Speech x={95} y={14} w={150} h={40} tailX={120} tailY={60} />
-      <text x={170} y={31} textAnchor="middle" fontSize={10} fill="#0F6E56" fontWeight="bold" fontFamily="sans-serif">혹시... OO 좋아하세요?!</text>
-      <text x={170} y={46} textAnchor="middle" fontSize={9} fill="#1D9E75" fontFamily="sans-serif">덕력 레이더 가동 🌿</text>
-      <Sparkle x={40} y={38} s={8} c="#1D9E75" /><Sparkle x={300} y={38} s={8} c="#1D9E75" />
-    </svg>
-  );
-}
-
-function Q11Visual() {
-  return (
-    <svg viewBox="0 0 340 180" className="w-full h-auto block">
-      <rect width={340} height={180} rx={8} fill="#FBEAF0" />
-      <SpeedLines cx={260} cy={95} n={16} r1={40} r2={108} c="#EFC2D3" />
-      <Sparkle x={45} y={30} s={9} c="#FFD24A" /><Sparkle x={150} y={28} s={7} c="#D4537E" /><Sparkle x={108} y={55} s={6} c="#FFD24A" />
-      <AnimeFace cx={260} cy={88} r={42} hair="#D4537E" mood="excited" />
-      <g>
-        <rect x={22} y={48} width={120} height={96} rx={8} fill="#fff" stroke="#2c2c3a" strokeWidth={2} />
-        <path d="M 42 88 L 42 70 Q 42 60 52 60 L 112 60 Q 122 60 122 70 L 122 88 Z" fill="#F4C0D1" />
-        <rect x={38} y={88} width={88} height={40} rx={3} fill="#ED93B1" />
-        <circle cx={62} cy={56} r={4} fill="#FFD24A" />
-        <circle cx={82} cy={52} r={4} fill="#D4537E" />
-        <circle cx={102} cy={56} r={4} fill="#FFD24A" />
-        <text x={82} y={113} textAnchor="middle" fontSize={9} fill="#fff" fontWeight="bold" fontFamily="sans-serif">HAPPY</text>
-        <text x={82} y={124} textAnchor="middle" fontSize={9} fill="#fff" fontWeight="bold" fontFamily="sans-serif">BIRTHDAY</text>
-      </g>
-      <Speech x={100} y={12} w={165} h={40} tailX={200} tailY={56} />
-      <text x={182} y={29} textAnchor="middle" fontSize={11} fill="#993556" fontWeight="bold" fontFamily="sans-serif">생일 카페 대관 완료!</text>
-      <text x={182} y={44} textAnchor="middle" fontSize={9} fill="#D4537E" fontFamily="sans-serif">서포트 광고도 신청했어요</text>
-      <text x={160} y={160} textAnchor="middle" fontSize={11} fill="#993556" fontWeight="bold" fontFamily="sans-serif">🎂 최애 생일 = 내 명절</text>
-    </svg>
-  );
-}
-
-function Q12Visual() {
-  return (
-    <svg viewBox="0 0 340 180" className="w-full h-auto block">
-      <rect width={340} height={180} rx={8} fill="#FAEEDA" />
-      <SpeedLines cx={78} cy={92} n={16} r1={40} r2={105} c="#EAD09A" />
-      <Sparkle x={150} y={30} s={9} c="#FFD24A" /><Sparkle x={185} y={58} s={6} c="#BA7517" />
-      <AnimeFace cx={78} cy={86} r={42} hair="#BA7517" mood="excited" />
-      <g>
-        <rect x={148} y={34} width={172} height={58} rx={8} fill="#fff" stroke="#2c2c3a" strokeWidth={2} />
-        <rect x={158} y={34} width={172} height={16} rx={8} fill="#FAC775" />
-        <text x={234} y={46} textAnchor="middle" fontSize={9} fill="#854F0B" fontWeight="bold" fontFamily="sans-serif">콜라보 카페 · 팝업스토어 OPEN</text>
-        <text x={234} y={68} textAnchor="middle" fontSize={10} fill="#BA7517" fontFamily="sans-serif">🥤 음료 · 🍰 디저트 · 🎁 굿즈</text>
-        <text x={234} y={84} textAnchor="middle" fontSize={9} fill="#854F0B" fontFamily="sans-serif">한정 특전 — 선착순!</text>
-      </g>
-      <g>
-        <rect x={150} y={102} width={170} height={62} rx={8} fill="#fff" stroke="#2c2c3a" strokeWidth={2} />
-        <text x={235} y={122} textAnchor="middle" fontSize={10} fill="#854F0B" fontWeight="bold" fontFamily="sans-serif">🛒 오픈런 장바구니</text>
-        <text x={235} y={138} textAnchor="middle" fontSize={9} fill="#BA7517" fontFamily="sans-serif">메뉴 풀세트 + 굿즈 전종</text>
-        <text x={235} y={153} textAnchor="middle" fontSize={9} fill="#BA7517" fontFamily="sans-serif">총합: ₩₩₩,₩₩₩ 💸</text>
-      </g>
-      <Speech x={28} y={14} w={150} h={38} tailX={90} tailY={58} fill="#FFF3E0" />
-      <text x={103} y={31} textAnchor="middle" fontSize={10} fill="#854F0B" fontWeight="bold" fontFamily="sans-serif">전부 다 주세요!</text>
-      <text x={103} y={46} textAnchor="middle" fontSize={9} fill="#BA7517" fontFamily="sans-serif">종류별로 하나씩</text>
-    </svg>
-  );
-}
-
 // ─── 질문 데이터 ─────────────────────────────────────────────
 
 const QUESTIONS: LevelQuestion[] = [
-  { num: 1, axis: "S/N", text: "주말에 갑자기 아무 계획이 없어졌다. 당신은?", Visual: Q1Visual,
+  { num: 1, axis: "S/N", text: "주말에 갑자기 아무 계획이 없어졌다. 당신은?", image: "/test/Q1.png",
     options: [
       { label: "A", text: "친구에게 연락해서 카페나 영화를 보러 나간다.", axis: "S", weight: 3 },
       { label: "B", text: "좋아하는 시리즈를 다시 보며 방구석 힐링을 즐긴다.", axis: "N", weight: 2 },
       { label: "C", text: "드디어! 밀린 애니 정주행 리스트를 꺼낸다. 오늘은 쉬지 않는다.", axis: "N", weight: 3 },
       { label: "D", text: "생산적인 걸 해야 한다며 청소하고 운동한다.", axis: "S", weight: 2 },
     ] },
-  { num: 2, axis: "D/C", text: "좋아하는 작품에 비판적인 리뷰가 달렸다. 당신의 반응은?", Visual: Q2Visual,
+  { num: 2, axis: "D/C", text: "좋아하는 작품에 비판적인 리뷰가 달렸다. 당신의 반응은?", image: "/test/Q2.png",
     options: [
       { label: "A", text: "같은 팬들과 공유하며 함께 분노한다.", axis: "D", weight: 2 },
       { label: "B", text: "그 리뷰의 논리적 허점을 조목조목 반박하는 댓글을 작성한다.", axis: "D", weight: 3 },
       { label: "C", text: "속으로 화가 나지만 그냥 닫는다.", axis: "C", weight: 2 },
       { label: "D", text: "'그럴 수도 있지' 하며 쿨하게 넘긴다.", axis: "C", weight: 3 },
     ] },
-  { num: 3, axis: "M/L", text: "좋아하는 캐릭터의 굿즈를 발견했다. 당신은?", Visual: Q3Visual,
+  { num: 3, axis: "M/L", text: "좋아하는 캐릭터의 굿즈를 발견했다. 당신은?", image: "/test/Q3.png",
     options: [
       { label: "A", text: "정말 퀄리티 좋은 굿즈만 신중하게 구매한다.", axis: "L", weight: 2 },
       { label: "B", text: "갖고 싶지만 공간이나 돈이 걱정돼 참는다.", axis: "L", weight: 3 },
       { label: "C", text: "한정판이면 무조건. 일반판은 고민한다.", axis: "M", weight: 2 },
       { label: "D", text: "가격 불문. 지르고 나서 생각한다.", axis: "M", weight: 3 },
     ] },
-  { num: 4, axis: "S/N", text: "친구가 '추천할 만한 애니 있어?'라고 물었다. 당신은?", Visual: Q4Visual,
+  { num: 4, axis: "S/N", text: "친구가 '추천할 만한 애니 있어?'라고 물었다. 당신은?", image: "/test/Q4.png",
     options: [
       { label: "A", text: "장르, 분위기, 화수까지 분석해 맞춤 추천 리스트를 만들어준다.", axis: "N", weight: 3 },
       { label: "B", text: "'뭐 좋아해?'라고 반문하며 대화로 이어간다.", axis: "S", weight: 2 },
       { label: "C", text: "'요즘 유행하는 거 봐봐'라며 인기작 하나만 추천한다.", axis: "S", weight: 3 },
       { label: "D", text: "내가 제일 좋아하는 작품을 강력히 밀어붙인다.", axis: "N", weight: 2 },
     ] },
-  { num: 5, axis: "D/C", text: "좋아하는 성우나 아티스트의 오프라인 이벤트가 열렸다. 당신은?", Visual: Q5Visual,
+  { num: 5, axis: "D/C", text: "좋아하는 성우나 아티스트의 오프라인 이벤트가 열렸다. 당신은?", image: "/test/Q5.png",
     options: [
       { label: "A", text: "같이 갈 동료를 모집해 단체 원정을 계획한다.", axis: "D", weight: 2 },
       { label: "B", text: "온라인 중계가 있으면 집에서 본다.", axis: "C", weight: 3 },
       { label: "C", text: "알림 설정해두고 티켓팅 시작 30분 전부터 대기한다.", axis: "D", weight: 3 },
       { label: "D", text: "가고 싶지만 줄 서고 대기하는 게 귀찮아서 고민한다.", axis: "C", weight: 2 },
     ] },
-  { num: 6, axis: "M/L", text: "방 안에 굿즈와 피규어가 점점 늘어가고 있다. 당신의 생각은?", Visual: Q6Visual,
+  { num: 6, axis: "M/L", text: "방 안에 굿즈와 피규어가 점점 늘어가고 있다. 당신의 생각은?", image: "/test/Q6.png",
     options: [
       { label: "A", text: "슬슬 미니멀리즘을 실천해야 할 것 같다.", axis: "L", weight: 3 },
       { label: "B", text: "이게 행복이다. 더 늘릴 계획을 세운다.", axis: "M", weight: 3 },
       { label: "C", text: "정리하고 싶은데 손이 안 간다.", axis: "L", weight: 2 },
       { label: "D", text: "사진 찍고 SNS에 올리며 컬렉션을 뽐낸다.", axis: "M", weight: 2 },
     ] },
-  { num: 7, axis: "S/N", text: "새 시즌 첫 화를 봤는데 기대와 달랐다. 당신은?", Visual: Q7Visual,
+  { num: 7, axis: "S/N", text: "새 시즌 첫 화를 봤는데 기대와 달랐다. 당신은?", image: "/test/Q7.png",
     options: [
       { label: "A", text: "'그럴 수도 있지, 계속 보다 보면 좋아지겠지' 생각한다.", axis: "S", weight: 2 },
       { label: "B", text: "커뮤니티에서 다른 팬들의 반응을 확인한다.", axis: "N", weight: 2 },
       { label: "C", text: "바로 드롭하고 다른 작품을 찾아본다.", axis: "S", weight: 3 },
       { label: "D", text: "스태프 정보, 원작 비교 등을 찾아보며 이유를 분석한다.", axis: "N", weight: 3 },
     ] },
-  { num: 8, axis: "D/C", text: "덕질 관련 이야기를 모르는 사람에게 할 때 당신은?", Visual: Q8Visual,
+  { num: 8, axis: "D/C", text: "덕질 관련 이야기를 모르는 사람에게 할 때 당신은?", image: "/test/Q8.png",
     options: [
       { label: "A", text: "설명하다 보면 흥분해서 한 시간은 기본이다.", axis: "D", weight: 3 },
       { label: "B", text: "굳이 설명하지 않는다. 어차피 모를 것 같아서.", axis: "C", weight: 3 },
       { label: "C", text: "'입문하게 해주겠다'며 자료를 준비해온다.", axis: "D", weight: 2 },
       { label: "D", text: "상대가 관심 있어 보이면 조금, 아니면 생략한다.", axis: "C", weight: 2 },
     ] },
-  { num: 9, axis: "M/L", text: "최애 작품이 실망스러운 엔딩으로 끝났다. 당신은?", Visual: Q9Visual,
+  { num: 9, axis: "M/L", text: "최애 작품이 실망스러운 엔딩으로 끝났다. 당신은?", image: "/test/Q9.png",
     options: [
       { label: "A", text: "커뮤니티에서 실컷 떠들고 털어버린다.", axis: "M", weight: 2 },
       { label: "B", text: "한동안 멍하다가 다른 작품으로 넘어간다.", axis: "L", weight: 2 },
       { label: "C", text: "이차창작이나 팬픽으로 내 머릿속의 엔딩을 완성한다.", axis: "M", weight: 3 },
       { label: "D", text: "엔딩은 아쉽지만 전체적인 여정을 기억하기로 한다.", axis: "L", weight: 3 },
     ] },
-  { num: 10, axis: "S/N", text: "처음 만난 사람이 같은 작품을 좋아한다는 걸 알게 됐다. 당신은?", Visual: Q10Visual,
+  { num: 10, axis: "S/N", text: "처음 만난 사람이 같은 작품을 좋아한다는 걸 알게 됐다. 당신은?", image: "/test/Q10.png",
     options: [
       { label: "A", text: "가볍게 공감하고 다른 얘기로 넘어간다.", axis: "S", weight: 3 },
       { label: "B", text: "운명이다. 숨겨둔 덕력을 전부 꺼낸다.", axis: "N", weight: 3 },
       { label: "C", text: "'혹시 OO도 알아?' 하며 레이더를 가동한다.", axis: "N", weight: 2 },
       { label: "D", text: "공통 화제가 생겨 반갑지만 일단 천천히 탐색한다.", axis: "S", weight: 2 },
     ] },
-  { num: 11, axis: "D/C", text: "좋아하는 캐릭터의 생일이 다가왔다. 당신은?", Visual: Q11Visual,
+  { num: 11, axis: "D/C", text: "좋아하는 캐릭터의 생일이 다가왔다. 당신은?", image: "/test/Q11.png",
     options: [
       { label: "A", text: "SNS에 축하 일러스트나 글을 올리며 함께 기념한다.", axis: "D", weight: 2 },
       { label: "B", text: "속으로 축하하고 굿즈를 하나 사며 조용히 챙긴다.", axis: "C", weight: 2 },
       { label: "C", text: "'아 오늘이었구나' 하고 마음속으로만 축하한다.", axis: "C", weight: 3 },
       { label: "D", text: "카페 대관해 생일 카페를 열거나, 광고·서포트에 참여한다.", axis: "D", weight: 3 },
     ] },
-  { num: 12, axis: "M/L", text: "좋아하는 작품의 콜라보 카페·팝업스토어가 열렸다. 당신은?", Visual: Q12Visual,
+  { num: 12, axis: "M/L", text: "좋아하는 작품의 콜라보 카페·팝업스토어가 열렸다. 당신은?", image: "/test/Q12.png",
     options: [
       { label: "A", text: "오픈런 한다. 메뉴 풀세트에 굿즈도 종류별로 쓸어담는다.", axis: "M", weight: 3 },
       { label: "B", text: "한정 굿즈만 노리고 가서 그것만 사 온다.", axis: "M", weight: 2 },
@@ -977,7 +595,6 @@ export default function OtakuTypePage() {
   // ── 퀴즈 ──
   const safeCur = Math.min(Math.max(cur, 0), QUESTIONS.length - 1);
   const q = QUESTIONS[safeCur];
-  const { Visual } = q;
   const progress = Math.round((safeCur / QUESTIONS.length) * 100);
 
   return (
@@ -995,8 +612,15 @@ export default function OtakuTypePage() {
       </div>
 
       <div className="bg-white border border-gray-200 rounded-xl p-6">
-        <div className="w-full rounded-lg mb-5 overflow-hidden leading-none">
-          <Visual />
+        <div className="relative w-full aspect-[3/2] rounded-lg mb-5 overflow-hidden bg-gray-50">
+          <Image
+            src={q.image}
+            alt={`Q${q.num} 일러스트`}
+            fill
+            sizes="(max-width: 560px) 100vw, 560px"
+            className="object-cover"
+            priority={q.num <= 2}
+          />
         </div>
         <div className="text-xs font-medium mb-2" style={{ color: "#E5527E", letterSpacing: "0.05em" }}>
           Q{q.num} · {q.axis} 유형 측정
