@@ -3,775 +3,818 @@
 import { useState } from "react";
 import Link from "next/link";
 
-type ResultType =
-  | "idol"
-  | "munchkin"
-  | "school"
-  | "animal"
-  | "monster"
-  | "sports"
-  | "adventure"
-  | "bishounen"
-  | "family";
+/* ============================================================
+ * 기존 질문지 보관 (어떤 오타쿠인가 — 타입 테스트)
+ * ============================================================
+ * Q1: 새 애니 1화, 10분이 지났는데 아직 아무것도 안 일어났다. 당신은?
+ *   → idol/munchkin/school/animal/monster
+ * Q2: 나는 애니에서 어떤 장면에 두근거리나?
+ *   → sports/adventure/bishounen/family/idol
+ * Q3: 최애 캐릭터가 다쳤다. 내 반응은?
+ *   → munchkin/school/animal/monster/sports
+ * Q4: 시즌 2 제작 발표. 가장 기대되는 건?
+ *   → adventure/bishounen/family/idol/munchkin
+ * Q5: 덕질하면서 가장 '아 이래서 이거 보는구나' 싶었던 순간
+ *   → school/animal/sports/adventure/monster
+ * Q6: 애니 속 세계에 들어간다면 제일 먼저 하고 싶은 건?
+ *   → bishounen/family/idol/munchkin/school
+ * Q7: 다음 중 나를 가장 잘 설명하는 문장은?
+ *   → animal/monster/sports/adventure/bishounen
+ * Q8: 마지막화를 다 보고 난 뒤 제일 먼저 드는 생각은?
+ *   → family/idol/munchkin/school/animal
+ * Q9: 주변에 애니를 추천할 때 내 기준은?
+ *   → monster/sports/adventure/bishounen/family
+ * Q10: 지금 이 순간, 나를 가장 잘 표현하는 취향은?
+ *   → idol/munchkin/school/animal/monster
+ *
+ * 결과 유형: idol, munchkin, school, animal, monster, sports, adventure, bishounen, family
+ * ============================================================ */
 
-interface Choice {
+// ─── 타입 정의 ───────────────────────────────────────────────
+
+type AxisType = "S/N" | "D/C" | "M/L";
+type AxisChoice = "S" | "N" | "D" | "C" | "M" | "L";
+type MoodType = "excited" | "happy" | "shock" | "focus" | "calm";
+type ResultCode = "SDM" | "SDL" | "SCM" | "SCL" | "NDM" | "NDL" | "NCM" | "NCL";
+
+interface LevelOption {
+  label: string;
   text: string;
-  type: ResultType;
+  axis: AxisChoice;
+  val: number;
 }
 
-interface Question {
-  q: string;
-  choices: [Choice, Choice, Choice, Choice, Choice];
+interface LevelQuestion {
+  num: number;
+  axis: AxisType;
+  text: string;
+  Visual: () => React.JSX.Element;
+  options: LevelOption[];
 }
 
-const LABELS = ["①", "②", "③", "④", "⑤"] as const;
+interface ResultInfo {
+  code: string;
+  emoji: string;
+  badge: string;
+  badgeColor: string;
+  badgeBg: string;
+  title: string;
+  sub: string;
+  traits: [string, string, string];
+  compat: string;
+}
 
-const QUESTIONS: Question[] = [
-  {
-    q: "새 애니 1화, 10분이 지났는데 아직 아무것도 안 일어났다. 당신은?",
-    choices: [
-      { text: "이미 오프닝 노래가 좋았으니 됐다", type: "idol" },
-      { text: "딱 5분만 더 준다. 그 이후는 모르겠다", type: "munchkin" },
-      { text: "캐릭터 파악 중이라 오히려 집중하고 있음", type: "school" },
-      { text: "배경에서 귀여운 동물 찾느라 바쁨", type: "animal" },
-      { text: "폭풍 전 고요겠지. 기다릴 수 있다", type: "monster" },
-    ],
-  },
-  {
-    q: "나는 애니에서 어떤 장면에 두근거리나?",
-    choices: [
-      { text: "수많은 노력이 경기에서 단 한 방에 터질 때", type: "sports" },
-      { text: "지도에도 없던 새로운 장소가 처음 등장할 때", type: "adventure" },
-      { text: "주인공이 음악과 함께 멋있게 등장하는 첫 씬", type: "bishounen" },
-      { text: "흩어졌던 팀이 다시 한 자리에 모이는 재결합 씬", type: "family" },
-      { text: "무대 위에서 스포트라이트를 독차지하는 순간", type: "idol" },
-    ],
-  },
-  {
-    q: "최애 캐릭터가 다쳤다. 내 반응은?",
-    choices: [
-      { text: "회복력이 비현실적인 캐릭터니까 괜찮겠지", type: "munchkin" },
-      { text: "왜 하필 그 순간에 그 사람이 옆에 없냐고", type: "school" },
-      { text: "동물 파트너라도 곁에 있어서 다행이다", type: "animal" },
-      { text: "이게 드디어 각성 조건이었나? 메모함", type: "monster" },
-      { text: "부상 딛고 복귀하면 분명 더 강해지겠지", type: "sports" },
-    ],
-  },
-  {
-    q: "시즌 2 제작 발표가 났다. 가장 기대되는 건?",
-    choices: [
-      { text: "새로운 지역 또는 더 넓어진 세계관", type: "adventure" },
-      { text: "성장하고 돌아온 주인공의 달라진 비주얼", type: "bishounen" },
-      { text: "흩어졌던 멤버들이 다시 뭉치는 장면", type: "family" },
-      { text: "시즌 2 오프닝 아티스트 발표", type: "idol" },
-      { text: "주인공이 얼마나 더 강해졌는지 확인", type: "munchkin" },
-    ],
-  },
-  {
-    q: "덕질하면서 가장 '아 이래서 이거 보는구나' 싶었던 순간은?",
-    choices: [
-      { text: "두 캐릭터가 드디어 서로 마음을 확인하는 장면", type: "school" },
-      { text: "귀여운 캐릭터가 화면 가득 채울 때", type: "animal" },
-      { text: "연습과 노력이 경기에서 한 번에 증명될 때", type: "sports" },
-      { text: "예상 못 한 새로운 지역이 처음 나올 때", type: "adventure" },
-      { text: "평화로운 일상 뒤에 충격적인 반전이 터질 때", type: "monster" },
-    ],
-  },
-  {
-    q: "애니 속 세계에 들어간다면 제일 먼저 하고 싶은 건?",
-    choices: [
-      { text: "주인공 옆에서 멋있는 장면 같이 찍기", type: "bishounen" },
-      { text: "전 멤버를 불러 모아 밥 한 끼 제대로 먹기", type: "family" },
-      { text: "라이브 무대 최전선 자리 확보하기", type: "idol" },
-      { text: "주인공한테 최강 기술 하나 전수받기", type: "munchkin" },
-      { text: "학교 옥상에서 도시락 먹기", type: "school" },
-    ],
-  },
-  {
-    q: "다음 중 나를 가장 잘 설명하는 문장은?",
-    choices: [
-      { text: "귀엽고 작은 것들에 유독 눈이 먼저 간다", type: "animal" },
-      { text: "어둡고 자극적인 것에 오히려 끌린다", type: "monster" },
-      { text: "지면 분한데 이기면 아무 말도 안 나온다", type: "sports" },
-      { text: "가본 적 없는 곳에 대한 상상을 자주 한다", type: "adventure" },
-      { text: "어딜 가든 첫인상이 가장 중요하다고 생각한다", type: "bishounen" },
-    ],
-  },
-  {
-    q: "마지막화를 다 보고 난 뒤 제일 먼저 드는 생각은?",
-    choices: [
-      { text: "다들 행복하게 잘 살겠지...? 살겠지?", type: "family" },
-      { text: "다음 시즌 공연은 언제야", type: "idol" },
-      { text: "저 이후로 얼마나 더 강해졌을까", type: "munchkin" },
-      { text: "저 둘 결국 이어진 거 맞지...? 맞지?", type: "school" },
-      { text: "동물 파트너는 잘 살고 있는 거겠지", type: "animal" },
-    ],
-  },
-  {
-    q: "주변에 애니를 추천할 때 내 기준은?",
-    choices: [
-      { text: "세계관이 깊고 반전과 충격이 있는 것", type: "monster" },
-      { text: "보고 나면 뭔가 하고 싶어지는 에너지가 있는 것", type: "sports" },
-      { text: "세계가 넓고 탐험하는 재미가 있는 것", type: "adventure" },
-      { text: "캐릭터 디자인이 확실히 눈을 사로잡는 것", type: "bishounen" },
-      { text: "아무나 불러다 같이 봐도 되는 것", type: "family" },
-    ],
-  },
-  {
-    q: "지금 이 순간, 나를 가장 잘 표현하는 취향은?",
-    choices: [
-      { text: "최애 소식을 남들보다 1분이라도 먼저 안다", type: "idol" },
-      { text: "어떤 상황이든 최적의 방법부터 떠올린다", type: "munchkin" },
-      { text: "주변 분위기와 사람들의 감정을 잘 읽는다", type: "school" },
-      { text: "길 가다 동물이 보이면 무조건 멈춘다", type: "animal" },
-      { text: "잔잔한 것보다 강렬하고 어두운 것에 끌린다", type: "monster" },
-    ],
-  },
-];
+interface Tier {
+  min: number;
+  max: number;
+  name: string;
+  desc: string;
+}
 
-const RESULTS: Record<
-  ResultType,
-  {
-    emoji: string;
-    color: string;
-    subtitle: string;
-    name: string;
-    description: string;
-    traits: [string, string, string];
-    animes: { title: string; note: string }[];
+interface ScoreData {
+  sn: number; snMax: number;
+  dc: number; dcMax: number;
+  ml: number; mlMax: number;
+  total: number;
+  snT: "S" | "N";
+  dcT: "D" | "C";
+  mlT: "M" | "L";
+  tier: Tier;
+}
+
+// ─── SVG 헬퍼 컴포넌트 ──────────────────────────────────────
+
+function AnimeFace({ cx, cy, r, hair, mood }: {
+  cx: number; cy: number; r: number; hair: string; mood: MoodType;
+}) {
+  const eyeY = cy - r * 0.05;
+  const eyeDx = r * 0.42;
+  const eyeR = r * 0.26;
+  let eyes: React.ReactNode, mouth: React.ReactNode, brow: React.ReactNode = null;
+
+  if (mood === "excited") {
+    eyes = (
+      <>
+        <g>
+          <ellipse cx={cx - eyeDx} cy={eyeY} rx={eyeR} ry={eyeR * 1.2} fill="#2c2c3a" />
+          <circle cx={cx - eyeDx - eyeR * 0.3} cy={eyeY - eyeR * 0.4} r={eyeR * 0.4} fill="#fff" />
+          <circle cx={cx - eyeDx + eyeR * 0.3} cy={eyeY + eyeR * 0.2} r={eyeR * 0.22} fill="#fff" opacity={0.8} />
+        </g>
+        <g>
+          <ellipse cx={cx + eyeDx} cy={eyeY} rx={eyeR} ry={eyeR * 1.2} fill="#2c2c3a" />
+          <circle cx={cx + eyeDx - eyeR * 0.3} cy={eyeY - eyeR * 0.4} r={eyeR * 0.4} fill="#fff" />
+          <circle cx={cx + eyeDx + eyeR * 0.3} cy={eyeY + eyeR * 0.2} r={eyeR * 0.22} fill="#fff" opacity={0.8} />
+        </g>
+      </>
+    );
+    mouth = <path d={`M ${cx - r * 0.3} ${cy + r * 0.45} Q ${cx} ${cy + r * 0.85} ${cx + r * 0.3} ${cy + r * 0.45}`} fill="#c0392b" stroke="#2c2c3a" strokeWidth={1.5} strokeLinejoin="round" />;
+  } else if (mood === "happy") {
+    eyes = (
+      <>
+        <path d={`M ${cx - eyeDx - eyeR * 0.7} ${eyeY} Q ${cx - eyeDx} ${eyeY - eyeR} ${cx - eyeDx + eyeR * 0.7} ${eyeY}`} fill="none" stroke="#2c2c3a" strokeWidth={3.5} strokeLinecap="round" />
+        <path d={`M ${cx + eyeDx - eyeR * 0.7} ${eyeY} Q ${cx + eyeDx} ${eyeY - eyeR} ${cx + eyeDx + eyeR * 0.7} ${eyeY}`} fill="none" stroke="#2c2c3a" strokeWidth={3.5} strokeLinecap="round" />
+      </>
+    );
+    mouth = <path d={`M ${cx - r * 0.28} ${cy + r * 0.5} Q ${cx} ${cy + r * 0.8} ${cx + r * 0.28} ${cy + r * 0.5}`} fill="none" stroke="#2c2c3a" strokeWidth={2.5} strokeLinecap="round" />;
+  } else if (mood === "shock") {
+    eyes = (
+      <>
+        <circle cx={cx - eyeDx} cy={eyeY} r={eyeR * 0.55} fill="#2c2c3a" />
+        <circle cx={cx - eyeDx - eyeR * 0.15} cy={eyeY - eyeR * 0.15} r={eyeR * 0.2} fill="#fff" />
+        <circle cx={cx + eyeDx} cy={eyeY} r={eyeR * 0.55} fill="#2c2c3a" />
+        <circle cx={cx + eyeDx - eyeR * 0.15} cy={eyeY - eyeR * 0.15} r={eyeR * 0.2} fill="#fff" />
+      </>
+    );
+    mouth = <ellipse cx={cx} cy={cy + r * 0.5} rx={r * 0.16} ry={r * 0.22} fill="#c0392b" stroke="#2c2c3a" strokeWidth={1.5} />;
+    brow = (
+      <>
+        <path d={`M ${cx - eyeDx - eyeR * 0.6} ${eyeY - eyeR * 1.5} L ${cx - eyeDx + eyeR * 0.6} ${eyeY - eyeR * 1.7}`} stroke="#2c2c3a" strokeWidth={2.5} strokeLinecap="round" />
+        <path d={`M ${cx + eyeDx - eyeR * 0.6} ${eyeY - eyeR * 1.7} L ${cx + eyeDx + eyeR * 0.6} ${eyeY - eyeR * 1.5}`} stroke="#2c2c3a" strokeWidth={2.5} strokeLinecap="round" />
+      </>
+    );
+  } else if (mood === "focus") {
+    eyes = (
+      <>
+        <g>
+          <ellipse cx={cx - eyeDx} cy={eyeY} rx={eyeR * 0.85} ry={eyeR * 0.7} fill="#2c2c3a" />
+          <circle cx={cx - eyeDx + eyeR * 0.2} cy={eyeY - eyeR * 0.2} r={eyeR * 0.22} fill="#fff" />
+        </g>
+        <g>
+          <ellipse cx={cx + eyeDx} cy={eyeY} rx={eyeR * 0.85} ry={eyeR * 0.7} fill="#2c2c3a" />
+          <circle cx={cx + eyeDx + eyeR * 0.2} cy={eyeY - eyeR * 0.2} r={eyeR * 0.22} fill="#fff" />
+        </g>
+      </>
+    );
+    mouth = <path d={`M ${cx - r * 0.22} ${cy + r * 0.55} L ${cx + r * 0.22} ${cy + r * 0.55}`} stroke="#2c2c3a" strokeWidth={2.5} strokeLinecap="round" />;
+    brow = (
+      <>
+        <path d={`M ${cx - eyeDx - eyeR * 0.6} ${eyeY - eyeR * 1.4} L ${cx - eyeDx + eyeR * 0.6} ${eyeY - eyeR * 1.1}`} stroke="#2c2c3a" strokeWidth={2.5} strokeLinecap="round" />
+        <path d={`M ${cx + eyeDx - eyeR * 0.6} ${eyeY - eyeR * 1.1} L ${cx + eyeDx + eyeR * 0.6} ${eyeY - eyeR * 1.4}`} stroke="#2c2c3a" strokeWidth={2.5} strokeLinecap="round" />
+      </>
+    );
+  } else {
+    eyes = (
+      <>
+        <ellipse cx={cx - eyeDx} cy={eyeY} rx={eyeR * 0.75} ry={eyeR * 0.9} fill="#2c2c3a" />
+        <circle cx={cx - eyeDx - eyeR * 0.2} cy={eyeY - eyeR * 0.3} r={eyeR * 0.28} fill="#fff" />
+        <ellipse cx={cx + eyeDx} cy={eyeY} rx={eyeR * 0.75} ry={eyeR * 0.9} fill="#2c2c3a" />
+        <circle cx={cx + eyeDx - eyeR * 0.2} cy={eyeY - eyeR * 0.3} r={eyeR * 0.28} fill="#fff" />
+      </>
+    );
+    mouth = <path d={`M ${cx - r * 0.2} ${cy + r * 0.55} Q ${cx} ${cy + r * 0.72} ${cx + r * 0.2} ${cy + r * 0.55}`} fill="none" stroke="#2c2c3a" strokeWidth={2.5} strokeLinecap="round" />;
   }
-> = {
-  idol: {
-    emoji: "🎤",
-    color: "#fce7f3",
-    subtitle: "아이돌형",
-    name: "응원봉이 진짜 무기인 타입",
-    description:
-      "최애가 무대에 서는 순간 뇌에서 도파민이 과부하된다. 오시 생일은 외우는데 본인 생일은 까먹음. '현장에 있었어야 했는데'를 주 4회 이상 중얼거리며 산다. 이 작품에 아이돌 요소가 있냐 없냐가 시청 기준의 전부. 응원봉은 이미 세 개인데 왜인지 모름.",
-    traits: ["오프닝 1절 통째로 암기", "굿즈 지름 전 '마지막이야' 선언", "현장 못 간 날 유튜브로 3회 대리 만족"],
-    animes: [
-      { title: "【推しの子】 오시노코", note: "아이돌 업계의 민낯을 파고드는 다크 판타지" },
-      { title: "러브 라이브!", note: "스쿨 아이돌 입문서. 오프닝만 30번 들어도 됨" },
-      { title: "BanG Dream!", note: "밴드 × 아이돌. 연주 씬에서 심장 두근거림 보장" },
-    ],
-  },
-  munchkin: {
-    emoji: "💥",
-    color: "#fef3c7",
-    subtitle: "먼치킨형",
-    name: "주인공이 1화에 약하면 내 시간이 없는 타입",
-    description:
-      "주인공이 1화에서 얻어맞으면 0.3초 안에 창을 닫는다. 스킬 설명 나오면 DPS 계산부터 함. 적이 나타났을 때 드는 감정은 걱정이 아니라 '이거 얼마나 걸리냐'임. 레벨 제한 없는 성장물이 이상적인 애니관. 최종 보스가 쓰러진 뒤 주인공이 더 강해질 여지가 있는지 확인하고 잠든다.",
-    traits: ["1화에서 스펙 판단 완료", "적 등장 = 클리어 타이머 시작", "최종화 후 후일담 스펙 검색"],
-    animes: [
-      { title: "원펀맨 (One Punch Man)", note: "1화부터 무쌍. 적이 나오면 끝남. 이게 바로 정석" },
-      { title: "오버로드 (Overlord)", note: "주인공이 이미 만렙. 걱정할 일이 없어서 오히려 편함" },
-      { title: "나 혼자만 레벨업", note: "성장 그래프가 수직 상승. 스펙 오르는 맛으로 봄" },
-    ],
-  },
-  school: {
-    emoji: "📚",
-    color: "#dbeafe",
-    subtitle: "학원물형",
-    name: "교복 없으면 청춘도 없는 타입",
-    description:
-      "모든 갈등은 교실→복도→체육관 창고 순으로 해결된다는 걸 이미 알고 있다. 전학생이 등장하면 심장이 먼저 반응한다. 우산 하나로 둘이 쓰는 씬에서 먹고 마시던 걸 내려놓는다. '어, 너도 이 학교야?' 소리 들을 때마다 당하는데 또 당함. 옥상은 왜 항상 잠겨 있지 않은 건지 궁금하지 않음.",
-    traits: ["전학생 등장 시 자동 집중", "우산 씬 = 영상 멈춤 필수", "옥상 개방 여부에 의심 없음"],
-    animes: [
-      { title: "카구야님은 고백받고 싶어", note: "두뇌전 러브코미디. 누가 먼저 고백하는지 두 시즌 걸림" },
-      { title: "청춘 돼지는 바니걸 선배의 꿈을 꾸지 않는다", note: "감성 + 청춘 + 설렘. 제목이 전부 설명함" },
-      { title: "5등분의 신부", note: "5명 중 누가 신부인지 알면서도 끝까지 보게 만드는 마력" },
-    ],
-  },
-  animal: {
-    emoji: "🐾",
-    color: "#dcfce7",
-    subtitle: "동물형",
-    name: "고양이 한 마리면 명작 인증되는 타입",
-    description:
-      "마스코트 캐릭터 없는 작품은 뭔가 불안하다. 고양이귀 달린 캐릭터가 나오는 순간 뇌가 멈춘다. 메인 스토리보다 동물 에피소드 내용을 더 잘 기억함. 귀여운 게 필살기를 써도 진심으로 감동받는다. 동물 조력자가 희생되는 씬에서 주인공보다 더 많이 운다.",
-    traits: ["마스코트 = 최애 확정 루트", "고양이귀 캐릭터에 무방비", "동물 에피소드 5회 이상 재시청"],
-    animes: [
-      { title: "던전밥 (Delicious in Dungeon)", note: "던전 속 몬스터를 요리해 먹음. 생명체 사랑이 느껴짐" },
-      { title: "비스타즈 (Beastars)", note: "초식과 육식이 공존하는 세계의 청춘물. 생각보다 진지함" },
-      { title: "포켓몬스터", note: "설명 필요 없음. 당신이 이미 알고 있음" },
-    ],
-  },
-  monster: {
-    emoji: "💀",
-    color: "#fee2e2",
-    subtitle: "괴물형",
-    name: "피가 안 나오면 아직 진짜 싸움 아닌 타입",
-    description:
-      "1화가 평화로우면 '폭풍 전 고요'로 해석하고 기다린다. 보스 디자인이 못생길수록 호감도 올라감. 주인공이 반쯤 괴물화되는 씬에서 혼자 박수 친다. 잔인도 낮은 작품은 마음속에서 '주니어용'으로 분류. 각성할 때 BGM 볼륨은 반드시 올려야 직성이 풀린다.",
-    traits: ["1화 평화 = 2화 학살 예고로 해석", "보스 못생길수록 기대감 상승", "각성 씬에서 혼자 흥분"],
-    animes: [
-      { title: "진격의 거인 (Attack on Titan)", note: "1화 10분에 세계관 전부 뒤집음. 이후 삶이 달라짐" },
-      { title: "주술회전 (Jujutsu Kaisen)", note: "저주 × 배틀. 작화와 연출이 극장판 수준" },
-      { title: "도쿄구울 (Tokyo Ghoul)", note: "인간과 괴물 사이에서 흔들리는 주인공. 각성 씬 레전드" },
-    ],
-  },
-  sports: {
-    emoji: "⚽",
-    color: "#ecfccb",
-    subtitle: "체육형",
-    name: "보고 나서 운동복 질렀다가 안 입는 타입",
-    description:
-      "시합 직전 BGM 한 소절만 들려도 심박수가 올라간다. 이건 스포입니다. 주인공이 땀 흘리며 한계를 넘는 장면에서 자기도 모르게 주먹을 쥔다. 합숙 에피소드 보고 실제로 합숙 계획 세웠다가 안 감. 부상당한 선수가 복귀하는 씬은 어떤 스포츠물이든 반드시 운다.",
-    traits: ["시합 BGM = 심박수 120", "합숙 계획 세우고 취소 경력 다수", "부상 복귀 씬 100% 눈물 보장"],
-    animes: [
-      { title: "하이큐!! (Haikyuu!!)", note: "배구물의 정점. 보고 나서 배구공 사고 싶어짐" },
-      { title: "블루록 (Blue Lock)", note: "에고이즘으로 승부하는 축구물. 주인공이 나쁜 놈인데 응원됨" },
-      { title: "쿠로코의 농구", note: "현실 불가능한 기술들의 향연. 그게 매력" },
-    ],
-  },
-  adventure: {
-    emoji: "🗺️",
-    color: "#fef9c3",
-    subtitle: "탐험여행형",
-    name: "지도에 '미지의 영역' 없으면 불안한 타입",
-    description:
-      "세계관 지도가 나오면 일단 확대해서 구석구석 읽는다. 이세계 전이 직후 첫 마을 씬이 제일 설레고 제일 오래 기억에 남음. 던전 탐험 BGM은 명상 플리 대신 쓴다. '저 너머에 뭐가 있을까'를 생각하다 잠 못 든 전적 있음. 지도에 표시 안 된 지역이 등장하면 입꼬리가 올라간다.",
-    traits: ["세계관 지도 정주행 필수", "미지 영역 등장 시 자동 흥분", "던전 BGM으로 집중 모드 입장"],
-    animes: [
-      { title: "프리렌: 장례식의 뒤에서", note: "마왕 쓰러뜨린 이후의 이야기. 여행의 끝이 더 여운 있음" },
-      { title: "메이드 인 어비스 (Made in Abyss)", note: "귀여운 그림체 + 지하 심연 탐험. 조합이 무섭도록 잘 맞음" },
-      { title: "던전밥 (Delicious in Dungeon)", note: "던전을 탐험하며 몬스터를 요리함. 진짜로" },
-    ],
-  },
-  bishounen: {
-    emoji: "✨",
-    color: "#ede9fe",
-    subtitle: "미소년미소녀형",
-    name: "작화가 8할이고 나머지 2할도 작화인 타입",
-    description:
-      "1화 오프닝 컷 하나로 시청 여부를 결정한다. 좋아하는 캐릭터 눈 색깔, 머리카락 색깔, 성우 이름은 당연히 외움. 작붕이 발생하면 그 에피소드만 1점 깎는다. 악역이라도 비주얼이 좋으면 응원 가능. 캐릭터 생일에 SNS 올리는 걸 연례 행사로 취급함.",
-    traits: ["오프닝 1컷으로 입덕 판정", "작붕 발생 시 해당 화 감점 처리", "잘생긴 악역도 응원 가능"],
-    animes: [
-      { title: "바이올렛 에버가든", note: "한 컷 한 컷이 배경화면. 작화에 감사함을 느끼게 되는 작품" },
-      { title: "귀멸의 칼날 (Demon Slayer)", note: "전투 작화가 극장판 수준. 눈이 호강함" },
-      { title: "흑집사 (Black Butler)", note: "비주얼 미친 집사와 도련님. 캐릭터 디자인만으로 입덕 가능" },
-    ],
-  },
-  family: {
-    emoji: "🏠",
-    color: "#ffedd5",
-    subtitle: "가족형",
-    name: "전원 생존 아니면 며칠 밥 못 먹는 타입",
-    description:
-      "부모님이랑 같이 봐도 되는 작품이 진짜 명작이다. 캐릭터들끼리 사이좋은 장면만 나와도 행복 게이지가 찬다. 복선 없이 갑자기 캐릭터가 죽으면 일상에 지장이 생긴다. 훈훈한 식사 씬은 반드시 한 번 더 본다. '이 팀 영원히 이러면 안 되나'를 시즌 내내 생각함.",
-    traits: ["식사 씬 = 힐링 = 재시청", "갑작스러운 캐릭터 사망 시 일상 붕괴", "전원 생존 엔딩만이 진짜 엔딩"],
-    animes: [
-      { title: "클라나드 (CLANNAD)", note: "이 작품 보고 안 운 사람 없음. 가족의 의미를 다시 생각하게 됨" },
-      { title: "원피스 (One Piece)", note: "나카마(동료)가 곧 가족. 재결합 씬마다 울게 설계됨" },
-      { title: "도라에몽 (Doraemon)", note: "부모님이랑 같이 봐도 되는 유일무이한 작품. 클래식" },
-    ],
-  },
-};
 
-const EMPTY_SCORES: Record<ResultType, number> = {
-  idol: 0,
-  munchkin: 0,
-  school: 0,
-  animal: 0,
-  monster: 0,
-  sports: 0,
-  adventure: 0,
-  bishounen: 0,
-  family: 0,
-};
-
-function getTopResult(scores: Record<ResultType, number>): ResultType {
-  return (Object.entries(scores) as [ResultType, number][]).reduce(
-    (best, [type, score]) => (score > scores[best] ? type : best),
-    "idol" as ResultType,
+  return (
+    <g>
+      <ellipse cx={cx} cy={cy + r * 0.08} rx={r} ry={r * 1.05} fill="#FFE3C8" />
+      <path d={`M ${cx - r} ${cy - r * 0.1} Q ${cx - r * 1.05} ${cy - r * 1.15} ${cx - r * 0.25} ${cy - r * 1.1} Q ${cx} ${cy - r * 1.45} ${cx + r * 0.3} ${cy - r * 1.05} Q ${cx + r * 1.1} ${cy - r * 1.15} ${cx + r} ${cy - r * 0.05} Q ${cx + r * 0.7} ${cy - r * 0.55} ${cx + r * 0.35} ${cy - r * 0.7} Q ${cx} ${cy - r * 0.95} ${cx - r * 0.35} ${cy - r * 0.65} Q ${cx - r * 0.72} ${cy - r * 0.5} ${cx - r} ${cy - r * 0.1} Z`} fill={hair} />
+      <ellipse cx={cx - r * 0.55} cy={cy + r * 0.42} rx={r * 0.2} ry={r * 0.13} fill="#FF9E9E" opacity={0.75} />
+      <ellipse cx={cx + r * 0.55} cy={cy + r * 0.42} rx={r * 0.2} ry={r * 0.13} fill="#FF9E9E" opacity={0.75} />
+      {brow}{eyes}{mouth}
+    </g>
   );
 }
 
-function TypeIllustration({ type }: { type: ResultType }) {
-  switch (type) {
-    case "idol":
-      return (
-        <svg viewBox="0 0 400 200" className="w-full block">
-          <path d="M200 -10 L110 200 L290 200 Z" fill="rgba(255,240,180,0.45)" />
-          <rect x="195" y="115" width="10" height="65" rx="2" fill="#be185d" opacity="0.7"/>
-          <rect x="177" y="175" width="46" height="8" rx="4" fill="#be185d" opacity="0.6"/>
-          <ellipse cx="200" cy="90" rx="20" ry="26" fill="#db2777" opacity="0.8"/>
-          <ellipse cx="200" cy="87" rx="14" ry="17" fill="#f9a8d4" opacity="0.5"/>
-          <line x1="183" y1="84" x2="217" y2="84" stroke="#be185d" strokeWidth="1.5" opacity="0.5"/>
-          <line x1="181" y1="91" x2="219" y2="91" stroke="#be185d" strokeWidth="1.5" opacity="0.5"/>
-          <line x1="183" y1="98" x2="217" y2="98" stroke="#be185d" strokeWidth="1.5" opacity="0.5"/>
-          <text x="108" y="80" fontSize="28" fill="#f9a8d4" opacity="0.75" fontFamily="serif">♪</text>
-          <text x="278" y="70" fontSize="22" fill="#f9a8d4" opacity="0.75" fontFamily="serif">♫</text>
-          <text x="70" y="140" fontSize="18" fill="#f9a8d4" opacity="0.55" fontFamily="serif">♩</text>
-          <text x="310" y="145" fontSize="20" fill="#f9a8d4" opacity="0.55" fontFamily="serif">♪</text>
-          <circle cx="55" cy="55" r="4" fill="#f472b6" opacity="0.6"/>
-          <circle cx="345" cy="50" r="5" fill="#f472b6" opacity="0.6"/>
-          <circle cx="140" cy="30" r="3" fill="#f472b6" opacity="0.5"/>
-          <circle cx="260" cy="28" r="3.5" fill="#f472b6" opacity="0.5"/>
-          <circle cx="40" cy="165" r="2.5" fill="#f472b6" opacity="0.4"/>
-          <circle cx="360" cy="170" r="2.5" fill="#f472b6" opacity="0.4"/>
-        </svg>
-      );
-
-    case "munchkin":
-      return (
-        <svg viewBox="0 0 400 200" className="w-full block">
-          <circle cx="200" cy="100" r="88" fill="none" stroke="#d97706" strokeWidth="1.5" strokeDasharray="8 4" opacity="0.35"/>
-          <circle cx="200" cy="100" r="62" fill="none" stroke="#d97706" strokeWidth="1.5" strokeDasharray="5 3" opacity="0.4"/>
-          <circle cx="200" cy="100" r="38" fill="#fbbf24" opacity="0.18"/>
-          {Array.from({ length: 12 }).map((_, i) => {
-            const a = (i * 30 * Math.PI) / 180;
-            return (
-              <line key={i}
-                x1={200 + 42 * Math.cos(a)} y1={100 + 42 * Math.sin(a)}
-                x2={200 + 92 * Math.cos(a)} y2={100 + 92 * Math.sin(a)}
-                stroke="#d97706" strokeWidth="1.5" opacity="0.35"
-              />
-            );
-          })}
-          <polygon points="197,25 203,25 206,130 194,130" fill="#92400e" opacity="0.75"/>
-          <polygon points="194,25 206,25 200,8" fill="#b45309" opacity="0.85"/>
-          <rect x="172" y="130" width="56" height="10" rx="4" fill="#78350f" opacity="0.8"/>
-          <rect x="194" y="140" width="12" height="38" rx="3" fill="#92400e" opacity="0.75"/>
-          <circle cx="200" cy="180" r="9" fill="#78350f" opacity="0.75"/>
-          <ellipse cx="200" cy="70" rx="10" ry="40" fill="#fef08a" opacity="0.25"/>
-          <text x="80" y="60" fontSize="20" fill="#fbbf24" opacity="0.7">✦</text>
-          <text x="300" y="55" fontSize="16" fill="#fbbf24" opacity="0.7">✦</text>
-          <text x="60" y="155" fontSize="14" fill="#fbbf24" opacity="0.5">★</text>
-          <text x="320" y="160" fontSize="18" fill="#fbbf24" opacity="0.5">★</text>
-        </svg>
-      );
-
-    case "school":
-      return (
-        <svg viewBox="0 0 400 200" className="w-full block">
-          <rect x="130" y="50" width="140" height="120" rx="4" fill="#93c5fd" opacity="0.45"/>
-          <rect x="193" y="50" width="14" height="120" fill="#60a5fa" opacity="0.35"/>
-          <rect x="130" y="46" width="140" height="8" rx="2" fill="#60a5fa" opacity="0.5"/>
-          {[65, 75, 85, 95].map((y, i) => (
-            <rect key={`l${i}`} x="145" y={y} width={i % 2 === 0 ? 40 : 36} height="3" rx="1" fill="#bfdbfe" opacity="0.7"/>
-          ))}
-          {[65, 75, 85, 95].map((y, i) => (
-            <rect key={`r${i}`} x="215" y={y} width={i % 2 === 0 ? 40 : 36} height="3" rx="1" fill="#bfdbfe" opacity="0.7"/>
-          ))}
-          <path d="M252 50 L252 95 L262 85 L272 95 L272 50 Z" fill="#ef4444" opacity="0.55"/>
-          {[[55,60],[75,90],[45,120],[330,55],[355,80],[340,115],[100,35],[310,40]].map(([x,y],i) => (
-            <g key={i}>
-              <circle cx={x} cy={y} r="9" fill="#fbcfe8" opacity="0.65"/>
-              <circle cx={x-6} cy={y-5} r="5.5" fill="#f9a8d4" opacity="0.65"/>
-              <circle cx={x+6} cy={y-5} r="5.5" fill="#f9a8d4" opacity="0.65"/>
-              <circle cx={x-6} cy={y+5} r="5.5" fill="#fbcfe8" opacity="0.55"/>
-              <circle cx={x+6} cy={y+5} r="5.5" fill="#fbcfe8" opacity="0.55"/>
-              <circle cx={x} cy={y} r="3" fill="#fce7f3" opacity="0.9"/>
-            </g>
-          ))}
-          {[[95,160],[180,175],[300,165],[370,145],[20,155]].map(([x,y],i) => (
-            <ellipse key={i} cx={x} cy={y} rx="5" ry="3" fill="#fbcfe8" opacity="0.45" transform={`rotate(${i*35} ${x} ${y})`}/>
-          ))}
-        </svg>
-      );
-
-    case "animal":
-      return (
-        <svg viewBox="0 0 400 200" className="w-full block">
-          {[[55,45],[340,50],[60,150],[355,155],[180,25],[220,170]].map(([x,y],i) => (
-            <g key={i} opacity="0.25">
-              <ellipse cx={x} cy={y} rx="9" ry="11" fill="#16a34a"/>
-              <circle cx={x-7} cy={y-11} r="4.5" fill="#16a34a"/>
-              <circle cx={x+7} cy={y-11} r="4.5" fill="#16a34a"/>
-              <circle cx={x-11} cy={y-4} r="4" fill="#16a34a"/>
-              <circle cx={x+11} cy={y-4} r="4" fill="#16a34a"/>
-            </g>
-          ))}
-          <circle cx="200" cy="108" r="60" fill="#86efac" opacity="0.45"/>
-          <path d="M152 72 L138 32 L178 60 Z" fill="#4ade80" opacity="0.6"/>
-          <path d="M248 72 L262 32 L222 60 Z" fill="#4ade80" opacity="0.6"/>
-          <path d="M154 70 L143 38 L174 62 Z" fill="#bbf7d0" opacity="0.75"/>
-          <path d="M246 70 L257 38 L226 62 Z" fill="#bbf7d0" opacity="0.75"/>
-          <ellipse cx="178" cy="98" rx="14" ry="16" fill="white" opacity="0.92"/>
-          <ellipse cx="222" cy="98" rx="14" ry="16" fill="white" opacity="0.92"/>
-          <ellipse cx="178" cy="99" rx="8" ry="11" fill="#15803d" opacity="0.85"/>
-          <ellipse cx="222" cy="99" rx="8" ry="11" fill="#15803d" opacity="0.85"/>
-          <circle cx="175" cy="97" r="3" fill="white"/>
-          <circle cx="219" cy="97" r="3" fill="white"/>
-          <path d="M196 118 L200 114 L204 118 L200 123 Z" fill="#fb7185" opacity="0.8"/>
-          <path d="M194 123 Q200 130 206 123" fill="none" stroke="#fb7185" strokeWidth="1.8" opacity="0.75"/>
-          <line x1="135" y1="115" x2="188" y2="120" stroke="#16a34a" strokeWidth="1.5" opacity="0.5"/>
-          <line x1="135" y1="124" x2="188" y2="124" stroke="#16a34a" strokeWidth="1.5" opacity="0.5"/>
-          <line x1="212" y1="120" x2="265" y2="115" stroke="#16a34a" strokeWidth="1.5" opacity="0.5"/>
-          <line x1="212" y1="124" x2="265" y2="124" stroke="#16a34a" strokeWidth="1.5" opacity="0.5"/>
-          <ellipse cx="158" cy="112" rx="12" ry="7" fill="#fb7185" opacity="0.25"/>
-          <ellipse cx="242" cy="112" rx="12" ry="7" fill="#fb7185" opacity="0.25"/>
-        </svg>
-      );
-
-    case "monster":
-      return (
-        <svg viewBox="0 0 400 200" className="w-full block">
-          <circle cx="200" cy="100" r="88" fill="#991b1b" opacity="0.12"/>
-          {[0,60,120,180,240,300].map((deg,i) => {
-            const a = (deg * Math.PI) / 180;
-            const a2 = ((deg + 40) * Math.PI) / 180;
-            return (
-              <path key={i}
-                d={`M ${200+75*Math.cos(a)} ${100+75*Math.sin(a)} Q ${200+45*Math.cos(a+0.4)} ${100+45*Math.sin(a+0.4)} ${200+18*Math.cos(a2)} ${100+18*Math.sin(a2)}`}
-                fill="none" stroke="#b91c1c" strokeWidth="1.5" opacity="0.3"
-              />
-            );
-          })}
-          <ellipse cx="200" cy="88" rx="52" ry="58" fill="#fca5a5" opacity="0.4"/>
-          <ellipse cx="200" cy="84" rx="44" ry="48" fill="#fecaca" opacity="0.5"/>
-          <ellipse cx="178" cy="78" rx="16" ry="18" fill="#991b1b" opacity="0.65"/>
-          <ellipse cx="222" cy="78" rx="16" ry="18" fill="#991b1b" opacity="0.65"/>
-          <ellipse cx="178" cy="78" rx="9" ry="11" fill="#ef4444" opacity="0.9"/>
-          <ellipse cx="222" cy="78" rx="9" ry="11" fill="#ef4444" opacity="0.9"/>
-          <ellipse cx="178" cy="78" rx="4.5" ry="5.5" fill="#fef2f2" opacity="0.95"/>
-          <ellipse cx="222" cy="78" rx="4.5" ry="5.5" fill="#fef2f2" opacity="0.95"/>
-          <path d="M195 100 L200 108 L205 100 Z" fill="#991b1b" opacity="0.6"/>
-          <rect x="155" y="128" width="90" height="16" rx="2" fill="#fecaca" opacity="0.45"/>
-          {[0,1,2,3,4,5].map(i => (
-            <rect key={i} x={163+i*14} y="128" width="10" height="12" rx="1" fill="#991b1b" opacity="0.5"/>
-          ))}
-          <path d="M163 144 Q165 157 163 168" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" opacity="0.4"/>
-          <path d="M237 144 Q235 158 237 170" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" opacity="0.4"/>
-          {[0,36,72,108,144,180,216,252,288,324].map((deg,i) => {
-            if (deg > 30 && deg < 150) return null;
-            const a = (deg * Math.PI) / 180;
-            return (
-              <polygon key={i}
-                points={`${200+92*Math.cos(a-0.12)},${100+92*Math.sin(a-0.12)} ${200+108*Math.cos(a)},${100+108*Math.sin(a)} ${200+92*Math.cos(a+0.12)},${100+92*Math.sin(a+0.12)}`}
-                fill="#991b1b" opacity="0.35"
-              />
-            );
-          })}
-        </svg>
-      );
-
-    case "sports":
-      return (
-        <svg viewBox="0 0 400 200" className="w-full block">
-          <ellipse cx="200" cy="195" rx="185" ry="35" fill="#4ade80" opacity="0.18"/>
-          <rect x="40" y="65" width="7" height="105" fill="#65a30d" opacity="0.5"/>
-          <rect x="165" y="65" width="7" height="105" fill="#65a30d" opacity="0.5"/>
-          <rect x="40" y="65" width="132" height="7" fill="#65a30d" opacity="0.5"/>
-          {[0,1,2,3].map(i => (
-            <line key={`nv${i}`} x1={58+i*30} y1={72} x2={58+i*30} y2={170} stroke="#65a30d" strokeWidth="1" opacity="0.25"/>
-          ))}
-          {[0,1,2,3,4].map(i => (
-            <line key={`nh${i}`} x1={40} y1={85+i*20} x2={172} y2={85+i*20} stroke="#65a30d" strokeWidth="1" opacity="0.25"/>
-          ))}
-          <circle cx="288" cy="115" r="46" fill="white" opacity="0.88"/>
-          <circle cx="288" cy="115" r="46" fill="none" stroke="#84cc16" strokeWidth="2.5" opacity="0.6"/>
-          <path d="M288 69 L302 87 L283 100 L270 86 Z" fill="#1a2e05" opacity="0.6"/>
-          <path d="M288 69 L274 56 L260 68 L270 86 Z" fill="#1a2e05" opacity="0.5"/>
-          <path d="M302 87 L320 80 L326 98 L308 106 L283 100 Z" fill="#1a2e05" opacity="0.4"/>
-          <path d="M283 100 L308 106 L302 124 L284 128 L270 113 Z" fill="#1a2e05" opacity="0.35"/>
-          <line x1="220" y1="100" x2="240" y2="106" stroke="#84cc16" strokeWidth="3.5" strokeLinecap="round" opacity="0.7"/>
-          <line x1="214" y1="115" x2="238" y2="115" stroke="#84cc16" strokeWidth="3.5" strokeLinecap="round" opacity="0.7"/>
-          <line x1="220" y1="130" x2="240" y2="124" stroke="#84cc16" strokeWidth="3.5" strokeLinecap="round" opacity="0.7"/>
-          <text x="348" y="68" fontSize="18" fill="#84cc16" opacity="0.6">★</text>
-          <text x="48" y="55" fontSize="14" fill="#84cc16" opacity="0.5">★</text>
-        </svg>
-      );
-
-    case "adventure":
-      return (
-        <svg viewBox="0 0 400 200" className="w-full block">
-          {[[30,25],[80,15],[160,12],[290,20],[330,35],[375,18]].map(([x,y],i) => (
-            <circle key={i} cx={x} cy={y} r={i%2===0?2:1.5} fill="#92400e" opacity="0.45"/>
-          ))}
-          <path d="M-10 190 L85 55 L170 190 Z" fill="#a16207" opacity="0.32"/>
-          <path d="M70 190 L185 22 L300 190 Z" fill="#92400e" opacity="0.48"/>
-          <path d="M210 190 L310 65 L410 190 Z" fill="#a16207" opacity="0.32"/>
-          <path d="M185 22 L168 62 L202 62 Z" fill="white" opacity="0.75"/>
-          {[[80,185],[100,185],[285,183],[305,183]].map(([x,y],i) => (
-            <g key={i}>
-              <polygon points={`${x},${y-25} ${x-8},${y} ${x+8},${y}`} fill="#166534" opacity="0.4"/>
-              <polygon points={`${x},${y-38} ${x-6},${y-18} ${x+6},${y-18}`} fill="#166534" opacity="0.45"/>
-            </g>
-          ))}
-          <circle cx="320" cy="85" r="38" fill="#fef9c3" opacity="0.7"/>
-          <circle cx="320" cy="85" r="38" fill="none" stroke="#92400e" strokeWidth="2" strokeDasharray="4 3" opacity="0.6"/>
-          <polygon points="320,47 326,75 320,70 314,75" fill="#ef4444" opacity="0.8"/>
-          <polygon points="320,123 326,95 320,100 314,95" fill="#92400e" opacity="0.6"/>
-          <polygon points="358,85 330,79 335,85 330,91" fill="#92400e" opacity="0.6"/>
-          <polygon points="282,85 310,79 305,85 310,91" fill="#92400e" opacity="0.6"/>
-          <circle cx="320" cy="85" r="5" fill="#92400e" opacity="0.8"/>
-          <text x="320" y="44" fontSize="9" fontWeight="bold" textAnchor="middle" fill="#ef4444" opacity="0.85">N</text>
-          {[[85,175],[105,168],[125,160],[148,152]].map(([x,y],i) => (
-            <circle key={i} cx={x} cy={y} r="3.5" fill="#a16207" opacity="0.5"/>
-          ))}
-          <circle cx="148" cy="152" r="11" fill="#fbbf24" opacity="0.6"/>
-          <text x="148" y="157" fontSize="12" fontWeight="bold" textAnchor="middle" fill="#78350f" opacity="0.9">✕</text>
-        </svg>
-      );
-
-    case "bishounen":
-      return (
-        <svg viewBox="0 0 400 200" className="w-full block">
-          {[[38,38],[75,75],[95,28],[362,32],[342,72],[382,52],[55,162],[352,168],[28,118],[372,128]].map(([x,y],i) => (
-            <g key={i} opacity="0.45">
-              <line x1={x-8} y1={y} x2={x+8} y2={y} stroke="#7c3aed" strokeWidth="1.5"/>
-              <line x1={x} y1={y-8} x2={x} y2={y+8} stroke="#7c3aed" strokeWidth="1.5"/>
-              <circle cx={x} cy={y} r="2" fill="#c4b5fd"/>
-            </g>
-          ))}
-          <ellipse cx="200" cy="105" rx="32" ry="38" fill="#ddd6fe" opacity="0.6"/>
-          <path d="M168 82 Q180 42 200 55 Q220 42 232 82 Q222 58 200 62 Q178 58 168 82 Z" fill="#7c3aed" opacity="0.45"/>
-          <path d="M168 82 Q155 95 158 115" fill="none" stroke="#7c3aed" strokeWidth="6" strokeLinecap="round" opacity="0.35"/>
-          <path d="M232 82 Q245 95 242 115" fill="none" stroke="#7c3aed" strokeWidth="6" strokeLinecap="round" opacity="0.35"/>
-          <ellipse cx="186" cy="100" rx="10" ry="11" fill="white" opacity="0.92"/>
-          <ellipse cx="214" cy="100" rx="10" ry="11" fill="white" opacity="0.92"/>
-          <ellipse cx="186" cy="101" rx="6" ry="8" fill="#5b21b6" opacity="0.9"/>
-          <ellipse cx="214" cy="101" rx="6" ry="8" fill="#5b21b6" opacity="0.9"/>
-          <circle cx="184" cy="99" r="2.5" fill="white"/>
-          <circle cx="212" cy="99" r="2.5" fill="white"/>
-          <path d="M177 92 Q182 88 188 92" fill="none" stroke="#4c1d95" strokeWidth="1.8" opacity="0.7"/>
-          <path d="M212 92 Q218 88 224 92" fill="none" stroke="#4c1d95" strokeWidth="1.8" opacity="0.7"/>
-          <path d="M193 117 Q200 123 207 117" fill="none" stroke="#a78bfa" strokeWidth="1.8" opacity="0.8"/>
-          <path d="M173 68 L178 50 L190 62 L200 44 L210 62 L222 50 L227 68 Z" fill="#fbbf24" opacity="0.72"/>
-          <circle cx="200" cy="44" r="5" fill="#f59e0b" opacity="0.85"/>
-          <circle cx="178" cy="50" r="3.5" fill="#f59e0b" opacity="0.75"/>
-          <circle cx="222" cy="50" r="3.5" fill="#f59e0b" opacity="0.75"/>
-          {[[118,48],[282,42],[138,148],[262,142]].map(([x,y],i) => (
-            <g key={i} opacity="0.72">
-              <line x1={x-16} y1={y} x2={x+16} y2={y} stroke="#7c3aed" strokeWidth="2"/>
-              <line x1={x} y1={y-16} x2={x} y2={y+16} stroke="#7c3aed" strokeWidth="2"/>
-              <line x1={x-10} y1={y-10} x2={x+10} y2={y+10} stroke="#a78bfa" strokeWidth="1.5"/>
-              <line x1={x+10} y1={y-10} x2={x-10} y2={y+10} stroke="#a78bfa" strokeWidth="1.5"/>
-              <circle cx={x} cy={y} r="3.5" fill="#c4b5fd"/>
-            </g>
-          ))}
-        </svg>
-      );
-
-    case "family":
-      return (
-        <svg viewBox="0 0 400 200" className="w-full block">
-          <circle cx="65" cy="48" r="22" fill="#fbbf24" opacity="0.55"/>
-          {Array.from({ length: 8 }).map((_, i) => {
-            const a = (i * 45 * Math.PI) / 180;
-            return (
-              <line key={i}
-                x1={65+25*Math.cos(a)} y1={48+25*Math.sin(a)}
-                x2={65+36*Math.cos(a)} y2={48+36*Math.sin(a)}
-                stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" opacity="0.5"
-              />
-            );
-          })}
-          <circle cx="200" cy="118" r="85" fill="#fed7aa" opacity="0.22"/>
-          <rect x="120" y="115" width="160" height="80" fill="#fdba74" opacity="0.5"/>
-          <path d="M100 118 L200 48 L300 118 Z" fill="#f97316" opacity="0.5"/>
-          <rect x="115" y="115" width="170" height="7" fill="#ea580c" opacity="0.4"/>
-          <rect x="242" y="68" width="24" height="42" fill="#f97316" opacity="0.5"/>
-          <circle cx="252" cy="58" r="8" fill="white" opacity="0.5"/>
-          <circle cx="256" cy="46" r="7" fill="white" opacity="0.4"/>
-          <circle cx="260" cy="36" r="5.5" fill="white" opacity="0.3"/>
-          <rect x="178" y="148" width="44" height="47" rx="3" fill="#ea580c" opacity="0.5"/>
-          <circle cx="217" cy="173" r="4.5" fill="#fbbf24" opacity="0.75"/>
-          <rect x="130" y="128" width="42" height="36" rx="3" fill="#fef3c7" opacity="0.8"/>
-          <rect x="228" y="128" width="42" height="36" rx="3" fill="#fef3c7" opacity="0.8"/>
-          <line x1="151" y1="128" x2="151" y2="164" stroke="#f97316" strokeWidth="1.5" opacity="0.45"/>
-          <line x1="130" y1="146" x2="172" y2="146" stroke="#f97316" strokeWidth="1.5" opacity="0.45"/>
-          <line x1="249" y1="128" x2="249" y2="164" stroke="#f97316" strokeWidth="1.5" opacity="0.45"/>
-          <line x1="228" y1="146" x2="270" y2="146" stroke="#f97316" strokeWidth="1.5" opacity="0.45"/>
-          {[[340,55,12],[365,90,9],[348,125,7],[55,120,8],[35,88,10]].map(([x,y,s],i) => (
-            <path key={i}
-              d={`M${x},${y+s*0.5} C${x},${y-s*0.2} ${x-s},${y-s*0.2} ${x-s},${y+s*0.3} C${x-s},${y+s} ${x},${y+s*1.6} ${x},${y+s*1.6} C${x},${y+s*1.6} ${x+s},${y+s} ${x+s},${y+s*0.3} C${x+s},${y-s*0.2} ${x},${y-s*0.2} ${x},${y+s*0.5} Z`}
-              fill="#f97316" opacity={0.4+i*0.06}
-            />
-          ))}
-        </svg>
-      );
-
-    default:
-      return null;
-  }
+function SpeedLines({ cx, cy, n, r1, r2, c }: { cx: number; cy: number; n: number; r1: number; r2: number; c: string }) {
+  return (
+    <g opacity={0.55}>
+      {Array.from({ length: n }, (_, i) => {
+        const a = (i / n) * Math.PI * 2;
+        return <line key={i} x1={cx + Math.cos(a) * r1} y1={cy + Math.sin(a) * r1} x2={cx + Math.cos(a) * r2} y2={cy + Math.sin(a) * r2} stroke={c} strokeWidth={2.5} strokeLinecap="round" />;
+      })}
+    </g>
+  );
 }
+
+function Sparkle({ x, y, s, c }: { x: number; y: number; s: number; c: string }) {
+  return <path d={`M ${x} ${y - s} Q ${x + s * 0.18} ${y - s * 0.18} ${x + s} ${y} Q ${x + s * 0.18} ${y + s * 0.18} ${x} ${y + s} Q ${x - s * 0.18} ${y + s * 0.18} ${x - s} ${y} Q ${x - s * 0.18} ${y - s * 0.18} ${x} ${y - s} Z`} fill={c} />;
+}
+
+function Speech({ x, y, w, h, tailX, tailY, fill = "#fff" }: {
+  x: number; y: number; w: number; h: number; tailX: number; tailY: number; fill?: string;
+}) {
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={h} rx={h * 0.32} fill={fill} stroke="#2c2c3a" strokeWidth={2} />
+      <path d={`M ${x + w * 0.3} ${y + h} L ${tailX} ${tailY} L ${x + w * 0.5} ${y + h} Z`} fill={fill} stroke="#2c2c3a" strokeWidth={2} strokeLinejoin="round" />
+    </g>
+  );
+}
+
+// ─── 문제 일러스트 ────────────────────────────────────────────
+
+function Q1Visual() {
+  const colors = ["#AFA9EC", "#7F77DD", "#534AB7", "#9C95E8"];
+  return (
+    <svg viewBox="0 0 340 180" className="w-full h-auto block">
+      <rect width={340} height={180} rx={8} fill="#EEEDFE" />
+      <SpeedLines cx={95} cy={95} n={16} r1={40} r2={110} c="#C9C3F2" />
+      <Sparkle x={245} y={38} s={9} c="#FFD24A" /><Sparkle x={295} y={70} s={7} c="#7F77DD" /><Sparkle x={270} y={130} s={6} c="#FFD24A" />
+      <g>{[0, 1, 2, 3].map((i) => (<g key={i}><rect x={175 + i * 38} y={30 + (i % 2) * 8} width={30} height={48 - (i % 2) * 8} rx={3} fill={colors[i]} stroke="#3C3489" strokeWidth={1.5} /><text x={190 + i * 38} y={60 + (i % 2) * 4} textAnchor="middle" fontSize={9} fill="#fff" fontFamily="sans-serif">S{i + 1}</text></g>))}</g>
+      <AnimeFace cx={95} cy={88} r={40} hair="#6B5BC7" mood="excited" />
+      <Speech x={120} y={18} w={150} h={40} tailX={150} tailY={68} />
+      <text x={195} y={34} textAnchor="middle" fontSize={11} fill="#3C3489" fontWeight="bold" fontFamily="sans-serif">드디어 정주행 타임!</text>
+      <text x={195} y={49} textAnchor="middle" fontSize={10} fill="#534AB7" fontFamily="sans-serif">오늘은 쉬지 않는다</text>
+      <text x={240} y={160} textAnchor="middle" fontSize={11} fill="#3C3489" fontWeight="bold" fontFamily="sans-serif">📋 정주행 리스트 4편</text>
+    </svg>
+  );
+}
+
+function Q2Visual() {
+  return (
+    <svg viewBox="0 0 340 180" className="w-full h-auto block">
+      <rect width={340} height={180} rx={8} fill="#FAECE7" />
+      <SpeedLines cx={265} cy={95} n={18} r1={42} r2={120} c="#F0BBA8" />
+      <Sparkle x={40} y={30} s={7} c="#D85A30" />
+      <g>
+        <rect x={20} y={22} width={170} height={58} rx={8} fill="#fff" stroke="#2c2c3a" strokeWidth={2} />
+        <text x={105} y={44} textAnchor="middle" fontSize={11} fill="#D85A30" fontWeight="bold" fontFamily="sans-serif">★★☆☆☆ 악평 리뷰</text>
+        <text x={105} y={62} textAnchor="middle" fontSize={10} fill="#993C1D" fontFamily="sans-serif">스토리가 허술하네요</text>
+      </g>
+      <AnimeFace cx={265} cy={88} r={42} hair="#3A3550" mood="focus" />
+      <Speech x={95} y={108} w={205} h={52} tailX={250} tailY={160} fill="#FFF3E0" />
+      <text x={197} y={128} textAnchor="middle" fontSize={11} fill="#993C1D" fontWeight="bold" fontFamily="sans-serif">↩ 반박 댓글을 작성하겠습니다</text>
+      <text x={197} y={146} textAnchor="middle" fontSize={10} fill="#D85A30" fontFamily="sans-serif">논리적 근거 15개 준비 완료 💢</text>
+      <text x={300} y={44} fontSize={20}>💢</text>
+    </svg>
+  );
+}
+
+function Q3Visual() {
+  return (
+    <svg viewBox="0 0 340 180" className="w-full h-auto block">
+      <rect width={340} height={180} rx={8} fill="#E1F5EE" />
+      <SpeedLines cx={85} cy={95} n={16} r1={38} r2={105} c="#A8DFCD" />
+      <Sparkle x={150} y={32} s={10} c="#FFD24A" /><Sparkle x={175} y={55} s={7} c="#1D9E75" /><Sparkle x={130} y={58} s={6} c="#FFD24A" />
+      <AnimeFace cx={85} cy={86} r={42} hair="#1D9E75" mood="excited" />
+      <g>
+        <rect x={200} y={40} width={100} height={105} rx={8} fill="#fff" stroke="#2c2c3a" strokeWidth={2} />
+        <rect x={212} y={52} width={76} height={62} rx={4} fill="#9FE1CB" />
+        <circle cx={250} cy={83} r={16} fill="#5DCAA5" />
+        <path d="M 250 70 L 254 80 L 264 80 L 256 86 L 259 96 L 250 90 L 241 96 L 244 86 L 236 80 L 246 80 Z" fill="#FFD24A" />
+        <text x={250} y={128} textAnchor="middle" fontSize={9} fill="#0F6E56" fontWeight="bold" fontFamily="sans-serif">한정판 피규어</text>
+        <text x={250} y={140} textAnchor="middle" fontSize={10} fill="#D85A30" fontWeight="bold" fontFamily="sans-serif">¥32,000</text>
+      </g>
+      <Speech x={95} y={16} w={150} h={42} tailX={140} tailY={68} />
+      <text x={170} y={33} textAnchor="middle" fontSize={11} fill="#0F6E56" fontWeight="bold" fontFamily="sans-serif">지금 안 사면 후회한다!</text>
+      <text x={170} y={49} textAnchor="middle" fontSize={10} fill="#1D9E75" fontFamily="sans-serif">생각은 나중에 🛒</text>
+    </svg>
+  );
+}
+
+function Q4Visual() {
+  return (
+    <svg viewBox="0 0 340 180" className="w-full h-auto block">
+      <rect width={340} height={180} rx={8} fill="#E6F1FB" />
+      <SpeedLines cx={255} cy={100} n={14} r1={40} r2={100} c="#AEC9EC" />
+      <AnimeFace cx={72} cy={72} r={38} hair="#E6A23C" mood="happy" />
+      <AnimeFace cx={255} cy={90} r={40} hair="#1F6FB5" mood="focus" />
+      <Speech x={108} y={18} w={158} h={40} tailX={118} tailY={62} />
+      <text x={187} y={34} textAnchor="middle" fontSize={10} fill="#185FA5" fontFamily="sans-serif">추천 애니 있어? 😊</text>
+      <text x={187} y={49} textAnchor="middle" fontSize={9} fill="#378ADD" fontFamily="sans-serif">친구의 질문</text>
+      <g>
+        <rect x={120} y={92} width={135} height={76} rx={8} fill="#fff" stroke="#2c2c3a" strokeWidth={2} />
+        <text x={187} y={110} textAnchor="middle" fontSize={10} fill="#185FA5" fontWeight="bold" fontFamily="sans-serif">📋 맞춤 추천 리스트</text>
+        <text x={187} y={126} textAnchor="middle" fontSize={9} fill="#0C447C" fontFamily="sans-serif">• 액션파라면: OO</text>
+        <text x={187} y={140} textAnchor="middle" fontSize={9} fill="#0C447C" fontFamily="sans-serif">• 힐링 원하면: OO</text>
+        <text x={187} y={154} textAnchor="middle" fontSize={9} fill="#0C447C" fontFamily="sans-serif">• 장편 OK면: OO</text>
+      </g>
+      <Sparkle x={300} y={55} s={8} c="#378ADD" />
+    </svg>
+  );
+}
+
+function Q5Visual() {
+  return (
+    <svg viewBox="0 0 340 180" className="w-full h-auto block">
+      <rect width={340} height={180} rx={8} fill="#FBEAF0" />
+      <SpeedLines cx={170} cy={150} n={20} r1={30} r2={90} c="#EFC2D3" />
+      <Sparkle x={40} y={40} s={8} c="#D4537E" /><Sparkle x={300} y={40} s={8} c="#D4537E" />
+      <g>
+        <rect x={35} y={18} width={270} height={46} rx={8} fill="#fff" stroke="#2c2c3a" strokeWidth={2} />
+        <text x={170} y={38} textAnchor="middle" fontSize={12} fill="#993556" fontWeight="bold" fontFamily="sans-serif">🎤 오프라인 팬미팅 티켓팅</text>
+        <text x={170} y={54} textAnchor="middle" fontSize={10} fill="#D4537E" fontFamily="sans-serif">2025.XX.XX 12:00 OPEN</text>
+      </g>
+      <AnimeFace cx={170} cy={108} r={38} hair="#D4537E" mood="focus" />
+      <g>
+        <rect x={95} y={148} width={150} height={26} rx={13} fill="#D4537E" stroke="#2c2c3a" strokeWidth={2} />
+        <text x={170} y={165} textAnchor="middle" fontSize={11} fill="#fff" fontWeight="bold" fontFamily="sans-serif">🕐 29:47 — 대기 중</text>
+      </g>
+      <text x={232} y={92} fontSize={18}>🔥</text><text x={108} y={92} fontSize={18}>🔥</text>
+    </svg>
+  );
+}
+
+function Q6Visual() {
+  const top = ["🎎", "🗡️", "📦", "🎭", "🌸"];
+  const bot = ["📚", "🎵", "🖼️", "✨", "🏆"];
+  return (
+    <svg viewBox="0 0 340 180" className="w-full h-auto block">
+      <rect width={340} height={180} rx={8} fill="#EEEDFE" />
+      <SpeedLines cx={280} cy={55} n={14} r1={30} r2={75} c="#C9C3F2" />
+      <rect x={20} y={92} width={300} height={74} rx={6} fill="#AFA9EC" opacity={0.35} />
+      <g>
+        {top.map((e, i) => (<g key={`t${i}`}><rect x={28 + i * 48} y={42} width={40} height={40} rx={6} fill="#fff" stroke="#7F77DD" strokeWidth={1.5} /><text x={48 + i * 48} y={70} textAnchor="middle" fontSize={20}>{e}</text></g>))}
+        {bot.map((e, i) => (<g key={`b${i}`}><rect x={52 + i * 48} y={100} width={40} height={40} rx={6} fill="#fff" stroke="#7F77DD" strokeWidth={1.5} /><text x={72 + i * 48} y={128} textAnchor="middle" fontSize={20}>{e}</text></g>))}
+      </g>
+      <AnimeFace cx={280} cy={52} r={30} hair="#6B5BC7" mood="excited" />
+      <Speech x={150} y={12} w={160} h={38} tailX={210} tailY={52} />
+      <text x={230} y={28} textAnchor="middle" fontSize={11} fill="#3C3489" fontWeight="bold" fontFamily="sans-serif">행복한 나의 성채 💜</text>
+      <text x={230} y={42} textAnchor="middle" fontSize={9} fill="#534AB7" fontFamily="sans-serif">더 늘릴 계획 수립 중</text>
+      <Sparkle x={45} y={30} s={7} c="#7F77DD" />
+    </svg>
+  );
+}
+
+function Q7Visual() {
+  return (
+    <svg viewBox="0 0 340 180" className="w-full h-auto block">
+      <rect width={340} height={180} rx={8} fill="#FAEEDA" />
+      <SpeedLines cx={78} cy={100} n={16} r1={38} r2={100} c="#EAD09A" />
+      <AnimeFace cx={78} cy={90} r={40} hair="#7A5A2E" mood="focus" />
+      <g>
+        <rect x={150} y={22} width={170} height={100} rx={8} fill="#fff" stroke="#2c2c3a" strokeWidth={2} />
+        <rect x={160} y={32} width={58} height={44} rx={4} fill="#FAC775" />
+        <text x={189} y={60} textAnchor="middle" fontSize={22}>📺</text>
+        <text x={232} y={44} fontSize={9} fill="#BA7517" fontFamily="sans-serif">기대 장면: 없음</text>
+        <text x={232} y={60} fontSize={9} fill="#854F0B" fontFamily="sans-serif">감독 교체: 확인중</text>
+        <text x={232} y={76} fontSize={9} fill="#BA7517" fontFamily="sans-serif">원작 변경점: 37개</text>
+        <line x1={160} y1={88} x2={310} y2={88} stroke="#FAC775" strokeWidth={1.5} />
+        <text x={235} y={106} textAnchor="middle" fontSize={10} fill="#854F0B" fontWeight="bold" fontFamily="sans-serif">🔍 심층 분석 중...</text>
+      </g>
+      <Speech x={28} y={118} w={165} h={46} tailX={90} tailY={164} fill="#FFF3E0" />
+      <text x={110} y={138} textAnchor="middle" fontSize={10} fill="#854F0B" fontWeight="bold" fontFamily="sans-serif">왜 별로지? 이유를 찾자</text>
+      <text x={110} y={153} textAnchor="middle" fontSize={9} fill="#BA7517" fontFamily="sans-serif">스태프롤부터 정독...</text>
+      <text x={112} y={55} fontSize={16}>🤔</text>
+    </svg>
+  );
+}
+
+function Q8Visual() {
+  return (
+    <svg viewBox="0 0 340 180" className="w-full h-auto block">
+      <rect width={340} height={180} rx={8} fill="#EAF3DE" />
+      <SpeedLines cx={245} cy={90} n={16} r1={42} r2={110} c="#C3DCA0" />
+      <AnimeFace cx={80} cy={82} r={38} hair="#A8772E" mood="calm" />
+      <AnimeFace cx={245} cy={80} r={40} hair="#3B6D11" mood="excited" />
+      <g>
+        <rect x={100} y={118} width={155} height={48} rx={8} fill="#fff" stroke="#2c2c3a" strokeWidth={2} />
+        <text x={177} y={138} textAnchor="middle" fontSize={10} fill="#3B6D11" fontWeight="bold" fontFamily="sans-serif">설명 중: 1시간 24분 🕐</text>
+        <text x={177} y={154} textAnchor="middle" fontSize={9} fill="#639922" fontFamily="sans-serif">아직 2쿨 남았습니다</text>
+      </g>
+      <Speech x={100} y={14} w={165} h={44} tailX={180} tailY={60} />
+      <text x={182} y={32} textAnchor="middle" fontSize={10} fill="#3B6D11" fontWeight="bold" fontFamily="sans-serif">이 작품 진짜 명작인데요!</text>
+      <text x={182} y={48} textAnchor="middle" fontSize={9} fill="#639922" fontFamily="sans-serif">일단 1쿨부터 설명하면...</text>
+      <text x={50} y={60} fontSize={15}>💧</text>
+      <Sparkle x={290} y={50} s={7} c="#639922" />
+    </svg>
+  );
+}
+
+function Q9Visual() {
+  return (
+    <svg viewBox="0 0 340 180" className="w-full h-auto block">
+      <rect width={340} height={180} rx={8} fill="#FCEBEB" />
+      <SpeedLines cx={80} cy={95} n={18} r1={40} r2={115} c="#EFC0C0" />
+      <g>
+        <rect x={155} y={20} width={165} height={56} rx={8} fill="#fff" stroke="#2c2c3a" strokeWidth={2} />
+        <text x={237} y={44} textAnchor="middle" fontSize={13} fill="#A32D2D" fontWeight="bold" fontFamily="sans-serif">💔 THE END</text>
+        <text x={237} y={62} textAnchor="middle" fontSize={9} fill="#E24B4A" fontFamily="sans-serif">이게 무슨 엔딩이야...</text>
+      </g>
+      <AnimeFace cx={80} cy={84} r={40} hair="#7C2A6A" mood="focus" />
+      <g>
+        <rect x={135} y={92} width={185} height={74} rx={8} fill="#fff" stroke="#2c2c3a" strokeWidth={2} />
+        <text x={227} y={114} textAnchor="middle" fontSize={11} fill="#3C3489" fontWeight="bold" fontFamily="sans-serif">✍️ 팬픽 작성 모드</text>
+        <line x1={150} y1={124} x2={305} y2={124} stroke="#AFA9EC" strokeWidth={1.5} />
+        <text x={227} y={140} textAnchor="middle" fontSize={9} fill="#534AB7" fontFamily="sans-serif">제1장. 진짜 결말은...</text>
+        <text x={227} y={155} textAnchor="middle" fontSize={9} fill="#534AB7" fontFamily="sans-serif">내가 원하는 대로 완성 💜</text>
+      </g>
+      <Sparkle x={45} y={40} s={8} c="#D4537E" />
+      <text x={112} y={56} fontSize={15}>🔥</text>
+    </svg>
+  );
+}
+
+function Q10Visual() {
+  return (
+    <svg viewBox="0 0 340 180" className="w-full h-auto block">
+      <rect width={340} height={180} rx={8} fill="#E1F5EE" />
+      <SpeedLines cx={170} cy={90} n={22} r1={46} r2={130} c="#A8DFCD" />
+      <AnimeFace cx={82} cy={90} r={40} hair="#1D9E75" mood="excited" />
+      <AnimeFace cx={258} cy={90} r={40} hair="#0F6E56" mood="shock" />
+      <path d="M 150 78 L 162 88 L 154 92 L 168 104 L 156 96 L 164 92 L 152 82 Z" fill="#FFD24A" stroke="#BA7517" strokeWidth={1} />
+      <path d="M 190 78 L 178 88 L 186 92 L 172 104 L 184 96 L 176 92 L 188 82 Z" fill="#FFD24A" stroke="#BA7517" strokeWidth={1} />
+      <Speech x={95} y={14} w={150} h={40} tailX={120} tailY={60} />
+      <text x={170} y={31} textAnchor="middle" fontSize={10} fill="#0F6E56" fontWeight="bold" fontFamily="sans-serif">혹시... OO 좋아하세요?!</text>
+      <text x={170} y={46} textAnchor="middle" fontSize={9} fill="#1D9E75" fontFamily="sans-serif">덕력 레이더 가동 🌿</text>
+      <Sparkle x={40} y={38} s={8} c="#1D9E75" /><Sparkle x={300} y={38} s={8} c="#1D9E75" />
+    </svg>
+  );
+}
+
+function Q11Visual() {
+  return (
+    <svg viewBox="0 0 340 180" className="w-full h-auto block">
+      <rect width={340} height={180} rx={8} fill="#FBEAF0" />
+      <SpeedLines cx={260} cy={95} n={16} r1={40} r2={108} c="#EFC2D3" />
+      <Sparkle x={45} y={30} s={9} c="#FFD24A" /><Sparkle x={150} y={28} s={7} c="#D4537E" /><Sparkle x={108} y={55} s={6} c="#FFD24A" />
+      <AnimeFace cx={260} cy={88} r={42} hair="#D4537E" mood="excited" />
+      <g>
+        <rect x={22} y={48} width={120} height={96} rx={8} fill="#fff" stroke="#2c2c3a" strokeWidth={2} />
+        <path d="M 42 88 L 42 70 Q 42 60 52 60 L 112 60 Q 122 60 122 70 L 122 88 Z" fill="#F4C0D1" />
+        <rect x={38} y={88} width={88} height={40} rx={3} fill="#ED93B1" />
+        <circle cx={62} cy={56} r={4} fill="#FFD24A" />
+        <circle cx={82} cy={52} r={4} fill="#D4537E" />
+        <circle cx={102} cy={56} r={4} fill="#FFD24A" />
+        <text x={82} y={113} textAnchor="middle" fontSize={9} fill="#fff" fontWeight="bold" fontFamily="sans-serif">HAPPY</text>
+        <text x={82} y={124} textAnchor="middle" fontSize={9} fill="#fff" fontWeight="bold" fontFamily="sans-serif">BIRTHDAY</text>
+      </g>
+      <Speech x={100} y={12} w={165} h={40} tailX={200} tailY={56} />
+      <text x={182} y={29} textAnchor="middle" fontSize={11} fill="#993556" fontWeight="bold" fontFamily="sans-serif">생일 카페 대관 완료!</text>
+      <text x={182} y={44} textAnchor="middle" fontSize={9} fill="#D4537E" fontFamily="sans-serif">서포트 광고도 신청했어요</text>
+      <text x={160} y={160} textAnchor="middle" fontSize={11} fill="#993556" fontWeight="bold" fontFamily="sans-serif">🎂 최애 생일 = 내 명절</text>
+    </svg>
+  );
+}
+
+function Q12Visual() {
+  return (
+    <svg viewBox="0 0 340 180" className="w-full h-auto block">
+      <rect width={340} height={180} rx={8} fill="#FAEEDA" />
+      <SpeedLines cx={78} cy={92} n={16} r1={40} r2={105} c="#EAD09A" />
+      <Sparkle x={150} y={30} s={9} c="#FFD24A" /><Sparkle x={185} y={58} s={6} c="#BA7517" />
+      <AnimeFace cx={78} cy={86} r={42} hair="#BA7517" mood="excited" />
+      <g>
+        <rect x={148} y={34} width={172} height={58} rx={8} fill="#fff" stroke="#2c2c3a" strokeWidth={2} />
+        <rect x={158} y={34} width={172} height={16} rx={8} fill="#FAC775" />
+        <text x={234} y={46} textAnchor="middle" fontSize={9} fill="#854F0B" fontWeight="bold" fontFamily="sans-serif">콜라보 카페 · 팝업스토어 OPEN</text>
+        <text x={234} y={68} textAnchor="middle" fontSize={10} fill="#BA7517" fontFamily="sans-serif">🥤 음료 · 🍰 디저트 · 🎁 굿즈</text>
+        <text x={234} y={84} textAnchor="middle" fontSize={9} fill="#854F0B" fontFamily="sans-serif">한정 특전 — 선착순!</text>
+      </g>
+      <g>
+        <rect x={150} y={102} width={170} height={62} rx={8} fill="#fff" stroke="#2c2c3a" strokeWidth={2} />
+        <text x={235} y={122} textAnchor="middle" fontSize={10} fill="#854F0B" fontWeight="bold" fontFamily="sans-serif">🛒 오픈런 장바구니</text>
+        <text x={235} y={138} textAnchor="middle" fontSize={9} fill="#BA7517" fontFamily="sans-serif">메뉴 풀세트 + 굿즈 전종</text>
+        <text x={235} y={153} textAnchor="middle" fontSize={9} fill="#BA7517" fontFamily="sans-serif">총합: ₩₩₩,₩₩₩ 💸</text>
+      </g>
+      <Speech x={28} y={14} w={150} h={38} tailX={90} tailY={58} fill="#FFF3E0" />
+      <text x={103} y={31} textAnchor="middle" fontSize={10} fill="#854F0B" fontWeight="bold" fontFamily="sans-serif">전부 다 주세요!</text>
+      <text x={103} y={46} textAnchor="middle" fontSize={9} fill="#BA7517" fontFamily="sans-serif">종류별로 하나씩</text>
+    </svg>
+  );
+}
+
+// ─── 질문 데이터 ─────────────────────────────────────────────
+
+const QUESTIONS: LevelQuestion[] = [
+  { num: 1, axis: "S/N", text: "주말에 갑자기 아무 계획이 없어졌다. 당신은?", Visual: Q1Visual,
+    options: [
+      { label: "A", text: "드디어! 밀린 애니 정주행 리스트를 꺼낸다. 오늘은 쉬지 않는다.", axis: "N", val: 2 },
+      { label: "B", text: "친구에게 연락해서 카페나 영화를 보러 나간다.", axis: "S", val: 0 },
+      { label: "C", text: "좋아하는 시리즈를 다시 보며 방구석 힐링을 즐긴다.", axis: "N", val: 1 },
+      { label: "D", text: "생산적인 걸 해야 한다며 청소하고 운동한다.", axis: "S", val: 0 },
+    ] },
+  { num: 2, axis: "D/C", text: "좋아하는 작품에 비판적인 리뷰가 달렸다. 당신의 반응은?", Visual: Q2Visual,
+    options: [
+      { label: "A", text: "그 리뷰의 논리적 허점을 조목조목 반박하는 댓글을 작성한다.", axis: "D", val: 2 },
+      { label: "B", text: "속으로 화가 나지만 그냥 닫는다.", axis: "C", val: 1 },
+      { label: "C", text: "'그럴 수도 있지' 하며 쿨하게 넘긴다.", axis: "C", val: 0 },
+      { label: "D", text: "같은 팬들과 공유하며 함께 분노한다.", axis: "D", val: 1 },
+    ] },
+  { num: 3, axis: "M/L", text: "좋아하는 캐릭터의 굿즈를 발견했다. 당신은?", Visual: Q3Visual,
+    options: [
+      { label: "A", text: "가격 불문. 지르고 나서 생각한다.", axis: "M", val: 2 },
+      { label: "B", text: "정말 퀄리티 좋은 굿즈만 신중하게 구매한다.", axis: "L", val: 1 },
+      { label: "C", text: "갖고 싶지만 공간이나 돈이 걱정돼 참는다.", axis: "L", val: 0 },
+      { label: "D", text: "한정판이면 무조건. 일반판은 고민한다.", axis: "M", val: 1 },
+    ] },
+  { num: 4, axis: "S/N", text: "친구가 '추천할 만한 애니 있어?'라고 물었다. 당신은?", Visual: Q4Visual,
+    options: [
+      { label: "A", text: "장르, 분위기, 화수까지 분석해 맞춤 추천 리스트를 만들어준다.", axis: "N", val: 2 },
+      { label: "B", text: "'요즘 유행하는 거 봐봐'라며 인기작 하나만 추천한다.", axis: "S", val: 0 },
+      { label: "C", text: "내가 제일 좋아하는 작품을 강력히 밀어붙인다.", axis: "N", val: 1 },
+      { label: "D", text: "'뭐 좋아해?'라고 반문하며 대화로 이어간다.", axis: "S", val: 0 },
+    ] },
+  { num: 5, axis: "D/C", text: "좋아하는 성우나 아티스트의 오프라인 이벤트가 열렸다. 당신은?", Visual: Q5Visual,
+    options: [
+      { label: "A", text: "알림 설정해두고 티켓팅 시작 30분 전부터 대기한다.", axis: "D", val: 2 },
+      { label: "B", text: "가고 싶지만 줄 서고 대기하는 게 귀찮아서 고민한다.", axis: "C", val: 1 },
+      { label: "C", text: "온라인 중계가 있으면 집에서 본다.", axis: "C", val: 0 },
+      { label: "D", text: "같이 갈 동료를 모집해 단체 원정을 계획한다.", axis: "D", val: 1 },
+    ] },
+  { num: 6, axis: "M/L", text: "방 안에 굿즈와 피규어가 점점 늘어가고 있다. 당신의 생각은?", Visual: Q6Visual,
+    options: [
+      { label: "A", text: "이게 행복이다. 더 늘릴 계획을 세운다.", axis: "M", val: 2 },
+      { label: "B", text: "사진 찍고 SNS에 올리며 컬렉션을 뽐낸다.", axis: "M", val: 1 },
+      { label: "C", text: "정리하고 싶은데 손이 안 간다.", axis: "L", val: 1 },
+      { label: "D", text: "슬슬 미니멀리즘을 실천해야 할 것 같다.", axis: "L", val: 0 },
+    ] },
+  { num: 7, axis: "S/N", text: "새 시즌 첫 화를 봤는데 기대와 달랐다. 당신은?", Visual: Q7Visual,
+    options: [
+      { label: "A", text: "스태프 정보, 원작 비교 등을 찾아보며 이유를 분석한다.", axis: "N", val: 2 },
+      { label: "B", text: "'그럴 수도 있지, 계속 보다 보면 좋아지겠지' 생각한다.", axis: "S", val: 0 },
+      { label: "C", text: "커뮤니티에서 다른 팬들의 반응을 확인한다.", axis: "N", val: 1 },
+      { label: "D", text: "바로 드롭하고 다른 작품을 찾아본다.", axis: "S", val: 0 },
+    ] },
+  { num: 8, axis: "D/C", text: "덕질 관련 이야기를 모르는 사람에게 할 때 당신은?", Visual: Q8Visual,
+    options: [
+      { label: "A", text: "설명하다 보면 흥분해서 한 시간은 기본이다.", axis: "D", val: 2 },
+      { label: "B", text: "상대가 관심 있어 보이면 조금, 아니면 생략한다.", axis: "C", val: 1 },
+      { label: "C", text: "굳이 설명하지 않는다. 어차피 모를 것 같아서.", axis: "C", val: 0 },
+      { label: "D", text: "'입문하게 해주겠다'며 자료를 준비해온다.", axis: "D", val: 1 },
+    ] },
+  { num: 9, axis: "M/L", text: "최애 작품이 실망스러운 엔딩으로 끝났다. 당신은?", Visual: Q9Visual,
+    options: [
+      { label: "A", text: "이차창작이나 팬픽으로 내 머릿속의 엔딩을 완성한다.", axis: "M", val: 2 },
+      { label: "B", text: "한동안 멍하다가 다른 작품으로 넘어간다.", axis: "L", val: 1 },
+      { label: "C", text: "커뮤니티에서 실컷 떠들고 털어버린다.", axis: "M", val: 1 },
+      { label: "D", text: "엔딩은 아쉽지만 전체적인 여정을 기억하기로 한다.", axis: "L", val: 0 },
+    ] },
+  { num: 10, axis: "S/N", text: "처음 만난 사람이 같은 작품을 좋아한다는 걸 알게 됐다. 당신은?", Visual: Q10Visual,
+    options: [
+      { label: "A", text: "운명이다. 숨겨둔 덕력을 전부 꺼낸다.", axis: "N", val: 2 },
+      { label: "B", text: "공통 화제가 생겨 반갑지만 일단 천천히 탐색한다.", axis: "S", val: 0 },
+      { label: "C", text: "'혹시 OO도 알아?' 하며 레이더를 가동한다.", axis: "N", val: 1 },
+      { label: "D", text: "가볍게 공감하고 다른 얘기로 넘어간다.", axis: "S", val: 0 },
+    ] },
+  { num: 11, axis: "D/C", text: "좋아하는 캐릭터의 생일이 다가왔다. 당신은?", Visual: Q11Visual,
+    options: [
+      { label: "A", text: "카페 대관해 생일 카페를 열거나, 광고·서포트에 참여한다.", axis: "D", val: 2 },
+      { label: "B", text: "SNS에 축하 일러스트나 글을 올리며 함께 기념한다.", axis: "D", val: 1 },
+      { label: "C", text: "속으로 축하하고 굿즈를 하나 사며 조용히 챙긴다.", axis: "C", val: 1 },
+      { label: "D", text: "'아 오늘이었구나' 하고 마음속으로만 축하한다.", axis: "C", val: 0 },
+    ] },
+  { num: 12, axis: "M/L", text: "좋아하는 작품의 콜라보 카페·팝업스토어가 열렸다. 당신은?", Visual: Q12Visual,
+    options: [
+      { label: "A", text: "오픈런 한다. 메뉴 풀세트에 굿즈도 종류별로 쓸어담는다.", axis: "M", val: 2 },
+      { label: "B", text: "가서 분위기를 즐기고 마음에 드는 굿즈 한두 개만 산다.", axis: "L", val: 1 },
+      { label: "C", text: "인증샷용으로 음료 하나만 시키고 구경한다.", axis: "L", val: 0 },
+      { label: "D", text: "한정 굿즈만 노리고 가서 그것만 사 온다.", axis: "M", val: 1 },
+    ] },
+];
+
+// ─── 결과 유형 ───────────────────────────────────────────────
+
+const TYPES: Record<ResultCode, ResultInfo> = {
+  SDM: { code: "S · D · M", emoji: "🎪", badge: "인싸 컬렉터", badgeColor: "#D4537E", badgeBg: "#FBEAF0",
+    title: "축제형 수집가",
+    sub: "가볍게 즐기지만 일단 좋아하면 화끈하게 표현하는 타입. 분위기를 타고 굿즈를 지르고, 사람들과 함께 떠드는 걸 좋아해요. 덕질의 즐거움을 가장 잘 아는 인싸 덕후입니다.",
+    traits: ["취향은 가볍지만 표현은 화끈해요", "사람들과 함께하는 덕질을 즐겨요", "분위기 타면 지름신이 강림합니다"],
+    compat: "🤝 잘 맞는 유형: 분석형 전도사 (NDM)" },
+  SDL: { code: "S · D · L", emoji: "🎤", badge: "소셜 라이트", badgeColor: "#185FA5", badgeBg: "#E6F1FB",
+    title: "사교형 라이트 덕후",
+    sub: "덕질을 사교의 수단으로 활용하는 타입. 깊이 파고들진 않지만 사람들과 어울리며 즐기고, 소비는 절제하는 편이에요. 덕질이 일상을 풍요롭게 해주는 균형형입니다.",
+    traits: ["덕질로 사람들과 자연스럽게 어울려요", "깊이보다 분위기와 재미를 추구해요", "소비는 합리적으로 절제하는 편"],
+    compat: "🤝 잘 맞는 유형: 사교형 큐레이터 (NDL)" },
+  SCM: { code: "S · C · M", emoji: "🛍️", badge: "조용한 지름러", badgeColor: "#BA7517", badgeBg: "#FAEEDA",
+    title: "은둔형 컬렉터",
+    sub: "겉으로는 티 내지 않지만 굿즈는 차곡차곡 모으는 타입. 혼자만의 공간에서 조용히 덕질하며, 컬렉션이 곧 행복이에요. 의외의 반전 매력을 가진 숨은 덕후입니다.",
+    traits: ["겉으로 티 안 내는 반전 덕후", "혼자만의 공간에서 조용히 즐겨요", "굿즈 컬렉션에 진심입니다"],
+    compat: "🤝 잘 맞는 유형: 은둔형 분석가 (NCM)" },
+  SCL: { code: "S · C · L", emoji: "🌿", badge: "라이트 덕후", badgeColor: "#639922", badgeBg: "#EAF3DE",
+    title: "균형형 라이트 덕후",
+    sub: "좋아하는 건 분명하지만 일상과의 균형이 완벽한 타입. 과몰입하지 않고 조용히 취향을 즐기며, 소비도 절제해요. 가장 건강하고 편안한 덕질 라이프를 사는 사람입니다.",
+    traits: ["일상과 취미의 균형이 훌륭해요", "조용하고 절제된 덕질 스타일", "부담 없이 오래 즐기는 타입"],
+    compat: "🤝 잘 맞는 유형: 은둔형 컬렉터 (SCM)" },
+  NDM: { code: "N · D · M", emoji: "🔥", badge: "하드코어 오타쿠", badgeColor: "#534AB7", badgeBg: "#EEEDFE",
+    title: "최고급 하드코어 오타쿠",
+    sub: "분석력, 표현력, 소비력 모두 최고치. 덕질이 곧 정체성이고 라이프스타일인 타입이에요. 굿즈룸이 있거나 준비 중이고, 작품 분석은 거의 평론가 수준. 덕후계의 끝판왕입니다.",
+    traits: ["작품 분석이 전문가·평론가급이에요", "열정의 표현에 거침이 없습니다", "소비력과 헌신이 무한대에 수렴해요"],
+    compat: "🤝 잘 맞는 유형: 축제형 수집가 (SDM)" },
+  NDL: { code: "N · D · L", emoji: "📣", badge: "덕질 전도사", badgeColor: "#0F6E56", badgeBg: "#E1F5EE",
+    title: "분석형 전도사",
+    sub: "깊이 파고들고 적극적으로 알리지만 소비는 신중한 타입. 작품을 분석하고 사람들을 입문시키는 데 진심이에요. 지갑은 지키면서 덕질 생태계를 넓히는 전도사입니다.",
+    traits: ["작품을 깊이 파고들고 분석해요", "사람들을 입문시키는 데 진심입니다", "소비는 신중하게 핵심만 골라요"],
+    compat: "🤝 잘 맞는 유형: 사교형 라이트 덕후 (SDL)" },
+  NCM: { code: "N · C · M", emoji: "📚", badge: "심층 수집가", badgeColor: "#993C1D", badgeBg: "#FAECE7",
+    title: "은둔형 분석가",
+    sub: "혼자 깊이 파고들고 굿즈도 모으는 타입. 떠들썩하게 드러내진 않지만 작품에 대한 이해도와 컬렉션은 상당해요. 조용한 진성 덕후, 알수록 깊이가 느껴지는 사람입니다.",
+    traits: ["혼자 깊이 파고드는 진성 덕후", "말수는 적지만 이해도가 깊어요", "굿즈 컬렉션도 알차게 갖춰져 있어요"],
+    compat: "🤝 잘 맞는 유형: 조용한 지름러 (SCM)" },
+  NCL: { code: "N · C · L", emoji: "🔍", badge: "고독한 연구가", badgeColor: "#3C3489", badgeBg: "#EEEDFE",
+    title: "고독한 덕질 연구가",
+    sub: "깊이 파고들지만 조용하고 소비도 절제하는 타입. 작품을 학문처럼 탐구하고 혼자만의 만족을 추구해요. 화려하진 않지만 내공이 가장 단단한 덕후입니다.",
+    traits: ["작품을 학문처럼 깊게 탐구해요", "조용하고 절제된 진성 덕후", "화려함보다 내공으로 승부합니다"],
+    compat: "🤝 잘 맞는 유형: 균형형 라이트 덕후 (SCL)" },
+};
+
+const TIERS: Tier[] = [
+  { min: 0, max: 6, name: "일반인", desc: "아직 덕질보다 일상이 더 많은 단계예요." },
+  { min: 7, max: 12, name: "패션 오타쿠", desc: "취향은 생겼는데 본격적으로 빠지진 않은 단계예요." },
+  { min: 13, max: 17, name: "오타쿠", desc: "덕질이 삶의 일부가 된 진짜 오타쿠 단계예요." },
+  { min: 18, max: 99, name: "찐", desc: "덕질이 곧 정체성. 부정할 수 없는 찐 오타쿠입니다." },
+];
+
+// ─── 결과 계산 ───────────────────────────────────────────────
+
+function calcResult(answers: (number | null)[]): { type: ResultInfo; scores: ScoreData } {
+  let sn = 0, dc = 0, ml = 0, snMax = 0, dcMax = 0, mlMax = 0, total = 0;
+  answers.forEach((ans, qi) => {
+    if (ans === null) return;
+    const q = QUESTIONS[qi];
+    const opt = q.options[ans];
+    total += opt.val;
+    if (q.axis === "S/N") { snMax += 2; if (opt.axis === "N") sn += opt.val; }
+    if (q.axis === "D/C") { dcMax += 2; if (opt.axis === "D") dc += opt.val; }
+    if (q.axis === "M/L") { mlMax += 2; if (opt.axis === "M") ml += opt.val; }
+  });
+  const snT = sn / snMax >= 0.5 ? "N" : "S";
+  const dcT = dc / dcMax >= 0.5 ? "D" : "C";
+  const mlT = ml / mlMax >= 0.5 ? "M" : "L";
+  const tier = TIERS.find((x) => total >= x.min && total <= x.max) ?? TIERS[TIERS.length - 1];
+  return { type: TYPES[(snT + dcT + mlT) as ResultCode], scores: { sn, snMax, dc, dcMax, ml, mlMax, total, snT, dcT, mlT, tier } };
+}
+
+// ─── 메인 페이지 ─────────────────────────────────────────────
 
 export default function OtakuTypePage() {
   const [phase, setPhase] = useState<"intro" | "quiz" | "result">("intro");
-  const [currentQ, setCurrentQ] = useState(0);
-  const [scores, setScores] = useState<Record<ResultType, number>>(EMPTY_SCORES);
-  const [selected, setSelected] = useState<number | null>(null);
+  const [cur, setCur] = useState(0);
+  const [answers, setAnswers] = useState<(number | null)[]>(new Array(QUESTIONS.length).fill(null));
 
-  const handleSelect = (index: number, type: ResultType) => {
-    if (selected !== null) return;
-    setSelected(index);
-    setTimeout(() => {
-      const next = { ...scores, [type]: scores[type] + 1 };
-      setScores(next);
-      if (currentQ + 1 >= QUESTIONS.length) {
-        setPhase("result");
-      } else {
-        setCurrentQ((q) => q + 1);
-        setSelected(null);
-      }
-    }, 350);
-  };
+  const select = (idx: number) =>
+    setAnswers((prev) => { const next = [...prev]; next[cur] = idx; return next; });
 
-  const reset = () => {
-    setPhase("intro");
-    setCurrentQ(0);
-    setScores(EMPTY_SCORES);
-    setSelected(null);
-  };
+  const reset = () => { setPhase("intro"); setCur(0); setAnswers(new Array(QUESTIONS.length).fill(null)); };
 
+  // ── 인트로 ──
   if (phase === "intro") {
     return (
-      <main className="mx-auto flex max-w-xl flex-col gap-6 py-8">
-        <div className="border border-dashed border-gray-500 bg-white p-6 text-center">
-          <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Otaku Type Test</p>
-          <div className="mt-4 text-5xl">🦆</div>
-          <h1 className="mt-3 text-2xl font-black text-gray-900">나는 어떤 오타쿠인가</h1>
-          <p className="mt-3 text-sm leading-6 text-gray-600">
-            10문항 · 5지선다 · 약 1분
-            <br />
-            당신의 진짜 오타쿠 성향을 정밀 분석합니다.
+      <main className="mx-auto flex max-w-[560px] flex-col gap-6 py-8 px-4">
+        <div className="text-center">
+          <h1 className="text-[22px] font-medium mb-1.5">🎌 오타쿠 레벨 테스트</h1>
+          <p className="text-sm text-gray-500">12문항으로 알아보는 8가지 덕후 유형</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-6 flex flex-col gap-4">
+          <p className="text-sm text-gray-600 leading-relaxed">
+            덕질 성향을 세 가지 축으로 분석해 8가지 유형 중 하나로 진단합니다.<br />솔직하게 답할수록 정확해요!
           </p>
-          <p className="mt-1 text-xs text-gray-400">(전혀 정밀하지 않음)</p>
-          <button
-            onClick={() => setPhase("quiz")}
-            className="mt-6 inline-flex w-full items-center justify-center border border-dashed border-gray-900 bg-gray-900 px-6 py-3 text-sm font-bold text-white hover:bg-gray-800"
-          >
+          <div className="flex flex-col gap-2 text-xs text-gray-500">
+            {[
+              { key: "S/N", desc: "몰입 성향 — 가볍게 즐기기 vs 깊이 파고들기" },
+              { key: "D/C", desc: "표현 성향 — 적극적 표현 vs 조용히 혼자" },
+              { key: "M/L", desc: "소비 성향 — 아낌없이 지름 vs 절제와 선택" },
+            ].map((a) => (
+              <div key={a.key} className="flex gap-2 items-start">
+                <span className="font-bold" style={{ color: "#7F77DD" }}>{a.key}</span>
+                <span>{a.desc}</span>
+              </div>
+            ))}
+          </div>
+          <button onClick={() => setPhase("quiz")} className="mt-2 w-full py-3 rounded-lg text-sm font-medium text-white" style={{ background: "#7F77DD" }}>
             테스트 시작하기 →
           </button>
         </div>
-        <div className="flex flex-col gap-2">
-          {(Object.entries(RESULTS) as [ResultType, (typeof RESULTS)[ResultType]][]).map(
-            ([, r]) => (
-              <div
-                key={r.subtitle}
-                className="flex items-center gap-3 border border-dashed border-gray-200 bg-gray-50 px-4 py-2.5"
-              >
-                <span className="text-2xl">{r.emoji}</span>
-                <div className="min-w-0">
-                  <span className="block text-[10px] font-bold text-gray-400">{r.subtitle}</span>
-                  <span className="block text-xs font-bold text-gray-700">{r.name}</span>
-                </div>
+        <div className="grid grid-cols-2 gap-2">
+          {(Object.values(TYPES) as ResultInfo[]).map((t) => (
+            <div key={t.code} className="flex items-center gap-2 border border-gray-100 rounded-lg px-3 py-2 bg-gray-50">
+              <span className="text-xl">{t.emoji}</span>
+              <div>
+                <div className="text-[10px] font-bold" style={{ color: t.badgeColor }}>{t.badge}</div>
+                <div className="text-[11px] text-gray-700 font-medium leading-tight">{t.title}</div>
               </div>
-            ),
-          )}
+            </div>
+          ))}
         </div>
       </main>
     );
   }
 
+  // ── 결과 ──
   if (phase === "result") {
-    const topType = getTopResult(scores);
-    const result = RESULTS[topType];
+    const { type: t, scores: d } = calcResult(answers);
+    const pct = (v: number, m: number) => Math.round((v / m) * 100);
+    const snPct = pct(d.sn, d.snMax);
+    const dcPct = pct(d.dc, d.dcMax);
+    const mlPct = pct(d.ml, d.mlMax);
+
+    const AxisBar = ({ lo, hi, name, value, isHi, color }: { lo: string; hi: string; name: string; value: number; isHi: boolean; color: string }) => (
+      <div className="rounded-lg p-3 px-3.5" style={{ background: "#f1efe8" }}>
+        <div className="flex justify-between text-xs text-gray-500 mb-1.5">
+          <span className="font-medium" style={!isHi ? { color } : {}}>{lo}</span>
+          <span className="font-medium" style={isHi ? { color } : {}}>{hi}</span>
+        </div>
+        <div className="h-2 rounded bg-white border border-gray-200 overflow-hidden">
+          <div className="h-full rounded transition-all duration-500" style={{ width: `${value}%`, background: color }} />
+        </div>
+        <div className="text-[11px] text-gray-400 mt-1.5 text-center">{name} · {value}%</div>
+      </div>
+    );
 
     return (
-      <main className="mx-auto flex max-w-xl flex-col gap-6 py-8">
-        <div className="overflow-hidden border border-dashed border-gray-500 bg-white">
-          <div style={{ backgroundColor: result.color }}>
-            <TypeIllustration type={topType} />
-            <div className="flex justify-center pb-4 -mt-1">
-              <span className="border border-dashed border-gray-400 bg-white/70 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-gray-600">
-                {result.subtitle}
-              </span>
-            </div>
-          </div>
-          <div className="p-6">
-            <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Your Otaku Type</p>
-            <div className="mt-3 text-center">
-              <h2 className="text-xl font-black text-gray-900">{result.name}</h2>
-            </div>
-            <p className="mt-4 border-t border-dashed border-gray-200 pt-4 text-sm leading-7 text-gray-700">
-              {result.description}
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {result.traits.map((trait) => (
-                <span
-                  key={trait}
-                  className="border border-dashed border-gray-300 bg-gray-50 px-2 py-1 text-xs font-bold text-gray-600"
-                >
-                  #{trait}
-                </span>
-              ))}
-            </div>
-            <div className="mt-5 border-t border-dashed border-gray-200 pt-4">
-              <p className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">
-                이런 애니 어때요?
-              </p>
-              <div className="flex flex-col gap-2">
-                {result.animes.map((anime) => (
-                  <div
-                    key={anime.title}
-                    className="border border-dashed border-gray-200 bg-gray-50 px-3 py-2.5"
-                  >
-                    <p className="text-xs font-black text-gray-900">{anime.title}</p>
-                    <p className="mt-0.5 text-xs leading-5 text-gray-500">{anime.note}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+      <main className="mx-auto flex max-w-[560px] flex-col gap-6 py-8 px-4">
+        <div className="text-center">
+          <h1 className="text-[22px] font-medium mb-1.5">🎌 오타쿠 레벨 테스트</h1>
+          <p className="text-sm text-gray-500">진단이 완료됐습니다!</p>
         </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-6 text-center">
+          <div className="text-[56px] leading-none mb-3">{t.emoji}</div>
+          <div className="text-[13px] font-medium mb-2" style={{ color: "#7F77DD", letterSpacing: "0.15em" }}>{t.code}</div>
+          <span className="inline-block px-3.5 py-1 rounded-lg text-xs font-medium mb-3" style={{ background: t.badgeBg, color: t.badgeColor }}>{t.badge}</span>
+          <div className="text-[22px] font-medium mb-2">{t.title}</div>
+          <div className="text-sm text-gray-500 leading-7 mb-6 text-left">{t.sub}</div>
 
-        <div className="flex gap-3">
-          <button
-            onClick={reset}
-            className="flex-1 border border-dashed border-gray-500 bg-white px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-gray-50"
-          >
-            다시하기
+          <div className="grid grid-cols-3 gap-2.5 mb-6">
+            {[{ v: `${d.total}/24`, l: "덕력 점수" }, { v: d.tier.name.replace(" 등급", ""), l: "등급" }, { v: t.code, l: "유형 코드" }].map((s) => (
+              <div key={s.l} className="rounded-lg p-3 text-center" style={{ background: "#f1efe8" }}>
+                <div className="text-[17px] font-medium" style={{ color: "#7F77DD" }}>{s.v}</div>
+                <div className="text-xs text-gray-500 mt-1">{s.l}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-col gap-3 mb-6 text-left">
+            <AxisBar lo="가볍게 즐김 (S)" hi="파고들기 (N)" name="몰입 성향" value={snPct} isHi={d.snT === "N"} color="#7F77DD" />
+            <AxisBar lo="조용히 (C)" hi="적극적 (D)" name="표현 성향" value={dcPct} isHi={d.dcT === "D"} color="#1D9E75" />
+            <AxisBar lo="절제 (L)" hi="과감한 소비 (M)" name="소비 성향" value={mlPct} isHi={d.mlT === "M"} color="#D4537E" />
+          </div>
+
+          <div className="text-left border-t border-gray-100 pt-3">
+            {t.traits.map((tr) => (
+              <div key={tr} className="flex gap-2.5 py-2 border-b border-gray-100 text-sm text-gray-500 last:border-b-0">
+                <span className="font-bold flex-shrink-0 mt-0.5" style={{ color: "#7F77DD" }}>✓</span>
+                <span>{tr}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3.5 p-3 rounded-lg text-sm text-left" style={{ background: "#EEEDFE", color: "#3C3489" }}>{t.compat}</div>
+          <div className="mt-3 p-3 rounded-lg text-sm text-left bg-gray-50 text-gray-500">
+            <strong>{d.tier.name}</strong> — {d.tier.desc}
+          </div>
+          <button onClick={reset} className="mt-5 px-7 py-2.5 border border-gray-300 rounded-lg bg-white text-sm text-gray-700 hover:bg-gray-50">
+            🔄 다시 테스트하기
           </button>
-          <Link
-            href="/play/oshi-card"
-            className="flex-1 border border-dashed border-gray-900 bg-gray-900 px-4 py-2.5 text-center text-xs font-bold text-white hover:bg-gray-800"
-          >
-            오시 카드 만들기 →
-          </Link>
         </div>
+        <Link href="/play/oshi-card" className="block text-center border border-gray-200 rounded-xl bg-white px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50">
+          오시 카드 만들기 →
+        </Link>
       </main>
     );
   }
 
-  const question = QUESTIONS[currentQ];
-  const progress = (currentQ / QUESTIONS.length) * 100;
+  // ── 퀴즈 ──
+  const q = QUESTIONS[cur];
+  const { Visual } = q;
+  const progress = Math.round((cur / QUESTIONS.length) * 100);
 
   return (
-    <main className="mx-auto flex max-w-xl flex-col gap-5 py-8">
-      <div className="flex items-center gap-3">
-        <div className="h-1.5 flex-1 overflow-hidden bg-gray-200">
-          <div
-            className="h-full bg-gray-900 transition-all duration-500"
-            style={{ width: `${progress}%` }}
-          />
+    <main className="mx-auto flex max-w-[560px] flex-col gap-6 py-8 px-4">
+      <div className="text-center">
+        <h1 className="text-[22px] font-medium mb-1.5">🎌 오타쿠 레벨 테스트</h1>
+        <p className="text-sm text-gray-500">12문항으로 알아보는 8가지 덕후 유형</p>
+      </div>
+
+      <div>
+        <div className="h-1.5 bg-gray-100 rounded overflow-hidden">
+          <div className="h-full rounded transition-all duration-300" style={{ width: `${progress}%`, background: "#7F77DD" }} />
         </div>
-        <span className="shrink-0 text-xs font-bold tabular-nums text-gray-500">
-          {currentQ + 1} / {QUESTIONS.length}
-        </span>
+        <div className="text-xs text-gray-400 mt-1.5 text-right">{cur + 1} / {QUESTIONS.length}</div>
       </div>
 
-      <div key={`q-${currentQ}`} className="border border-dashed border-gray-500 bg-white p-5">
-        <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Q{currentQ + 1}</p>
-        <h2 className="mt-2 text-lg font-black leading-7 text-gray-900">{question.q}</h2>
-      </div>
+      <div className="bg-white border border-gray-200 rounded-xl p-6">
+        <div className="w-full rounded-lg mb-5 overflow-hidden leading-none">
+          <Visual />
+        </div>
+        <div className="text-xs font-medium mb-2" style={{ color: "#7F77DD", letterSpacing: "0.05em" }}>
+          Q{q.num} · {q.axis} 유형 측정
+        </div>
+        <div className="text-base font-medium leading-relaxed mb-5 text-gray-800">{q.text}</div>
 
-      <div key={`c-${currentQ}`} className="flex flex-col gap-2">
-        {question.choices.map((choice, index) => (
-          <button
-            key={index}
-            onClick={() => handleSelect(index, choice.type)}
-            disabled={selected !== null}
-            className={`flex items-center gap-3 border border-dashed px-4 py-3 text-left text-sm font-medium transition-colors disabled:cursor-default ${
-              selected === index
-                ? "border-gray-900 bg-gray-900 text-white"
-                : selected !== null
-                  ? "border-gray-200 bg-gray-50 text-gray-400"
-                  : "border-gray-400 bg-white text-gray-800 hover:border-gray-700 hover:bg-gray-50"
-            }`}
-          >
-            <span
-              className={`shrink-0 text-xs font-black ${selected === index ? "text-gray-300" : "text-gray-400"}`}
+        <div className="flex flex-col gap-2.5">
+          {q.options.map((opt, i) => (
+            <button
+              key={i}
+              onClick={() => select(i)}
+              className="text-left px-4 py-3 rounded-lg border text-sm leading-relaxed transition-all"
+              style={answers[cur] === i
+                ? { borderColor: "#7F77DD", background: "#EEEDFE", color: "#3C3489" }
+                : { borderColor: "rgba(0,0,0,0.12)", background: "#fff", color: "#2c2c2a" }}
             >
-              {LABELS[index]}
-            </span>
-            {choice.text}
+              <span className="font-medium mr-2" style={{ color: "#7F77DD" }}>{opt.label}</span>
+              {opt.text}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex justify-between items-center mt-5">
+          <button
+            onClick={() => setCur((c) => Math.max(0, c - 1))}
+            disabled={cur === 0}
+            className="px-5 py-2.5 border rounded-lg text-sm bg-white text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50"
+            style={{ borderColor: "rgba(0,0,0,0.22)" }}
+          >
+            ← 이전
           </button>
-        ))}
+          <button
+            onClick={() => { if (cur < QUESTIONS.length - 1) { setCur((c) => c + 1); } else { setPhase("result"); } }}
+            disabled={answers[cur] === null}
+            className="px-5 py-2.5 border rounded-lg text-sm font-medium text-white disabled:opacity-30 disabled:cursor-not-allowed"
+            style={{ background: "#7F77DD", borderColor: "#7F77DD" }}
+          >
+            {cur === QUESTIONS.length - 1 ? "결과 보기 →" : "다음 →"}
+          </button>
+        </div>
       </div>
     </main>
   );
