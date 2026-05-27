@@ -8,8 +8,9 @@
 - **Cursor Supabase MCP**가 연결되어 있으면, 원격 프로젝트 DDL은 MCP `apply_migration`(권장) 또는 `execute_sql`로 적용하고, SQL 본문은 저장소 마이그레이션 파일과 동일하게 맞춘다. 자세한 절차는 [plans/data-model.md](./plans/data-model.md) §0.
 - 권한 검사는 UI가 아니라 DB(RLS)가 최종 기준이다. 클라이언트 체크만으로 권한을 보장하지 않는다.
 - 관리자 권한 기준은 단일화한다.
-  - 기본 기준: JWT role(`app_metadata.role` 또는 `user_metadata.role`)이 `ADMIN`
-  - DB 정책은 `private.is_admin()` 같은 공통 함수로 일관되게 사용한다.
+  - 기본 기준: `public.profiles.role = 'ADMIN'` (앱: `lib/supabase/admin.ts`, 클라이언트: `useIsAdmin()`)
+  - DB RLS: `public.is_admin()` (동일하게 `profiles.role` 조회). 레거시 `jwt_is_admin()`도 동일 함수로 위임.
+  - 유저 관리(`/admin/users`)에서 `profiles.role` 변경 시 즉시 반영. 기존 JWT 메타데이터 어드민은 `db/2026-05-27-unify-admin-role.sql`로 1회 동기화.
 - 사용자 식별 FK는 기본적으로 `auth.users(id)`를 기준으로 잡는다.
   - `profiles`는 표시/프로필 정보 용도로 사용하고, 트랜잭션 테이블의 강제 FK를 이중으로 물지 않는다.
 - `public` 스키마 테이블은 노출 가능성을 전제로 RLS를 반드시 켠다.

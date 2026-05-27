@@ -37,7 +37,7 @@ Supabase Auth가 자동으로 관리하는 사용자 테이블입니다.
 
 ### RLS 정책
 - `select`: 누구나 (`using (true)`)
-- `insert` / `update` / `delete`: 로그인 사용자 중 JWT 역할이 `ADMIN`인 경우만 (`public.is_admin()` — `lib/supabase/admin.ts` 와 동일 기준)
+- `insert` / `update` / `delete`: `public.is_admin()` (`profiles.role = 'ADMIN'`)
 - 마이그레이션: `docs/migrations/2026-05-12-boards-rls-admin.sql`
 
 ---
@@ -110,7 +110,7 @@ Supabase Auth가 자동으로 관리하는 사용자 테이블입니다.
 - `created_by` `uuid` NULL → `auth.users(id)`
 - `created_at` `timestamptz` NOT NULL DEFAULT now()
 
-RLS: 전역 조회; 일반 사용자는 비공식 태그만 본인 소유로 생성·수정·삭제; 공식 태그·전역 편집은 `public.jwt_is_admin()` (JWT `ADMIN` 역할).
+RLS: 전역 조회; 일반 사용자는 비공식 태그만 본인 소유로 생성·수정·삭제; 공식 태그·전역 편집은 `public.is_admin()` (`profiles.role`).
 
 ### `public.tag_aliases`
 
@@ -131,9 +131,9 @@ RLS: 전역 조회; 삽입·수정·삭제는 관리자 또는 해당 비공식 
 
 RLS: 전역 조회; 글 작성자(`posts.author_id = auth.uid()`) 또는 관리자만 행 삽입·수정·삭제. **익명 글**은 클라이언트에서 태그를 붙이지 않음(작성자 ID 없음으로 RLS 불가).
 
-### `public.jwt_is_admin()`
+### `public.is_admin()` / `public.jwt_is_admin()`
 
-JWT 메타데이터 역할이 `ADMIN`인지 여부. 태그 RLS에서 사용.
+로그인 사용자의 `profiles.role`이 `ADMIN`인지 여부. `jwt_is_admin()`은 동일 로직으로 위임(레거시 정책 호환). 앱 `lib/supabase/admin.ts`·`useIsAdmin()`과 동일 기준.
 
 마이그레이션 파일: `docs/migrations/2026-05-13_experiment_a3_tag_system.sql` (동일 본문 `db/experiment/a3-tag-system.sql`).
 
@@ -280,6 +280,7 @@ Phase 2.3 캐릭터-커뮤니티 연결의 댓글 시스템입니다.
 - `avatar_url` `text` (아바타 이미지 URL)
 - `bio` `text` (자기소개)
 - `nickname_type` `text` NOT NULL 기본값 'NORMAL' ('NORMAL' | 'FIXED')
+- `role` `text` NOT NULL 기본값 `'USER'` (`'USER'` | `'ADMIN'`) — 관리자 권한 단일 기준
 - `updated_at` `timestamptz` 기본값 `now()`
 
 ### 트리거

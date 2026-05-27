@@ -3,17 +3,15 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { fetchActiveMissions, type DailyMission, type MissionActionType } from "@/lib/community/missions";
-import { isAdminUser } from "@/lib/supabase/admin";
 import { supabase } from "@/lib/supabase/client";
-import { useAuthUser } from "@/lib/supabase/useAuthUser";
+import { useIsAdmin } from "@/lib/supabase/useAuthUser";
 
 const ACTION_TYPE_OPTIONS: MissionActionType[] = ["attendance", "comment", "reaction", "post"];
 
 type AdminMissionRow = DailyMission;
 
 export default function AdminMissionsPage() {
-  const authUser = useAuthUser();
-  const isAdmin = isAdminUser(authUser);
+  const isAdmin = useIsAdmin();
   const [missions, setMissions] = useState<AdminMissionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -58,8 +56,8 @@ export default function AdminMissionsPage() {
   }, []);
 
   useEffect(() => {
-    if (!isAdmin) return;
-    load();
+    if (isAdmin !== true) return;
+    void load();
   }, [isAdmin, load]);
 
   async function toggleActive(mission: AdminMissionRow) {
@@ -116,22 +114,10 @@ export default function AdminMissionsPage() {
     await load();
   }
 
-  if (!authUser) {
+  if (isAdmin === undefined) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-8">
-        <h1 className="text-xl font-bold">미션 관리</h1>
-        <p className="mt-4 text-sm text-gray-500">
-          로그인 후 운영자 권한으로 접근하세요.
-        </p>
-      </main>
-    );
-  }
-
-  if (!isAdmin) {
-    return (
-      <main className="mx-auto max-w-3xl px-4 py-8">
-        <h1 className="text-xl font-bold">미션 관리</h1>
-        <p className="mt-4 text-sm text-gray-500">운영자 권한이 필요해요.</p>
+        <p className="text-sm text-gray-500">로딩 중...</p>
       </main>
     );
   }

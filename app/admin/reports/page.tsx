@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { isAdminUser } from "@/lib/supabase/admin";
 import { supabase } from "@/lib/supabase/client";
-import { useAuthUser } from "@/lib/supabase/useAuthUser";
+import { useIsAdmin } from "@/lib/supabase/useAuthUser";
 import { Report } from "@/types/community";
 
 interface TargetContent {
@@ -15,11 +14,10 @@ interface TargetContent {
 }
 
 export default function AdminReportsPage() {
-  const authUser = useAuthUser();
+  const isAdmin = useIsAdmin();
   const [reports, setReports] = useState<Report[]>([]);
   const [targetContents, setTargetContents] = useState<Record<string, TargetContent>>({});
   const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
 
   const fetchReports = useCallback(async () => {
     setLoading(true);
@@ -75,33 +73,12 @@ export default function AdminReportsPage() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-
-    const checkAdmin = async () => {
-      if (authUser === undefined) return;
-
-      if (!authUser) {
-        setIsAdmin(false);
-        setLoading(false);
-        return;
-      }
-
-      if (cancelled) return;
-      if (isAdminUser(authUser)) {
-        setIsAdmin(true);
-        await fetchReports();
-      } else {
-        setIsAdmin(false);
-        setLoading(false);
-      }
-    };
-
-    void checkAdmin();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [authUser, fetchReports]);
+    if (isAdmin !== true) {
+      if (isAdmin === false) setLoading(false);
+      return;
+    }
+    void fetchReports();
+  }, [isAdmin, fetchReports]);
 
   const updateReportStatus = async (reportId: string, status: Report["status"]) => {
     const { error } = await supabase
@@ -135,7 +112,7 @@ export default function AdminReportsPage() {
     }
   };
 
-  if (loading) return <main className="p-6">로딩 중...</main>;
+  if (loading || isAdmin === undefined) return <main className="p-6">로딩 중...</main>;
 
   if (!isAdmin) {
     return (

@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { isAdminUser } from "@/lib/supabase/admin";
+import { isAdminUserId } from "@/lib/supabase/admin";
 import { normalizeCours } from "@/lib/otaku/cours";
 import {
   buildDetailEntries,
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
   if (userError || !userData.user) {
     return NextResponse.json({ error: "로그인 정보를 확인할 수 없습니다." }, { status: 401 });
   }
-  if (!isAdminUser(userData.user)) {
+  if (!(await isAdminUserId(supabase, userData.user.id))) {
     return NextResponse.json({ error: "관리자만 실행할 수 있습니다." }, { status: 403 });
   }
 

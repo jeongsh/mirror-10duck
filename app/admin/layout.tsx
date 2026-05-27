@@ -2,17 +2,17 @@
 
 import Link from "next/link";
 import { ReactNode } from "react";
-import { isAdminUser } from "@/lib/supabase/admin";
-import { useAuthUser } from "@/lib/supabase/useAuthUser";
+import { useAuthUser, useIsAdmin } from "@/lib/supabase/useAuthUser";
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const authUser = useAuthUser();
+  const isAdmin = useIsAdmin();
 
-  if (authUser === undefined) {
+  if (authUser === undefined || isAdmin === undefined) {
     return <main className="p-6">로딩 중...</main>;
   }
 
-  if (!isAdminUser(authUser)) {
+  if (!isAdmin) {
     return (
       <main className="flex min-h-[400px] flex-col items-center justify-center gap-4 p-6">
         <h1 className="text-2xl font-bold text-red-600">접근 권한 없음</h1>
@@ -70,6 +70,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             className="rounded border border-transparent p-2 transition-colors hover:border-gray-300 hover:bg-gray-100"
           >
             뱃지 관리
+          </Link>
+          <Link
+            href="/admin/users"
+            className="rounded border border-transparent p-2 transition-colors hover:border-gray-300 hover:bg-gray-100"
+          >
+            유저 관리
           </Link>
         </nav>
       </aside>

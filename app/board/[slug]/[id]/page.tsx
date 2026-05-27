@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
-import { useAuthUser } from "@/lib/supabase/useAuthUser";
+import { useAuthUser, useIsAdmin } from "@/lib/supabase/useAuthUser";
 import { CommunityPost, Board, postAggregateDefaults } from "@/types/community";
 import RichContent from "@/components/stickers/RichContent";
 import ReactionBar from "@/components/community/ReactionBar";
@@ -14,7 +14,6 @@ import IdentityBadge from "@/components/community/IdentityBadge";
 import { createNotification } from "@/lib/community/notifications";
 import { formatIp } from "@/lib/utils/formatIp";
 import AuthorProfileCard from "@/components/community/AuthorProfileCard";
-import { isAdminUser } from "@/lib/supabase/admin";
 import { splitFeedShareHeader } from "@/lib/community/feedContentDisplay";
 import UserActionModal from "@/components/community/UserActionModal";
 import { normalizeBoardSlug } from "@/lib/community/boardSlug";
@@ -30,6 +29,7 @@ export default function BoardPostDetailPage() {
   const slug = normalizeBoardSlug(rawSlugParam);
   const postId = params.id as string;
   const authUser = useAuthUser();
+  const isAdmin = useIsAdmin();
 
   const [post, setPost] = useState<CommunityPost | null>(null);
   const [board, setBoard] = useState<Board | null>(null);
@@ -51,17 +51,17 @@ export default function BoardPostDetailPage() {
       return;
     }
     const next = data as CommunityPost;
-    if ((next.status ?? "NORMAL") === "HIDDEN" && !isAdminUser(authUser ?? undefined)) {
+    if ((next.status ?? "NORMAL") === "HIDDEN" && !isAdmin) {
       setPost(null);
       setMessage("이 글은 숨김 처리되었거나 존재하지 않습니다.");
       return;
     }
     setPost(next);
-  }, [postId, authUser]);
+  }, [postId, isAdmin]);
 
   useEffect(() => {
     const fetchData = async () => {
-      if (authUser === undefined) return;
+      if (authUser === undefined || isAdmin === undefined) return;
 
       setLoading(true);
       setMessage("");
@@ -90,7 +90,7 @@ export default function BoardPostDetailPage() {
       } else {
         const postData = postResponse.data as CommunityPost;
         const hidden =
-          (postData.status ?? "NORMAL") === "HIDDEN" && !isAdminUser(authUser ?? undefined);
+          (postData.status ?? "NORMAL") === "HIDDEN" && !isAdmin;
         if (hidden) {
           setPost(null);
           setMessage("이 글은 숨김 처리되었거나 존재하지 않습니다.");
@@ -140,7 +140,7 @@ export default function BoardPostDetailPage() {
     };
 
     if (postId && (slug || rawSlugParam.trim())) fetchData();
-  }, [authUser, postId, slug, rawSlugParam]);
+  }, [authUser, isAdmin, postId, slug, rawSlugParam]);
 
   const canEdit = useMemo(() => {
     if (!post || !userId) return false;
