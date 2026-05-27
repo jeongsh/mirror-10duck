@@ -7,8 +7,8 @@ import {
   OFFICIAL_CATALOG_STATUS_OPTIONS,
   OFFICIAL_WORK_CATEGORY_OPTIONS,
   normalizeOfficialSlug,
+  splitList,
 } from "@/lib/official/catalog";
-import { uploadOfficialCatalogImage } from "@/lib/official/storage";
 import type {
   OfficialCatalogStatus,
   OfficialWorkCategory,
@@ -19,32 +19,24 @@ export default function CreateOfficialWorkPage() {
   const [slug, setSlug] = useState("");
   const [title, setTitle] = useState("");
   const [originalTitle, setOriginalTitle] = useState("");
+  const [aliases, setAliases] = useState("");
   const [category, setCategory] = useState<OfficialWorkCategory>("anime");
+  const [genres, setGenres] = useState("");
+  const [ageRating, setAgeRating] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [season, setSeason] = useState("");
+  const [episodeCount, setEpisodeCount] = useState("");
+  const [studios, setStudios] = useState("");
+  const [director, setDirector] = useState("");
+  const [originalAuthor, setOriginalAuthor] = useState("");
+  const [anilistId, setAnilistId] = useState("");
   const [synopsis, setSynopsis] = useState("");
-  const [coverImageUrl, setCoverImageUrl] = useState("");
   const [status, setStatus] = useState<OfficialCatalogStatus>("DRAFT");
   const [sortOrder, setSortOrder] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [uploadingImage, setUploadingImage] = useState(false);
 
-  const normalizedSlug = normalizeOfficialSlug(slug);
-
-  const handleImageUpload = async (file: File | null) => {
-    if (!file) return;
-    try {
-      setUploadingImage(true);
-      const publicUrl = await uploadOfficialCatalogImage(
-        "works",
-        normalizedSlug || title || "draft-work",
-        file,
-      );
-      setCoverImageUrl(publicUrl);
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "이미지 업로드 실패");
-    } finally {
-      setUploadingImage(false);
-    }
-  };
+  const normalizedSlug = normalizeOfficialSlug(slug || title);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -60,9 +52,20 @@ export default function CreateOfficialWorkPage() {
         slug: normalizedSlug,
         title: title.trim(),
         original_title: originalTitle.trim() || null,
+        aliases: splitList(aliases),
         category,
+        genres: splitList(genres),
+        age_rating: ageRating.trim() || null,
+        start_date: startDate || null,
+        end_date: endDate || null,
+        season: season.trim() || null,
+        episode_count: episodeCount ? Number(episodeCount) : null,
+        studios: splitList(studios),
+        director: director.trim() || null,
+        original_author: originalAuthor.trim() || null,
+        anilist_id: anilistId ? Number(anilistId) : null,
         synopsis: synopsis.trim(),
-        cover_image_url: coverImageUrl.trim() || null,
+        cover_image_url: null,
         status,
         sort_order: sortOrder,
       })
@@ -79,69 +82,163 @@ export default function CreateOfficialWorkPage() {
   };
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6">
+    <div className="mx-auto flex max-w-4xl flex-col gap-6">
       <div className="border-b border-dashed border-gray-500 pb-4">
-        <h2 className="text-xl font-bold">공식 작품 추가</h2>
+        <h2 className="text-xl font-bold">작품 추가</h2>
         <p className="mt-1 text-sm text-gray-600">
-          온보딩과 작품 허브에서 선택할 수 있는 공식 작품을 추가합니다.
+          온보딩과 작품 허브에서 선택할 수 있는 작품 정보를 등록합니다. 이미지는 상세 화면에서 직접 넣으면 됩니다.
         </p>
       </div>
 
       <form
         onSubmit={handleSubmit}
-        className="flex flex-col gap-4 rounded border border-dashed border-gray-500 bg-white/70 p-6"
+        className="flex flex-col gap-6 rounded border border-dashed border-gray-500 bg-white/70 p-6"
       >
-        <label className="flex flex-col gap-1">
-          <span className="text-sm font-semibold">슬러그 *</span>
-          <input
-            value={slug}
-            onChange={(event) => setSlug(event.target.value)}
-            placeholder="ex) one-piece"
-            className="rounded border p-2 focus:border-black focus:outline-none"
-            required
-          />
-          {normalizedSlug ? (
-            <p className="text-xs text-gray-600">미리보기: /works/{normalizedSlug}</p>
-          ) : null}
-        </label>
-
-        <label className="flex flex-col gap-1">
-          <span className="text-sm font-semibold">작품명 *</span>
-          <input
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            className="rounded border p-2 focus:border-black focus:outline-none"
-            required
-          />
-        </label>
-
-        <label className="flex flex-col gap-1">
-          <span className="text-sm font-semibold">원제/별칭</span>
-          <input
-            value={originalTitle}
-            onChange={(event) => setOriginalTitle(event.target.value)}
-            className="rounded border p-2 focus:border-black focus:outline-none"
-          />
-        </label>
-
-        <div className="grid gap-4 sm:grid-cols-3">
+        <section className="grid gap-4 md:grid-cols-2">
+          <h3 className="md:col-span-2 text-sm font-bold uppercase tracking-widest text-gray-500">기본</h3>
           <label className="flex flex-col gap-1">
-            <span className="text-sm font-semibold">분류</span>
-            <select
-              value={category}
-              onChange={(event) =>
-                setCategory(event.target.value as OfficialWorkCategory)
-              }
-              className="rounded border border-gray-300 bg-white p-2 focus:border-black focus:outline-none"
-            >
-              {OFFICIAL_WORK_CATEGORY_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <span className="text-sm font-semibold">작품명 *</span>
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              className="rounded border p-2 focus:border-black focus:outline-none"
+              required
+            />
           </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-semibold">원제</span>
+            <input
+              value={originalTitle}
+              onChange={(event) => setOriginalTitle(event.target.value)}
+              className="rounded border p-2 focus:border-black focus:outline-none"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-semibold">슬러그 *</span>
+            <input
+              value={slug}
+              onChange={(event) => setSlug(event.target.value)}
+              placeholder="ex) one-piece"
+              className="rounded border p-2 focus:border-black focus:outline-none"
+            />
+            {normalizedSlug ? (
+              <p className="text-xs text-gray-600">미리보기: /works/{normalizedSlug}</p>
+            ) : null}
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-semibold">별칭</span>
+            <input
+              value={aliases}
+              onChange={(event) => setAliases(event.target.value)}
+              placeholder="쉼표로 구분"
+              className="rounded border p-2 focus:border-black focus:outline-none"
+            />
+          </label>
+        </section>
 
+        <section className="grid gap-4 md:grid-cols-2">
+          <h3 className="md:col-span-2 text-sm font-bold uppercase tracking-widest text-gray-500">분류</h3>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-semibold">장르(태그)</span>
+            <input
+              value={genres}
+              onChange={(event) => setGenres(event.target.value)}
+              placeholder="액션, 판타지"
+              className="rounded border p-2 focus:border-black focus:outline-none"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-semibold">연령등급</span>
+            <input
+              value={ageRating}
+              onChange={(event) => setAgeRating(event.target.value)}
+              placeholder="15세 이상"
+              className="rounded border p-2 focus:border-black focus:outline-none"
+            />
+          </label>
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-4">
+          <h3 className="md:col-span-4 text-sm font-bold uppercase tracking-widest text-gray-500">방영정보</h3>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-semibold">시작일</span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(event) => setStartDate(event.target.value)}
+              className="rounded border p-2 focus:border-black focus:outline-none"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-semibold">종료일</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(event) => setEndDate(event.target.value)}
+              className="rounded border p-2 focus:border-black focus:outline-none"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-semibold">분기</span>
+            <input
+              value={season}
+              onChange={(event) => setSeason(event.target.value)}
+              placeholder="2026 2분기"
+              className="rounded border p-2 focus:border-black focus:outline-none"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-semibold">화수</span>
+            <input
+              type="number"
+              min={1}
+              value={episodeCount}
+              onChange={(event) => setEpisodeCount(event.target.value)}
+              className="rounded border p-2 focus:border-black focus:outline-none"
+            />
+          </label>
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-3">
+          <h3 className="md:col-span-3 text-sm font-bold uppercase tracking-widest text-gray-500">제작</h3>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-semibold">제작사</span>
+            <input
+              value={studios}
+              onChange={(event) => setStudios(event.target.value)}
+              placeholder="쉼표로 구분"
+              className="rounded border p-2 focus:border-black focus:outline-none"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-semibold">감독</span>
+            <input
+              value={director}
+              onChange={(event) => setDirector(event.target.value)}
+              className="rounded border p-2 focus:border-black focus:outline-none"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-semibold">원작자</span>
+            <input
+              value={originalAuthor}
+              onChange={(event) => setOriginalAuthor(event.target.value)}
+              className="rounded border p-2 focus:border-black focus:outline-none"
+            />
+          </label>
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-3">
+          <h3 className="md:col-span-3 text-sm font-bold uppercase tracking-widest text-gray-500">외부 / 관리</h3>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-semibold">AniList ID</span>
+            <input
+              type="number"
+              value={anilistId}
+              onChange={(event) => setAnilistId(event.target.value)}
+              className="rounded border p-2 focus:border-black focus:outline-none"
+            />
+          </label>
           <label className="flex flex-col gap-1">
             <span className="text-sm font-semibold">상태</span>
             <select
@@ -158,9 +255,8 @@ export default function CreateOfficialWorkPage() {
               ))}
             </select>
           </label>
-
           <label className="flex flex-col gap-1">
-            <span className="text-sm font-semibold">정렬</span>
+            <span className="text-sm font-semibold">우선순위</span>
             <input
               type="number"
               value={sortOrder}
@@ -168,7 +264,23 @@ export default function CreateOfficialWorkPage() {
               className="rounded border p-2 focus:border-black focus:outline-none"
             />
           </label>
-        </div>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-semibold">분류</span>
+            <select
+              value={category}
+              onChange={(event) =>
+                setCategory(event.target.value as OfficialWorkCategory)
+              }
+              className="rounded border border-gray-300 bg-white p-2 focus:border-black focus:outline-none"
+            >
+              {OFFICIAL_WORK_CATEGORY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </section>
 
         <label className="flex flex-col gap-1">
           <span className="text-sm font-semibold">소개</span>
@@ -178,36 +290,6 @@ export default function CreateOfficialWorkPage() {
             rows={4}
             className="rounded border p-2 focus:border-black focus:outline-none"
           />
-        </label>
-
-        <label className="flex flex-col gap-1">
-          <span className="text-sm font-semibold">대표 이미지</span>
-          <input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            onChange={(event) => void handleImageUpload(event.target.files?.[0] ?? null)}
-            className="rounded border p-2 focus:border-black focus:outline-none"
-            disabled={uploadingImage}
-          />
-          {uploadingImage ? (
-            <p className="text-xs text-gray-500">이미지 업로드 중...</p>
-          ) : null}
-          {coverImageUrl ? (
-            <div className="mt-2 flex items-center gap-3">
-              <img
-                src={coverImageUrl}
-                alt="대표 이미지 미리보기"
-                className="h-20 w-14 rounded border object-cover"
-              />
-              <button
-                type="button"
-                onClick={() => setCoverImageUrl("")}
-                className="text-xs text-red-600 hover:underline"
-              >
-                이미지 제거
-              </button>
-            </div>
-          ) : null}
         </label>
 
         <div className="flex gap-2 pt-2">

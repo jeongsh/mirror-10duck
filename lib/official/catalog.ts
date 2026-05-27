@@ -9,7 +9,7 @@ export const OFFICIAL_WORK_CATEGORY_OPTIONS: {
 }[] = [
   { value: "anime", label: "애니" },
   { value: "manga", label: "만화" },
-  { value: "light_novel", label: "라노벨" },
+  { value: "light_novel", label: "라이트노벨" },
   { value: "webtoon", label: "웹툰" },
   { value: "other", label: "기타" },
 ];
@@ -44,4 +44,15 @@ export function normalizeOfficialSlug(value: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .replace(/-{2,}/g, "-");
+}
+
+export function splitList(value: string) {
+  return value
+    .split(/[,\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function joinList(value: string[] | null | undefined) {
+  return Array.isArray(value) ? value.join(", ") : "";
 }

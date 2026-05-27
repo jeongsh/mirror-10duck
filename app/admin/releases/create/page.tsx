@@ -72,7 +72,7 @@ function CreateReleaseInner() {
         .single();
 
       if (workError) {
-        alert("공식 작품 생성 실패: " + workError.message);
+        alert("작품 생성 실패: " + workError.message);
         return;
       }
 

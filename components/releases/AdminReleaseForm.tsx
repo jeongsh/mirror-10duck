@@ -342,20 +342,20 @@ export function ReleaseForm({
 
       <section className="rounded border border-dashed border-blue-300 bg-blue-50/50 p-4">
         <div className="mb-3">
-          <h3 className="text-sm font-bold text-blue-900">공식 작품 허브</h3>
+          <h3 className="text-sm font-bold text-blue-900">작품 허브</h3>
           <p className="mt-1 text-xs text-blue-600">
-            기존 허브에 연결하거나, 이 신작 정보로 공식 작품 허브를 함께 생성합니다.
+            기존 허브에 연결하거나, 이 신작 정보로 작품 허브를 함께 생성합니다.
           </p>
         </div>
         <div className="grid gap-3 md:grid-cols-[1fr_auto]">
           <label className="flex flex-col gap-1">
-            <span className="text-sm font-semibold">기존 공식 작품</span>
+            <span className="text-sm font-semibold">기존 작품</span>
             <select
               value={form.officialWorkId}
               onChange={(event) => applyOfficialWork(event.target.value)}
               className="rounded border p-2 focus:border-black focus:outline-none"
             >
-              <option value="">새 공식 작품으로 함께 등록</option>
+              <option value="">새 작품으로 함께 등록</option>
               {officialWorks.map((work) => (
                 <option key={work.id} value={work.id}>
                   {work.title}

@@ -992,7 +992,7 @@ export default function OshiCardPage() {
                   onChange={(event) => setCustomWork(event.target.value)}
                   type="search"
                   maxLength={40}
-                  placeholder="공식 작품 검색"
+                  placeholder="작품 검색"
                   className="w-full rounded-md border border-white/35 bg-black/25 px-2 py-1 text-xs font-black text-white outline-none placeholder:text-white/55 focus:border-[var(--card-foil)]"
                 />
                 {customWork.trim() ? (
@@ -1000,7 +1000,7 @@ export default function OshiCardPage() {
                     {officialWorksLoading ? (
                       <p className="px-2 py-2 text-[11px] font-black text-white/55">작품 목록을 불러오는 중...</p>
                     ) : officialWorkSearchResults.length === 0 ? (
-                      <p className="px-2 py-2 text-[11px] font-black text-white/55">공식 작품 검색 결과가 없습니다.</p>
+                      <p className="px-2 py-2 text-[11px] font-black text-white/55">작품 검색 결과가 없습니다.</p>
                     ) : (
                       officialWorkSearchResults.map((work) => (
                         <button

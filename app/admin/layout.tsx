@@ -33,7 +33,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             href="/admin/works"
             className="rounded border border-transparent p-2 transition-colors hover:border-gray-300 hover:bg-gray-100"
           >
-            공식 작품/최애캐 관리
+            작품/최애캐 관리
           </Link>
           <Link
             href="/admin/boards"

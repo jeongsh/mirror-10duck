@@ -178,7 +178,7 @@ export default function InterestOnboardingPage() {
 
           {works.length === 0 ? (
             <div className="border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-sm text-gray-500">
-              공개된 공식 작품이 아직 없습니다. 관리자에서 공식 작품을 먼저 등록해야 합니다.
+              공개된 작품이 아직 없습니다. 관리자에서 작품을 먼저 등록해야 합니다.
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">

@@ -1122,7 +1122,7 @@ function ProfilePageContent() {
               <div className="flex items-end justify-between border-b border-dashed border-gray-300 pb-2 mb-6">
                 <div>
                   <h2 className="text-sm font-bold uppercase tracking-widest text-gray-500">내 관심작</h2>
-                  <p className="text-[11px] text-gray-400 mt-0.5">공식 작품 중 관심 있는 작품을 등록합니다.</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">작품 중 관심 있는 작품을 등록합니다.</p>
                 </div>
                 <span className="text-[10px] text-gray-400">TOTAL: {followedOfficialWorkIds.size}</span>
               </div>
@@ -2155,7 +2155,7 @@ function ProfilePageContent() {
                 <div className="space-y-3 rounded border border-dashed border-blue-300 bg-blue-50/50 p-3">
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-widest text-blue-700">
-                      공식 작품/최애캐에서 선택
+                      작품/최애캐에서 선택
                     </p>
                     <p className="mt-1 text-[10px] text-blue-500">
                       선택하면 아래 입력값이 자동으로 채워집니다. 목록에 없으면 직접 입력하세요.
@@ -2163,7 +2163,7 @@ function ProfilePageContent() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
-                      공식 작품 검색
+                      작품 검색
                     </label>
                     <input
                       type="search"
