@@ -25,7 +25,7 @@ export const CREATE_NAV_GROUPS: NavGroup[] = [
     items: [
       {
         href: "/play/oshi-card",
-        label: "오시 프로필 카드",
+        label: "최애 프로필 카드",
         description: "최애, 인생작, 취향 태그를 공유 카드로 만든다.",
         status: "live",
       },
@@ -71,8 +71,8 @@ export const CREATE_NAV_GROUPS: NavGroup[] = [
       },
       {
         href: "/play/match",
-        label: "오시 궁합",
-        description: "오시, 장르, 금지 취향 기반으로 유저 관계망을 만든다.",
+        label: "최애 궁합",
+        description: "최애, 장르, 금지 취향 기반으로 유저 관계망을 만든다.",
         status: "planned",
       },
       {

@@ -586,7 +586,7 @@ export default function OtakuTypePage() {
           </button>
         </div>
         <Link href="/play/oshi-card" className="block text-center border border-gray-200 rounded-xl bg-white px-4 py-3 text-sm font-medium text-gray-700 hover:bg-[#FCE7EF] hover:border-[#E5527E] hover:text-[#A82E58] transition-colors duration-150">
-          오시 카드 만들기 →
+          최애 카드 만들기 →
         </Link>
       </main>
     );

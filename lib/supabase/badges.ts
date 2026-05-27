@@ -5,7 +5,7 @@ const DEFAULT_BADGES: Badge[] = [
   {
     id: "first_oshi",
     name: "입덕 완료",
-    description: "오시 첫 등록",
+    description: "최애 첫 등록",
     icon: "✨",
     rarity: "common",
     condition_type: "oshi_count",
@@ -15,7 +15,7 @@ const DEFAULT_BADGES: Badge[] = [
   {
     id: "oshi_trio",
     name: "삼각편대",
-    description: "오시 3개 등록",
+    description: "최애 3개 등록",
     icon: "🎯",
     rarity: "common",
     condition_type: "oshi_count",
@@ -25,7 +25,7 @@ const DEFAULT_BADGES: Badge[] = [
   {
     id: "oshi_max",
     name: "덕후의 증명",
-    description: "오시 5개 등록",
+    description: "최애 5개 등록",
     icon: "🏅",
     rarity: "rare",
     condition_type: "oshi_count",
@@ -85,7 +85,7 @@ const DEFAULT_BADGES: Badge[] = [
   {
     id: "early_bird",
     name: "초기 멤버",
-    description: "가입 후 1주일 이내 오시 등록",
+    description: "가입 후 1주일 이내 최애 등록",
     icon: "🌅",
     rarity: "rare",
     condition_type: "early_bird",

@@ -1265,7 +1265,7 @@ export default function Live2DWrapper() {
         const unreadCount = await fetchUnreadCount();
         const message =
           unreadCount > 0
-            ? `오시 새 소식 ${unreadCount}건이 있어요.`
+            ? `최애 새 소식 ${unreadCount}건이 있어요.`
             : "관심작 새 소식은 아직 없어요.";
         setTemporaryMessage(message, ASSISTANT_RESPONSE_DURATION_MS);
         useCharacterStore.getState().setEmotion("happy");

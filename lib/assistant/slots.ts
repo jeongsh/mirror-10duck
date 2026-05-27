@@ -20,7 +20,7 @@ export const ASSISTANT_SLOT_DEFINITIONS: Record<AssistantSlotKey, AssistantSlotD
   daily_missions: { key: "daily_missions", label: "오늘 미션", busyLabel: "확인 중" },
   today_schedule: { key: "today_schedule", label: "오늘 일정", busyLabel: "확인 중" },
   week_schedule: { key: "week_schedule", label: "이번 주", busyLabel: "확인 중" },
-  oshi_updates: { key: "oshi_updates", label: "오시 새 소식", busyLabel: "확인 중" },
+  oshi_updates: { key: "oshi_updates", label: "최애 새 소식", busyLabel: "확인 중" },
   sticker_reply: { key: "sticker_reply", label: "스티커 답글", busyLabel: "등록 중" },
   draft_resume: { key: "draft_resume", label: "임시저장 복귀", busyLabel: "여는 중" },
 };

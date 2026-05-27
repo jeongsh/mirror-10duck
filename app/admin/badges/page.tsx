@@ -21,7 +21,7 @@ const RARITY_STYLE: Record<BadgeRarity, string> = {
 };
 
 const CONDITION_SUGGESTIONS = [
-  { value: "oshi_count",       label: "오시 등록 수" },
+  { value: "oshi_count",       label: "최애 등록 수" },
   { value: "post_count",       label: "게시글 작성 수" },
   { value: "comment_count",    label: "댓글 작성 수" },
   { value: "hot_post",         label: "인기글 달성 수" },
@@ -220,7 +220,7 @@ export default function AdminBadgesPage() {
             <div className="flex flex-col gap-1 sm:col-span-2">
               <label className="text-xs font-bold text-gray-600">설명</label>
               <input className="border border-dashed border-gray-400 bg-white px-3 py-2 text-sm"
-                placeholder="오시 첫 등록 시 지급" value={form.description}
+                placeholder="최애 첫 등록 시 지급" value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
             </div>
             <div className="flex flex-col gap-1">

@@ -53,9 +53,9 @@ export default function AdminWorksPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-dashed border-gray-500 pb-4">
         <div>
-          <h2 className="text-xl font-bold">공식 작품/오시 관리</h2>
+          <h2 className="text-xl font-bold">공식 작품/최애캐 관리</h2>
           <p className="mt-1 text-sm text-gray-600">
-            온보딩과 작품 허브에서 사용할 공식 작품과 작품별 오시를 관리합니다.
+            온보딩과 작품 허브에서 사용할 공식 작품과 작품별 최애캐를 관리합니다.
           </p>
         </div>
         <Link
@@ -88,7 +88,7 @@ export default function AdminWorksPage() {
                   <th className="p-3 font-semibold">작품</th>
                   <th className="p-3 font-semibold">분류</th>
                   <th className="p-3 font-semibold">상태</th>
-                  <th className="p-3 font-semibold">오시</th>
+                  <th className="p-3 font-semibold">최애캐</th>
                   <th className="p-3 font-semibold">정렬</th>
                   <th className="p-3 font-semibold text-right">관리</th>
                 </tr>

@@ -3,9 +3,9 @@ import { CREATE_NAV_GROUPS } from "@/lib/navigation";
 
 const FLOW_STEPS = [
   "성향 테스트로 유입",
-  "오시 프로필 카드 생성",
+  "최애 프로필 카드 생성",
   "가입하면 카드 저장",
-  "같은 오시 유저와 게시판 추천",
+  "같은 최애 유저와 게시판 추천",
   "분기 체크리스트 등록",
   "관심작 알림과 피드로 재방문",
 ];
@@ -86,7 +86,7 @@ export default function PlayHubPage() {
               href="/profile?tab=oshi"
               className="inline-flex w-full justify-center border border-dashed border-gray-700 bg-gray-900 px-3 py-2 text-xs font-bold text-white hover:bg-gray-800"
             >
-              현재 프로필/오시 설정으로 이동
+              현재 프로필/최애 설정으로 이동
             </Link>
           </div>
         </aside>

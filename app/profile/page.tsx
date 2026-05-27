@@ -49,7 +49,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "profile", label: "프로필" },
   { id: "library", label: "캐릭터 관리" },
   { id: "subscription", label: "구독 채널" },
-  { id: "oshi", label: "오시 & 배지" },
+  { id: "oshi", label: "최애 & 배지" },
   { id: "card", label: "카드 꾸미기" },
   { id: "account", label: "계정 설정" },
 ];
@@ -893,7 +893,7 @@ function ProfilePageContent() {
 
   const handleOshiDelete = async (oshi: OshiRegistration) => {
     if (!user) return;
-    if (!confirm(`"${formatOshiPrimaryTitle(oshi)}" 오시 등록을 삭제하시겠습니까?`)) return;
+    if (!confirm(`"${formatOshiPrimaryTitle(oshi)}" 최애 등록을 삭제하시겠습니까?`)) return;
     setLoading(true);
     try {
       await deleteOshi(user.id, oshi.id);
@@ -973,7 +973,7 @@ function ProfilePageContent() {
             cropType === "profileAvatar"
               ? "프로필 이미지 리사이즈"
               : cropType === "oshi"
-                ? "오시 이미지 리사이즈"
+                ? "최애 이미지 리사이즈"
                 : cropType === "avatar"
                   ? "카드 아바타 리사이즈"
                   : "카드 배경 이미지 리사이즈"
@@ -1227,8 +1227,8 @@ function ProfilePageContent() {
             <section>
               <div className="flex items-end justify-between border-b border-dashed border-gray-300 pb-2 mb-6">
                 <div>
-                  <h2 className="text-sm font-bold uppercase tracking-widest text-gray-500">내 오시 (推し)</h2>
-                  <p className="text-[11px] text-gray-400 mt-0.5">최대 5개 · 1번이 메인 오시</p>
+                  <h2 className="text-sm font-bold uppercase tracking-widest text-gray-500">내 최애</h2>
+                  <p className="text-[11px] text-gray-400 mt-0.5">최대 5개 · 1번이 메인 최애</p>
                 </div>
                 {oshiList.length < 5 && (
                   <button
@@ -1236,7 +1236,7 @@ function ProfilePageContent() {
                     onClick={() => openOshiForm()}
                     className="border border-dashed border-gray-800 bg-white px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-800 hover:bg-gray-800 hover:text-white transition-colors"
                   >
-                    [+ 오시 추가]
+                    [+ 최애 추가]
                   </button>
                 )}
               </div>
@@ -1246,13 +1246,13 @@ function ProfilePageContent() {
               ) : oshiList.length === 0 ? (
                 <div className="border border-dashed border-gray-300 bg-gray-50/50 p-12 text-center text-xs text-gray-400 italic space-y-2">
                   <div className="text-3xl">💘</div>
-                  <p>아직 등록된 오시가 없습니다.</p>
+                  <p>아직 등록된 최애가 없습니다.</p>
                   <button
                     type="button"
                     onClick={() => openOshiForm()}
                     className="mt-2 border border-dashed border-gray-400 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-600 hover:bg-gray-100 transition-colors"
                   >
-                    [첫 오시 등록하기]
+                    [첫 최애 등록하기]
                   </button>
                 </div>
               ) : (
@@ -1269,7 +1269,7 @@ function ProfilePageContent() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[9px] font-bold bg-gray-800 text-white px-1.5 py-0.5">#1 메인 오시</span>
+                          <span className="text-[9px] font-bold bg-gray-800 text-white px-1.5 py-0.5">#1 메인 최애</span>
                           <span className="text-[9px] border border-dashed border-gray-400 text-gray-500 px-1 font-bold uppercase">{OSHI_TYPE_LABELS[oshi.oshi_type]}</span>
                           {!oshi.is_public && <span className="text-[9px] border border-dashed border-gray-300 text-gray-400 px-1">비공개</span>}
                         </div>
@@ -1288,7 +1288,7 @@ function ProfilePageContent() {
                             disabled={oshi.rank === 1}
                             onClick={() => handleOshiMove(oshi.id, "up")}
                             className="border border-dashed border-gray-300 px-2 py-1 text-[10px] font-bold text-gray-400 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
-                            aria-label="오시 순서 위로"
+                            aria-label="최애 순서 위로"
                           >
                             ↑
                           </button>
@@ -1297,7 +1297,7 @@ function ProfilePageContent() {
                             disabled={oshi.rank === oshiList.length}
                             onClick={() => handleOshiMove(oshi.id, "down")}
                             className="border border-dashed border-gray-300 px-2 py-1 text-[10px] font-bold text-gray-400 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
-                            aria-label="오시 순서 아래로"
+                            aria-label="최애 순서 아래로"
                           >
                             ↓
                           </button>
@@ -1338,7 +1338,7 @@ function ProfilePageContent() {
                               disabled={oshi.rank === 1}
                               onClick={() => handleOshiMove(oshi.id, "up")}
                               className="text-[11px] font-bold text-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
-                              aria-label="오시 순서 위로"
+                              aria-label="최애 순서 위로"
                             >
                               ↑
                             </button>
@@ -1347,7 +1347,7 @@ function ProfilePageContent() {
                               disabled={oshi.rank === oshiList.length}
                               onClick={() => handleOshiMove(oshi.id, "down")}
                               className="text-[11px] font-bold text-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
-                              aria-label="오시 순서 아래로"
+                              aria-label="최애 순서 아래로"
                             >
                               ↓
                             </button>
@@ -1566,7 +1566,7 @@ function ProfilePageContent() {
 
                 {/* 오시 표시 여부 */}
                 <section>
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 border-b border-dashed border-gray-300 pb-2 mb-4">오시 표시</h3>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 border-b border-dashed border-gray-300 pb-2 mb-4">최애 표시</h3>
                   <label className="flex items-center gap-2 cursor-pointer select-none">
                     <input
                       type="checkbox"
@@ -1574,7 +1574,7 @@ function ProfilePageContent() {
                       onChange={(e) => setCardShowOshi(e.target.checked)}
                       className="accent-gray-800 w-4 h-4"
                     />
-                    <span className="text-xs font-bold text-gray-700">카드에 메인 오시 표시</span>
+                    <span className="text-xs font-bold text-gray-700">카드에 메인 최애 표시</span>
                   </label>
                 </section>
 
@@ -2142,7 +2142,7 @@ function ProfilePageContent() {
           >
             <div className="border-b border-dashed border-gray-300 px-5 py-4">
               <h3 className="text-sm font-bold uppercase tracking-widest text-gray-800">
-                {editingOshi ? "오시 편집" : "오시 등록"}
+                {editingOshi ? "최애 편집" : "최애 등록"}
               </h3>
               {!editingOshi && (
                 <p className="mt-1 text-[11px] text-gray-400">
@@ -2155,7 +2155,7 @@ function ProfilePageContent() {
                 <div className="space-y-3 rounded border border-dashed border-blue-300 bg-blue-50/50 p-3">
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-widest text-blue-700">
-                      공식 작품/오시에서 선택
+                      공식 작품/최애캐에서 선택
                     </p>
                     <p className="mt-1 text-[10px] text-blue-500">
                       선택하면 아래 입력값이 자동으로 채워집니다. 목록에 없으면 직접 입력하세요.
@@ -2231,7 +2231,7 @@ function ProfilePageContent() {
                   {oshiForm.official_work_id && officialOshiForSelectedWork.length > 0 && (
                     <div className="space-y-1">
                       <label className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
-                        공식 오시
+                        공식 최애캐
                       </label>
                       <select
                         value={oshiForm.official_oshi_id}

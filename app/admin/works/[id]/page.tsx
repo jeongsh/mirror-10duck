@@ -152,7 +152,7 @@ export default function OfficialWorkDetailPage({
   const handleDeleteWork = async () => {
     if (
       !confirm(
-        "이 공식 작품을 삭제할까요? 연결된 공식 오시도 함께 삭제되며 되돌릴 수 없습니다.",
+        "이 공식 작품을 삭제할까요? 연결된 공식 최애캐도 함께 삭제되며 되돌릴 수 없습니다.",
       )
     ) {
       return;
@@ -224,7 +224,7 @@ export default function OfficialWorkDetailPage({
   const handleSaveCharacter = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!normalizedCharacterSlug || !characterForm.name.trim()) {
-      alert("오시 슬러그와 이름은 필수입니다.");
+      alert("최애캐 슬러그와 이름은 필수입니다.");
       return;
     }
 
@@ -252,7 +252,7 @@ export default function OfficialWorkDetailPage({
     setSavingCharacter(false);
 
     if (error) {
-      alert(`오시 저장 실패: ${error.message}`);
+      alert(`최애캐 저장 실패: ${error.message}`);
       return;
     }
 
@@ -261,7 +261,7 @@ export default function OfficialWorkDetailPage({
   };
 
   const handleDeleteCharacter = async (character: OfficialOshiCharacter) => {
-    if (!confirm(`"${character.name}" 오시를 삭제할까요?`)) return;
+    if (!confirm(`"${character.name}" 최애캐를 삭제할까요?`)) return;
     setDeletingCharacterId(character.id);
     const { error } = await supabase
       .from("official_oshi_characters")
@@ -270,7 +270,7 @@ export default function OfficialWorkDetailPage({
     setDeletingCharacterId(null);
 
     if (error) {
-      alert(`오시 삭제 실패: ${error.message}`);
+      alert(`최애캐 삭제 실패: ${error.message}`);
       return;
     }
     await fetchData();
@@ -291,7 +291,7 @@ export default function OfficialWorkDetailPage({
         <div>
           <h2 className="text-xl font-bold">{work.title} 관리</h2>
           <p className="mt-1 text-sm text-gray-600">
-            공식 작품 정보와 이 작품에 연결할 공식 오시를 관리합니다.
+            공식 작품 정보와 이 작품에 연결할 공식 최애캐를 관리합니다.
           </p>
         </div>
       </div>
@@ -437,13 +437,13 @@ export default function OfficialWorkDetailPage({
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="rounded border border-dashed border-gray-500 bg-white/70 p-6">
           <div className="mb-4 flex items-center justify-between gap-3">
-            <h3 className="text-lg font-bold">공식 오시 목록</h3>
+            <h3 className="text-lg font-bold">공식 최애캐 목록</h3>
             <span className="text-sm text-gray-500">{characters.length}명</span>
           </div>
 
           {characters.length === 0 ? (
             <p className="rounded border border-dashed border-gray-300 bg-white p-4 text-sm text-gray-500">
-              아직 등록된 공식 오시가 없습니다.
+              아직 등록된 공식 최애캐가 없습니다.
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -508,7 +508,7 @@ export default function OfficialWorkDetailPage({
         >
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-lg font-bold">
-              {characterForm.id ? "오시 수정" : "오시 추가"}
+              {characterForm.id ? "최애캐 수정" : "최애캐 추가"}
             </h3>
             {characterForm.id ? (
               <button
@@ -643,7 +643,7 @@ export default function OfficialWorkDetailPage({
               <div className="mt-2 flex items-center gap-3">
                 <img
                   src={characterForm.profile_image_url}
-                  alt="오시 이미지 미리보기"
+                  alt="최애캐 이미지 미리보기"
                   className="h-16 w-16 rounded border object-cover"
                 />
                 <button
@@ -682,7 +682,7 @@ export default function OfficialWorkDetailPage({
             disabled={savingCharacter}
             className="rounded bg-black px-4 py-2 text-white transition-opacity hover:opacity-80 disabled:opacity-50"
           >
-            {savingCharacter ? "저장 중..." : characterForm.id ? "오시 저장" : "오시 추가"}
+            {savingCharacter ? "저장 중..." : characterForm.id ? "최애캐 저장" : "최애캐 추가"}
           </button>
         </form>
       </section>

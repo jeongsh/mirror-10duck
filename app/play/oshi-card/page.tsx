@@ -938,7 +938,7 @@ export default function OshiCardPage() {
           type="button"
           onClick={() => editable && oshiAvatarInputRef.current?.click()}
           className={`oshi-avatar-circle ${editable ? "" : "pointer-events-none"}`}
-          aria-label="오시 캐릭터 사진 업로드"
+          aria-label="최애 캐릭터 사진 업로드"
         >
           {oshiAvatarDataUrl ? (
             <img src={oshiAvatarDataUrl} alt="" draggable={false} />
@@ -956,7 +956,7 @@ export default function OshiCardPage() {
               value={oshi}
               onChange={(event) => setOshi(event.target.value)}
               maxLength={28}
-              placeholder="오시 캐릭터"
+              placeholder="최애 캐릭터"
               className="oshi-main-input oshi-glow-text oshi-main-name mt-2 placeholder:text-white/60"
               style={oshiNameStyle(oshi)}
             />
@@ -1097,11 +1097,11 @@ export default function OshiCardPage() {
         <CardImageCropModal
           imageSrc={cropTarget.src}
           aspect={cropTarget.kind === "background" ? 734 / 1024 : 1}
-          title={cropTarget.kind === "background" ? "카드 배경 이미지 맞추기" : "오시 프로필 이미지 맞추기"}
+          title={cropTarget.kind === "background" ? "카드 배경 이미지 맞추기" : "최애 프로필 이미지 맞추기"}
           description={
             cropTarget.kind === "background"
               ? "공유 카드 실제 비율에 맞춰 이동하거나 크롭하세요."
-              : "오시 프로필 영역에 맞춰 정사각형으로 이동하거나 크롭하세요."
+              : "최애 프로필 영역에 맞춰 정사각형으로 이동하거나 크롭하세요."
           }
           outputSize={cropTarget.kind === "background" ? { width: 734, height: 1024 } : { width: 126, height: 126 }}
           onConfirm={applyImageCrop}
