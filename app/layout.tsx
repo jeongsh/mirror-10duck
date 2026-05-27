@@ -32,9 +32,7 @@ export default function RootLayout({
         <AuthProvider>
           <AttendanceRecorder />
           <GlobalNavigation />
-          <div className="relative mx-auto w-full max-w-7xl px-4 pt-6 pb-4">
-            <MainLayoutClient>{children}</MainLayoutClient>
-          </div>
+          <MainLayoutClient>{children}</MainLayoutClient>
           <Live2DClientOnly />
         </AuthProvider>
       </body>

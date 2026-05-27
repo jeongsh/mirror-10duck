@@ -10,8 +10,12 @@ export default function MainLayoutClient({ children }: { children: React.ReactNo
   const isAuth = pathname?.startsWith("/auth");
   const hideChrome = isAdmin || isAuth;
 
+  const shellClassName = hideChrome
+    ? "relative w-full pb-4"
+    : "relative mx-auto w-full max-w-7xl px-4 pt-6 pb-4";
+
   return (
-    <>
+    <div className={shellClassName}>
       <DailyLoginXp />
       {!hideChrome && (
         <div className="sticky top-20 z-10 hidden h-0 w-0 2xl:block">
@@ -26,6 +30,6 @@ export default function MainLayoutClient({ children }: { children: React.ReactNo
         <div className="min-w-0 flex-1 w-full">{children}</div>
         {!hideChrome && <RightSidebar />}
       </div>
-    </>
+    </div>
   );
 }

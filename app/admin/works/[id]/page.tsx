@@ -555,6 +555,7 @@ export default function OfficialWorkDetailPage({
               <table className="w-full text-left text-sm">
                 <thead className="border-b">
                   <tr>
+                    <th className="w-20 p-3 font-semibold">썸네일</th>
                     <th className="p-3 font-semibold">이름</th>
                     <th className="p-3 font-semibold">프로필</th>
                     <th className="p-3 font-semibold">상태</th>
@@ -565,6 +566,19 @@ export default function OfficialWorkDetailPage({
                 <tbody className="divide-y divide-dashed">
                   {characters.map((character) => (
                     <tr key={character.id} className="transition-colors hover:bg-gray-100">
+                      <td className="p-3 align-top">
+                        <div className="flex h-16 w-12 items-center justify-center overflow-hidden rounded border border-dashed border-gray-300 bg-gray-100 text-center text-[9px] font-bold leading-tight text-gray-400">
+                          {character.profile_image_url ? (
+                            <img
+                              src={character.profile_image_url}
+                              alt={`${character.name} 썸네일`}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span>NO<br />IMAGE</span>
+                          )}
+                        </div>
+                      </td>
                       <td className="p-3">
                         <div className="font-medium">{character.name}</div>
                         <div className="text-xs text-gray-500">/{work.slug}/{character.slug}</div>
