@@ -17,6 +17,7 @@ export type WorkExcelPayload = {
   category: OfficialWorkCategory;
   genres: string[];
   age_rating: string | null;
+  ott_platforms: string[];
   start_date: string | null;
   end_date: string | null;
   season: string | null;
@@ -115,6 +116,7 @@ export async function parseWorkExcel(file: File): Promise<WorkExcelPayload[]> {
         category: category(row),
         genres: splitList(text(row, "장르")),
         age_rating: optionalText(row, "연령등급"),
+        ott_platforms: splitList(text(row, "OTT")),
         start_date: optionalText(row, "시작일"),
         end_date: optionalText(row, "종료일"),
         season: optionalText(row, "분기"),

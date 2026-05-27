@@ -5,6 +5,7 @@ import AttendanceRecorder from "@/components/AttendanceRecorder";
 import GlobalNavigation from "@/components/GlobalNavigation";
 import Live2DClientOnly from "@/components/Live2DClientOnly";
 import MainLayoutClient from "@/components/MainLayoutClient";
+import ScrollToTop from "@/components/ScrollToTop";
 import "./globals.css";
 
 const pretendard = localFont({
@@ -27,6 +28,7 @@ export default function RootLayout({
   return (
     <html lang="ko" className={pretendard.variable}>
       <body className="min-h-screen font-sans antialiased">
+        <ScrollToTop />
         <AuthProvider>
           <AttendanceRecorder />
           <GlobalNavigation />

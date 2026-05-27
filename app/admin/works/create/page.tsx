@@ -23,6 +23,7 @@ export default function CreateOfficialWorkPage() {
   const [category, setCategory] = useState<OfficialWorkCategory>("anime");
   const [genres, setGenres] = useState("");
   const [ageRating, setAgeRating] = useState("");
+  const [ottPlatforms, setOttPlatforms] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [season, setSeason] = useState("");
@@ -56,6 +57,7 @@ export default function CreateOfficialWorkPage() {
         category,
         genres: splitList(genres),
         age_rating: ageRating.trim() || null,
+        ott_platforms: splitList(ottPlatforms),
         start_date: startDate || null,
         end_date: endDate || null,
         season: season.trim() || null,
@@ -136,8 +138,8 @@ export default function CreateOfficialWorkPage() {
           </label>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2">
-          <h3 className="md:col-span-2 text-sm font-bold uppercase tracking-widest text-gray-500">분류</h3>
+        <section className="grid gap-4 md:grid-cols-3">
+          <h3 className="md:col-span-3 text-sm font-bold uppercase tracking-widest text-gray-500">분류</h3>
           <label className="flex flex-col gap-1">
             <span className="text-sm font-semibold">장르(태그)</span>
             <input
@@ -153,6 +155,15 @@ export default function CreateOfficialWorkPage() {
               value={ageRating}
               onChange={(event) => setAgeRating(event.target.value)}
               placeholder="15세 이상"
+              className="rounded border p-2 focus:border-black focus:outline-none"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-semibold">국내 시청 가능 OTT</span>
+            <input
+              value={ottPlatforms}
+              onChange={(event) => setOttPlatforms(event.target.value)}
+              placeholder="라프텔, 티빙, 웨이브, 넷플릭스"
               className="rounded border p-2 focus:border-black focus:outline-none"
             />
           </label>

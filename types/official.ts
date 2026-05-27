@@ -16,6 +16,7 @@ export type OfficialWork = {
   category: OfficialWorkCategory;
   genres: string[] | null;
   age_rating: string | null;
+  ott_platforms: string[] | null;
   start_date: string | null;
   end_date: string | null;
   season: string | null;
@@ -30,6 +31,31 @@ export type OfficialWork = {
   sort_order: number;
   created_at: string;
   updated_at: string;
+};
+
+export type OttPlatform = {
+  id: string;
+  name: string;
+  display_name: string;
+  logo_key: string;
+  logo_url: string | null;
+  website_url: string | null;
+  sort_order: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OfficialWorkOttPlatform = {
+  work_id: string;
+  platform_id: string;
+  availability_note: string | null;
+  source: string | null;
+  source_url: string | null;
+  checked_at: string;
+  created_at: string;
+  updated_at: string;
+  ott_platforms?: OttPlatform | OttPlatform[] | null;
 };
 
 export type OfficialOshiCharacter = {
