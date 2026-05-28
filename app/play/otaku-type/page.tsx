@@ -449,32 +449,43 @@ export default function OtakuTypePage() {
     return (
       <main className="mx-auto flex max-w-[560px] flex-col gap-6 py-8 px-4">
         <div className="text-center">
-          <h1 className="text-[22px] font-medium mb-1.5">🌸 오타쿠 레벨 테스트</h1>
-          <p className="text-sm text-gray-500">12문항으로 알아보는 8가지 덕후 유형</p>
+          <h1 className="text-[22px] font-medium mb-1.5">🌸 오타쿠 테스트</h1>
+          <p className="text-sm text-gray-500">나의 덕후 유형을 알아보는 두 가지 테스트</p>
         </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-6 flex flex-col gap-4">
-          <p className="text-sm text-gray-600 leading-relaxed">
-            덕질 성향을 세 가지 축으로 분석해 8가지 유형 중 하나로 진단합니다.<br />
-            문항마다 1~3단계 강도로 채점하고, 결과에서 축별·문항별 점수를 모두 보여줘요.
-          </p>
-          <div className="flex flex-col gap-2 text-xs text-gray-500">
-            {[
-              { key: "S/N", desc: "몰입 성향 — 가볍게 즐기기 vs 깊이 파고들기" },
-              { key: "D/C", desc: "표현 성향 — 적극적 표현 vs 조용히 혼자" },
-              { key: "M/L", desc: "소비 성향 — 아낌없이 지름 vs 절제와 선택" },
-            ].map((a) => (
-              <div key={a.key} className="flex gap-2 items-start">
-                <span className="font-bold" style={{ color: "#E5527E" }}>{a.key}</span>
-                <span>{a.desc}</span>
-              </div>
-            ))}
+        <div className="flex flex-col gap-3">
+          {/* v1 카드 */}
+          <div className="bg-white border border-gray-200 rounded-xl p-5 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "#FBEAF0", color: "#D4537E" }}>12문항</span>
+              <span className="text-sm font-medium text-gray-800">덕후 타입 테스트</span>
+            </div>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              덕질 성향을 <strong>S/N · D/C · M/L</strong> 세 가지 축으로 분석해 8가지 유형 중 하나로 진단합니다. 축별·문항별 점수를 상세하게 보여줘요.
+            </p>
+            <button
+              onClick={() => setPhase("quiz")}
+              className="w-full py-2.5 rounded-lg text-sm font-medium text-white bg-[#E5527E] hover:bg-[#C73D69] active:bg-[#A82E58] shadow-sm hover:shadow-md transition-all duration-150"
+            >
+              타입 테스트 시작하기 →
+            </button>
           </div>
-          <button
-            onClick={() => setPhase("quiz")}
-            className="mt-2 w-full py-3 rounded-lg text-sm font-medium text-white bg-[#E5527E] hover:bg-[#C73D69] active:bg-[#A82E58] shadow-sm hover:shadow-md transition-all duration-150"
-          >
-            테스트 시작하기 →
-          </button>
+
+          {/* v2 카드 */}
+          <div className="bg-white border border-gray-200 rounded-xl p-5 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "#EEEDFE", color: "#534AB7" }}>10문항</span>
+              <span className="text-sm font-medium text-gray-800">어떤 오타쿠?</span>
+            </div>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              질문에 답하면 <strong>9가지 덕후 장르</strong> 중 나와 가장 가까운 유형을 찾아드려요. 아이돌·배틀·스포츠·모험 등 장르 취향으로 분류합니다.
+            </p>
+            <Link
+              href="/play/otaku-type/v2"
+              className="block w-full py-2.5 rounded-lg text-sm font-medium text-center text-white bg-[#534AB7] hover:bg-[#3E3899] active:bg-[#2E2A80] shadow-sm hover:shadow-md transition-all duration-150"
+            >
+              어떤 오타쿠? 시작하기 →
+            </Link>
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
           {(Object.values(TYPES) as ResultInfo[]).map((t) => (
