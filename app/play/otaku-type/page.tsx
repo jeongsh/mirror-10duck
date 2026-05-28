@@ -480,7 +480,7 @@ export default function OtakuTypePage() {
               질문에 답하면 <strong>9가지 덕후 장르</strong> 중 나와 가장 가까운 유형을 찾아드려요. 아이돌·배틀·스포츠·모험 등 장르 취향으로 분류합니다.
             </p>
             <Link
-              href="/play/otaku-type/v2"
+              href="/play/otaku-type/v2?start=1"
               className="block w-full py-2.5 rounded-lg text-sm font-medium text-center text-white bg-[#534AB7] hover:bg-[#3E3899] active:bg-[#2E2A80] shadow-sm hover:shadow-md transition-all duration-150"
             >
               어떤 오타쿠? 시작하기 →

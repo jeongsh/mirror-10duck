@@ -1,6 +1,8 @@
 "use client";
 
+import { Suspense } from "react";
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 type V2Type = "idol" | "munchkin" | "school" | "animal" | "monster" | "sports" | "adventure" | "bishounen" | "family";
@@ -336,8 +338,11 @@ function calcResult(answers: (number | null)[]): { winner: V2Type; votes: Record
 
 // ─── 메인 페이지 ─────────────────────────────────────────────
 
-export default function OtakuTypeV2Page() {
-  const [phase, setPhase] = useState<"intro" | "quiz" | "result">("intro");
+function OtakuTypeV2PageContent() {
+  const searchParams = useSearchParams();
+  const [phase, setPhase] = useState<"intro" | "quiz" | "result">(
+    searchParams.get("start") === "1" ? "quiz" : "intro"
+  );
   const [cur, setCur] = useState(0);
   const [answers, setAnswers] = useState<(number | null)[]>(new Array(QUESTIONS.length).fill(null));
 
@@ -556,5 +561,13 @@ export default function OtakuTypeV2Page() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function OtakuTypeV2Page() {
+  return (
+    <Suspense>
+      <OtakuTypeV2PageContent />
+    </Suspense>
   );
 }
