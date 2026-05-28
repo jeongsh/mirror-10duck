@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Download, Plus, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import {
@@ -10,48 +10,55 @@ import {
   joinList,
 } from "@/lib/official/catalog";
 import { parseWorkExcel, WORK_TEMPLATE_PATH } from "@/lib/official/excel";
-import type { OfficialOshiCharacter, OfficialWork } from "@/types/official";
+import type { OfficialWork } from "@/types/official";
 
 export default function AdminWorksPage() {
   const [works, setWorks] = useState<OfficialWork[]>([]);
-  const [oshi, setOshi] = useState<Pick<OfficialOshiCharacter, "work_id">[]>([]);
+  const [oshiCountByWork, setOshiCountByWork] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
   const fetchItems = async () => {
     setLoading(true);
-    const [{ data: workData, error: workError }, { data: oshiData }] =
-      await Promise.all([
-        supabase
-          .from("official_works")
-          .select("*")
-          .order("sort_order", { ascending: true })
-          .order("title", { ascending: true }),
-        supabase.from("official_oshi_characters").select("work_id"),
-      ]);
+    const { data: workData, error: workError } = await supabase
+      .from("official_works")
+      .select("*")
+      .order("sort_order", { ascending: true })
+      .order("title", { ascending: true });
 
     if (workError) {
       console.error("Failed to load official works:", workError);
       setWorks([]);
+      setOshiCountByWork(new Map());
+      setLoading(false);
+      return;
     } else {
       setWorks((workData ?? []) as OfficialWork[]);
     }
-    setOshi((oshiData ?? []) as Pick<OfficialOshiCharacter, "work_id">[]);
+
+    const nextCounts = new Map<string, number>();
+    await Promise.all(
+      ((workData ?? []) as OfficialWork[]).map(async (work) => {
+        const { count, error } = await supabase
+          .from("official_oshi_characters")
+          .select("id", { count: "exact", head: true })
+          .eq("work_id", work.id);
+        if (error) {
+          console.error(`Failed to count oshi for work ${work.id}:`, error);
+          nextCounts.set(work.id, 0);
+          return;
+        }
+        nextCounts.set(work.id, count ?? 0);
+      }),
+    );
+    setOshiCountByWork(nextCounts);
     setLoading(false);
   };
 
   useEffect(() => {
     void fetchItems();
   }, []);
-
-  const oshiCountByWork = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const item of oshi) {
-      map.set(item.work_id, (map.get(item.work_id) ?? 0) + 1);
-    }
-    return map;
-  }, [oshi]);
 
   const handleExcelUpload = async (file: File | null) => {
     if (!file) return;

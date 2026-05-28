@@ -11,7 +11,7 @@ export default function MainLayoutClient({ children }: { children: React.ReactNo
   const hideChrome = isAdmin || isAuth;
 
   const shellClassName = hideChrome
-    ? "relative w-full pb-4"
+    ? "relative w-full"
     : "relative mx-auto w-full max-w-7xl px-4 pt-6 pb-4";
 
   return (
