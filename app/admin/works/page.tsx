@@ -106,6 +106,12 @@ export default function AdminWorksPage() {
     await fetchItems();
   };
 
+  const totalWorkCount = works.length;
+  const totalOshiCount = Array.from(oshiCountByWork.values()).reduce(
+    (sum, count) => sum + count,
+    0,
+  );
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-dashed border-gray-500 pb-4">
@@ -114,6 +120,14 @@ export default function AdminWorksPage() {
           <p className="mt-1 text-sm text-gray-600">
             온보딩과 작품 허브에서 사용할 작품과 작품별 최애캐를 관리합니다.
           </p>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-gray-700">
+            <span className="rounded border border-dashed border-gray-400 bg-white px-2 py-1">
+              등록 작품수 {totalWorkCount}개
+            </span>
+            <span className="rounded border border-dashed border-gray-400 bg-white px-2 py-1">
+              등록 최애캐 전체 {totalOshiCount}명
+            </span>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <a
