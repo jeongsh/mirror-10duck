@@ -33,6 +33,7 @@ interface V2Result {
   headerGradient: string;
   title: string;
   sub: string;
+  compat: string;
   traits: [string, string, string];
   recommendedAnime: AnimeRec[];
 }
