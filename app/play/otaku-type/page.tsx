@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useAuthUser } from "@/lib/supabase/useAuthUser";
+import { upsertOtakuTypeResult } from "@/lib/supabase/otakuTypeResults";
 
 /* ============================================================
  * 기존 질문지 보관 (어떤 오타쿠인가 — 타입 테스트)
@@ -426,9 +428,32 @@ function calcResult(answers: (number | null)[]): { type: ResultInfo; scores: Sco
 // ─── 메인 페이지 ─────────────────────────────────────────────
 
 export default function OtakuTypePage() {
+  const authUser = useAuthUser();
+  const savedResultRef = useRef(false);
   const [phase, setPhase] = useState<"intro" | "quiz" | "result">("intro");
   const [cur, setCur] = useState(0);
   const [answers, setAnswers] = useState<(number | null)[]>(new Array(QUESTIONS.length).fill(null));
+
+  useEffect(() => {
+    if (phase !== "result" || !authUser?.id || savedResultRef.current) return;
+    if (answers.some((answer) => answer === null)) return;
+
+    savedResultRef.current = true;
+    const { type, scores } = calcResult(answers);
+    void upsertOtakuTypeResult(authUser.id, {
+      testVersion: "v1",
+      resultCode: `${scores.snT}${scores.dcT}${scores.mlT}`,
+      resultTitle: type.title,
+      resultBadge: type.badge,
+      tierName: scores.tier.name,
+      scores: {
+        pct: scores.pct,
+        snT: scores.snT,
+        dcT: scores.dcT,
+        mlT: scores.mlT,
+      },
+    }).catch(console.error);
+  }, [phase, authUser?.id, answers]);
 
   const select = (idx: number) => {
     const clickedAt = cur;
@@ -442,7 +467,12 @@ export default function OtakuTypePage() {
     }, 180);
   };
 
-  const reset = () => { setPhase("intro"); setCur(0); setAnswers(new Array(QUESTIONS.length).fill(null)); };
+  const reset = () => {
+    savedResultRef.current = false;
+    setPhase("intro");
+    setCur(0);
+    setAnswers(new Array(QUESTIONS.length).fill(null));
+  };
 
   // ── 인트로 ──
   if (phase === "intro") {

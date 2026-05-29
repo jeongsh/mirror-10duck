@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense } from "react";
-import { useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useAuthUser } from "@/lib/supabase/useAuthUser";
+import { upsertOtakuTypeResult } from "@/lib/supabase/otakuTypeResults";
 
 type V2Type = "idol" | "munchkin" | "school" | "animal" | "monster" | "sports" | "adventure" | "bishounen" | "family";
 
@@ -340,12 +341,30 @@ function calcResult(answers: (number | null)[]): { winner: V2Type; votes: Record
 // ─── 메인 페이지 ─────────────────────────────────────────────
 
 function OtakuTypeV2PageContent() {
+  const authUser = useAuthUser();
+  const savedResultRef = useRef(false);
   const searchParams = useSearchParams();
   const [phase, setPhase] = useState<"intro" | "quiz" | "result">(
     searchParams.get("start") === "1" ? "quiz" : "intro"
   );
   const [cur, setCur] = useState(0);
   const [answers, setAnswers] = useState<(number | null)[]>(new Array(QUESTIONS.length).fill(null));
+
+  useEffect(() => {
+    if (phase !== "result" || !authUser?.id || savedResultRef.current) return;
+    if (answers.some((answer) => answer === null)) return;
+
+    savedResultRef.current = true;
+    const { winner, votes } = calcResult(answers);
+    const result = TYPES[winner];
+    void upsertOtakuTypeResult(authUser.id, {
+      testVersion: "v2",
+      resultCode: winner,
+      resultTitle: result.title,
+      resultBadge: result.badge,
+      scores: { votes },
+    }).catch(console.error);
+  }, [phase, authUser?.id, answers]);
 
   const select = (idx: number) => {
     const clickedAt = cur;
@@ -359,7 +378,12 @@ function OtakuTypeV2PageContent() {
     }, 180);
   };
 
-  const reset = () => { setPhase("intro"); setCur(0); setAnswers(new Array(QUESTIONS.length).fill(null)); };
+  const reset = () => {
+    savedResultRef.current = false;
+    setPhase("intro");
+    setCur(0);
+    setAnswers(new Array(QUESTIONS.length).fill(null));
+  };
 
   // ── 인트로 ──
   if (phase === "intro") {

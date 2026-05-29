@@ -150,17 +150,24 @@ export async function createOshiCardShare(input: CreateOshiCardShareInput): Prom
 }
 
 export async function fetchLatestOshiCardShareForUser(userId: string): Promise<OshiCardShare | null> {
+  const shares = await fetchOshiCardSharesForUser(userId, 1);
+  return shares[0] ?? null;
+}
+
+export async function fetchOshiCardSharesForUser(
+  userId: string,
+  limit = 5,
+): Promise<OshiCardShare[]> {
   const { data, error } = await supabase
     .from("oshi_card_shares")
     .select("*")
     .eq("owner_id", userId)
     .gt("expires_at", new Date().toISOString())
     .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(limit);
 
   if (error) throw error;
-  return (data as OshiCardShare | null) ?? null;
+  return (data as OshiCardShare[]) ?? [];
 }
 
 export async function fetchOshiCardShare(id: string): Promise<OshiCardShare | null> {

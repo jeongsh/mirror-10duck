@@ -36,6 +36,12 @@ export const CREATE_NAV_GROUPS: NavGroup[] = [
         status: "live",
       },
       {
+        href: "/play/oshi-analysis",
+        label: "최애 기반 취향분석",
+        description: "최애 5~10명을 고르면 공통 태그로 취향을 폭로한다.",
+        status: "live",
+      },
+      {
         href: "/play/timeline",
         label: "덕질 연대기",
         description: "입덕작부터 인생작까지 개인 히스토리를 카드화한다.",

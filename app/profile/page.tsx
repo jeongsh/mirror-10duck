@@ -41,9 +41,10 @@ import {
 import AuthorProfileCard from "@/components/community/AuthorProfileCard";
 import { CARD_THEMES, THEME_ORDER } from "@/lib/cardThemes";
 import CardImageCropModal from "@/components/profile/CardImageCropModal";
+import PlayHistoryPanel from "@/components/profile/PlayHistoryPanel";
 import type { OfficialOshiCharacter, OfficialWork } from "@/types/official";
 
-type TabId = "profile" | "library" | "subscription" | "oshi" | "card" | "account";
+type TabId = "profile" | "library" | "subscription" | "oshi" | "card" | "play" | "account";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "profile", label: "프로필" },
@@ -51,6 +52,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "subscription", label: "구독 채널" },
   { id: "oshi", label: "최애 & 배지" },
   { id: "card", label: "카드 꾸미기" },
+  { id: "play", label: "내 놀이 기록" },
   { id: "account", label: "계정 설정" },
 ];
 
@@ -1727,6 +1729,24 @@ function ProfilePageContent() {
                 {cardSaving ? "SAVING..." : "[카드 저장]"}
               </button>
             </div>
+          </div>
+        )}
+
+        {activeTab === "play" && (
+          <div>
+            {user?.id ? (
+              <PlayHistoryPanel userId={user.id} />
+            ) : (
+              <div className="py-12 text-center space-y-4">
+                <p className="text-sm text-gray-500">놀이 기록은 로그인 후 확인할 수 있어요.</p>
+                <Link
+                  href="/login?redirect=/profile?tab=play"
+                  className="inline-block border border-dashed border-gray-800 px-6 py-2.5 text-xs font-bold uppercase tracking-widest text-gray-800 hover:bg-gray-800 hover:text-white transition-colors"
+                >
+                  로그인
+                </Link>
+              </div>
+            )}
           </div>
         )}
 
