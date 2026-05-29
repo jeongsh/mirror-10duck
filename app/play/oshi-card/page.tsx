@@ -2,12 +2,22 @@
 
 import Link from "next/link";
 import { CSSProperties, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Download, ImagePlus, RefreshCcw, Save, Share2, X } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowLeft, Download, ImagePlus, RefreshCcw, Save, Share2, X } from "lucide-react";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { supabase } from "@/lib/supabase/client";
 import { getOshiList, upsertOshi } from "@/lib/supabase/oshi";
-import { createOshiCardShare, fetchLatestOshiCardShareForUser, type OshiCardShare } from "@/lib/supabase/oshiCardShares";
+import {
+  createOshiCardShare,
+  deleteOshiCardShare,
+  fetchOwnedOshiCardShareById,
+  fetchOshiCardSharesForUser,
+  MAX_OWNED_CARDS,
+  updateOshiCardShare,
+  type OshiCardShare,
+} from "@/lib/supabase/oshiCardShares";
 import CardImageCropModal from "@/components/profile/CardImageCropModal";
+import OshiCardManagePanel from "./OshiCardManagePanel";
 import type { OfficialWork } from "@/types/official";
 import OshiCardStyles from "./OshiCardStyles";
 
@@ -187,6 +197,11 @@ function oshiNameStyle(name: string): CSSProperties {
 
 export default function OshiCardPage() {
   const authUser = useAuthUser();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const editCardId = searchParams.get("edit");
+  const isNewCard = searchParams.has("new");
+  const showManageView = Boolean(authUser?.id && !editCardId && !isNewCard);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const oshiAvatarInputRef = useRef<HTMLInputElement>(null);
   const previewCardRef = useRef<HTMLDivElement>(null);
@@ -214,6 +229,9 @@ export default function OshiCardPage() {
   const [oshiAvatarDataUrl, setOshiAvatarDataUrl] = useState("");
   const [cropTarget, setCropTarget] = useState<CropTarget | null>(null);
   const [shareUrl, setShareUrl] = useState("");
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [ownedCards, setOwnedCards] = useState<OshiCardShare[]>([]);
+  const [cardsLoading, setCardsLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [isHoveringCard, setIsHoveringCard] = useState(false);
@@ -222,6 +240,7 @@ export default function OshiCardPage() {
   const [tilt, setTilt] = useState<TiltState>({ rotateX: 0, rotateY: 0, glareX: 50, glareY: 50 });
 
   const resetCardForm = () => {
+    setEditingCardId(null);
     setNickname("");
     setOshi("");
     setWorks([]);
@@ -237,6 +256,7 @@ export default function OshiCardPage() {
 
   const applyShareToForm = (share: OshiCardShare) => {
     skipNextShareUrlResetRef.current = true;
+    setEditingCardId(share.id);
     setNickname(share.nickname ?? "");
     setOshi(share.oshi ?? "");
     setWorks(Array.isArray(share.works) ? share.works.slice(0, 5) : []);
@@ -264,33 +284,72 @@ export default function OshiCardPage() {
 
   useEffect(() => {
     if (authUser === undefined) return;
-    const p = new URLSearchParams(window.location.search);
-    const hasUrlParams = p.has("n") || p.has("o") || p.has("w") || p.has("g") || p.has("t");
-    if (hasUrlParams) return;
-
-    if (!authUser) {
-      resetCardForm();
+    if (!authUser?.id) {
+      setOwnedCards([]);
+      setCardsLoading(false);
       return;
     }
 
     let cancelled = false;
-    fetchLatestOshiCardShareForUser(authUser.id)
+    setCardsLoading(true);
+    fetchOshiCardSharesForUser(authUser.id)
+      .then((shares) => {
+        if (!cancelled) setOwnedCards(shares);
+      })
+      .catch(() => {
+        if (!cancelled) setOwnedCards([]);
+      })
+      .finally(() => {
+        if (!cancelled) setCardsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser?.id]);
+
+  useEffect(() => {
+    if (authUser === undefined || showManageView) return;
+
+    const p = new URLSearchParams(window.location.search);
+    const hasLegacyUrlParams = p.has("n") || p.has("o") || p.has("w") || p.has("g") || p.has("t");
+    if (hasLegacyUrlParams) return;
+
+    if (!authUser?.id) {
+      resetCardForm();
+      return;
+    }
+
+    if (isNewCard) {
+      resetCardForm();
+      return;
+    }
+
+    if (!editCardId) return;
+
+    let cancelled = false;
+    fetchOwnedOshiCardShareById(editCardId, authUser.id)
       .then((share) => {
         if (cancelled) return;
         if (share) {
           applyShareToForm(share);
         } else {
           resetCardForm();
+          setMessage("카드를 찾을 수 없습니다.");
+          router.replace("/play/oshi-card");
         }
       })
       .catch(() => {
-        if (!cancelled) resetCardForm();
+        if (!cancelled) {
+          resetCardForm();
+          router.replace("/play/oshi-card");
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [authUser]);
+  }, [authUser, editCardId, isNewCard, router, showManageView]);
 
   useEffect(() => {
     if (skipNextShareUrlResetRef.current) {
@@ -501,6 +560,11 @@ export default function OshiCardPage() {
   };
 
   const handleSaveShareCard = async () => {
+    if (!oshi.trim()) {
+      setMessage("최애를 먼저 입력해 주세요.");
+      return;
+    }
+
     setBusy(true);
     try {
       let ogImageDataUrl = "";
@@ -512,8 +576,7 @@ export default function OshiCardPage() {
         console.warn("OG image capture skipped:", error);
       }
 
-      const share = await createOshiCardShare({
-        ownerId: authUser?.id ?? null,
+      const payload = {
         nickname,
         oshi,
         works,
@@ -522,15 +585,51 @@ export default function OshiCardPage() {
         backgroundImageDataUrl: imageDataUrl,
         oshiAvatarDataUrl,
         ogImageDataUrl,
-      });
+      };
+
+      let share: OshiCardShare;
+      if (authUser?.id && editingCardId) {
+        share = await updateOshiCardShare(editingCardId, authUser.id, payload);
+        setOwnedCards((prev) => prev.map((item) => (item.id === share.id ? share : item)));
+        setMessage("카드를 저장했습니다.");
+      } else if (authUser?.id) {
+        share = await createOshiCardShare({ ownerId: authUser.id, ...payload });
+        setEditingCardId(share.id);
+        setOwnedCards((prev) => [share, ...prev.filter((item) => item.id !== share.id)].slice(0, MAX_OWNED_CARDS));
+        router.replace(`/play/oshi-card?edit=${share.id}`);
+        setMessage(`카드를 저장했습니다. (${ownedCards.length + 1}/${MAX_OWNED_CARDS}장)`);
+      } else {
+        share = await createOshiCardShare({ ownerId: null, ...payload });
+        setMessage("카드를 30일 공유용으로 저장했고 링크를 복사했습니다.");
+      }
+
       const url = `${window.location.origin}/play/oshi-card/view/${share.id}`;
       setShareUrl(url);
       await navigator.clipboard.writeText(url).catch(() => undefined);
-      setMessage("카드를 30일 공유용으로 저장했고 링크를 복사했습니다.");
     } catch (error) {
       console.error("Failed to save oshi card share:", error);
-      setShareUrl(buildFallbackShareUrl());
-      setMessage("DB 저장에 실패했습니다. Supabase 마이그레이션 적용 여부를 확인해 주세요.");
+      if (authUser?.id) {
+        setMessage(error instanceof Error ? error.message : "카드 저장에 실패했습니다.");
+      } else {
+        setShareUrl(buildFallbackShareUrl());
+        setMessage("DB 저장에 실패했습니다. Supabase 마이그레이션 적용 여부를 확인해 주세요.");
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDeleteOwnedCard = async (cardId: string) => {
+    if (!authUser?.id) return;
+    if (!window.confirm("이 카드를 삭제할까요? 삭제하면 공유 링크도 더 이상 열리지 않습니다.")) return;
+
+    setBusy(true);
+    try {
+      await deleteOshiCardShare(cardId, authUser.id);
+      setOwnedCards((prev) => prev.filter((item) => item.id !== cardId));
+      setMessage("카드를 삭제했습니다.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "카드 삭제에 실패했습니다.");
     } finally {
       setBusy(false);
     }
@@ -540,7 +639,11 @@ export default function OshiCardPage() {
     try {
       const url = shareUrl;
       if (!url) {
-        setMessage("먼저 카드 저장을 눌러 30일 공유 링크를 만들어 주세요.");
+        setMessage(
+          authUser?.id
+            ? "먼저 카드 저장을 눌러 공유 링크를 만들어 주세요."
+            : "먼저 카드 저장을 눌러 30일 공유 링크를 만들어 주세요.",
+        );
         return;
       }
       const shareTitle = `${displayName}의 덕질 프로필 카드`;
@@ -558,11 +661,19 @@ export default function OshiCardPage() {
 
       if (canOpenNativeShare) {
         await navigator.share({ title: shareTitle, text: shareText, url });
-        setMessage(copied ? "30일짜리 공유 링크를 복사했고 SNS 공유 창을 열었습니다." : "30일짜리 SNS 공유 창을 열었습니다.");
+        setMessage(
+          copied
+            ? authUser?.id
+              ? "공유 링크를 복사했고 SNS 공유 창을 열었습니다."
+              : "30일짜리 공유 링크를 복사했고 SNS 공유 창을 열었습니다."
+            : authUser?.id
+              ? "SNS 공유 창을 열었습니다."
+              : "30일짜리 SNS 공유 창을 열었습니다.",
+        );
         return;
       }
       if (copied) {
-        setMessage("30일짜리 공유 링크가 클립보드에 복사됐습니다.");
+        setMessage(authUser?.id ? "공유 링크가 클립보드에 복사됐습니다." : "30일짜리 공유 링크가 클립보드에 복사됐습니다.");
         return;
       }
       setMessage("클립보드 권한이 막혀 링크 복사에 실패했습니다.");
@@ -1078,16 +1189,49 @@ export default function OshiCardPage() {
     </div>
   );
 
+  if (showManageView) {
+    return (
+      <>
+        <OshiCardStyles />
+        <OshiCardManagePanel
+          cards={ownedCards}
+          loading={cardsLoading}
+          busy={busy}
+          onDelete={handleDeleteOwnedCard}
+        />
+        {message ? (
+          <div className="fixed bottom-5 left-1/2 z-[10000] -translate-x-1/2 rounded-full border border-zinc-700 bg-zinc-950 px-4 py-2 text-xs font-black text-white shadow-2xl">
+            {message}
+          </div>
+        ) : null}
+      </>
+    );
+  }
+
   return (
     <main className="w-full">
       <OshiCardStyles />
       <div className="border border-dashed border-gray-500 bg-white p-5">
-        <Link href="/play" className="text-xs font-bold text-gray-500 hover:underline">
-          바이럴 허브로 돌아가기
-        </Link>
-        <h1 className="mt-3 text-2xl font-black text-gray-900">덕질 프로필 카드 생성기</h1>
+        {authUser?.id ? (
+          <Link
+            href="/play/oshi-card"
+            className="inline-flex items-center gap-1 text-xs font-bold text-gray-500 hover:underline"
+          >
+            <ArrowLeft size={14} />
+            내 카드 관리로 돌아가기
+          </Link>
+        ) : (
+          <Link href="/play" className="text-xs font-bold text-gray-500 hover:underline">
+            바이럴 허브로 돌아가기
+          </Link>
+        )}
+        <h1 className="mt-3 text-2xl font-black text-gray-900">
+          {authUser?.id ? (editingCardId ? "최애 카드 수정" : "새 최애 카드 만들기") : "덕질 프로필 카드 생성기"}
+        </h1>
         <p className="mt-2 text-sm leading-6 text-gray-600">
-          왼쪽 카드에서 직접 입력하고, 오른쪽 카드에서 마우스 오버 홀로그램 반응을 확인합니다.
+          {authUser?.id
+            ? `계정에 최대 ${MAX_OWNED_CARDS}장까지 저장할 수 있습니다. 저장하면 공유 링크가 생성됩니다.`
+            : "왼쪽 카드에서 직접 입력하고, 오른쪽 카드에서 마우스 오버 홀로그램 반응을 확인합니다."}
         </p>
       </div>
 
@@ -1248,7 +1392,9 @@ export default function OshiCardPage() {
 
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         <p className="border border-dashed border-gray-400 bg-white p-3 text-center text-xs font-bold text-gray-600">
-          카드 저장을 누르면 로그인 여부와 상관없이 30일짜리 공유 링크가 생성됩니다.
+          {authUser?.id
+            ? "저장하면 계정에 영구 보관되며, 공유 링크가 생성됩니다."
+            : "카드 저장을 누르면 30일짜리 공유 링크가 생성됩니다."}
         </p>
         <p className="border border-dashed border-gray-400 bg-white p-3 text-center text-xs font-bold text-gray-600">
           기본 반짝임은 양쪽에 유지되고, hover 반응은 오른쪽만 켜집니다.

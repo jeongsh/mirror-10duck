@@ -1,10 +1,15 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
-import { upsertOtakuTypeResult } from "@/lib/supabase/otakuTypeResults";
+import {
+  fetchOtakuTypeResult,
+  upsertOtakuTypeResult,
+  type OtakuTypeResultRow,
+} from "@/lib/supabase/otakuTypeResults";
 
 /* ============================================================
  * 기존 질문지 보관 (어떤 오타쿠인가 — 타입 테스트)
@@ -425,16 +430,126 @@ function calcResult(answers: (number | null)[]): { type: ResultInfo; scores: Sco
   };
 }
 
+function fallbackAxis(picked: AxisChoice, axisType: AxisType): AxisDetail {
+  const hiKey = HI_AXIS[axisType];
+  const isHi = picked === hiKey;
+  return {
+    hi: isHi ? 6 : 4,
+    lo: isHi ? 4 : 6,
+    hiMax: 12,
+    loMax: 12,
+    hiCount: 0,
+    loCount: 0,
+    questionCount: 4,
+    pct: isHi ? 60 : 40,
+    side: isHi ? "hi" : "lo",
+  };
+}
+
+function buildV1FromSavedRow(row: OtakuTypeResultRow): { type: ResultInfo; scores: ScoreData } | null {
+  const code = row.result_code as ResultCode;
+  const type = TYPES[code];
+  if (!type) return null;
+
+  const raw = row.scores as Partial<ScoreData>;
+  const snT = (raw.snT ?? code[0]) as "S" | "N";
+  const dcT = (raw.dcT ?? code[1]) as "D" | "C";
+  const mlT = (raw.mlT ?? code[2]) as "M" | "L";
+  const tier =
+    raw.tier ??
+    TIERS.find((item) => item.name === row.tier_name) ??
+    TIERS[TIERS.length - 1];
+
+  const sn = raw.sn ?? fallbackAxis(snT, "S/N");
+  const dc = raw.dc ?? fallbackAxis(dcT, "D/C");
+  const ml = raw.ml ?? fallbackAxis(mlT, "M/L");
+  const total = raw.total ?? sn.hi + dc.hi + ml.hi;
+  const totalMax = raw.totalMax ?? sn.hiMax + dc.hiMax + ml.hiMax;
+  const pct = raw.pct ?? (totalMax === 0 ? 0 : Math.round((total / totalMax) * 100));
+
+  return {
+    type,
+    scores: {
+      sn,
+      dc,
+      ml,
+      total,
+      totalMax,
+      pct,
+      snT,
+      dcT,
+      mlT,
+      tier,
+      perQuestion: raw.perQuestion ?? [],
+    },
+  };
+}
+
 // ─── 메인 페이지 ─────────────────────────────────────────────
 
 export default function OtakuTypePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto flex max-w-[560px] flex-col items-center gap-6 py-24 px-4">
+          <div className="h-8 w-8 animate-spin border-2 border-[#E5527E] border-t-transparent rounded-full" />
+          <p className="text-sm text-gray-500">불러오는 중...</p>
+        </main>
+      }
+    >
+      <OtakuTypePageContent />
+    </Suspense>
+  );
+}
+
+function OtakuTypePageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const showSaved = searchParams.get("saved") === "1";
   const authUser = useAuthUser();
   const savedResultRef = useRef(false);
+  const [restoring, setRestoring] = useState(showSaved);
+  const [loadedResult, setLoadedResult] = useState<{ type: ResultInfo; scores: ScoreData } | null>(
+    null,
+  );
   const [phase, setPhase] = useState<"intro" | "quiz" | "result">("intro");
   const [cur, setCur] = useState(0);
   const [answers, setAnswers] = useState<(number | null)[]>(new Array(QUESTIONS.length).fill(null));
 
   useEffect(() => {
+    if (!showSaved) return;
+    if (authUser === undefined) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      setRestoring(true);
+      try {
+        if (!authUser?.id) return;
+
+        const row = await fetchOtakuTypeResult(authUser.id, "v1");
+        if (cancelled) return;
+        if (!row) return;
+
+        const restored = buildV1FromSavedRow(row);
+        if (!restored) return;
+
+        setLoadedResult(restored);
+        setPhase("result");
+      } catch (error) {
+        console.error("[otaku-type] saved result load failed:", error);
+      } finally {
+        if (!cancelled) setRestoring(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showSaved, authUser]);
+
+  useEffect(() => {
+    if (loadedResult) return;
     if (phase !== "result" || !authUser?.id || savedResultRef.current) return;
     if (answers.some((answer) => answer === null)) return;
 
@@ -451,9 +566,15 @@ export default function OtakuTypePage() {
         snT: scores.snT,
         dcT: scores.dcT,
         mlT: scores.mlT,
+        total: scores.total,
+        totalMax: scores.totalMax,
+        sn: scores.sn,
+        dc: scores.dc,
+        ml: scores.ml,
+        tier: scores.tier,
       },
     }).catch(console.error);
-  }, [phase, authUser?.id, answers]);
+  }, [phase, authUser?.id, answers, loadedResult]);
 
   const select = (idx: number) => {
     const clickedAt = cur;
@@ -469,10 +590,21 @@ export default function OtakuTypePage() {
 
   const reset = () => {
     savedResultRef.current = false;
+    setLoadedResult(null);
     setPhase("intro");
     setCur(0);
     setAnswers(new Array(QUESTIONS.length).fill(null));
+    router.replace("/play/otaku-type");
   };
+
+  if (restoring) {
+    return (
+      <main className="mx-auto flex max-w-[560px] flex-col items-center gap-6 py-24 px-4">
+        <div className="h-8 w-8 animate-spin border-2 border-[#E5527E] border-t-transparent rounded-full" />
+        <p className="text-sm text-gray-500">저장된 결과 불러오는 중...</p>
+      </main>
+    );
+  }
 
   // ── 인트로 ──
   if (phase === "intro") {
@@ -534,7 +666,7 @@ export default function OtakuTypePage() {
 
   // ── 결과 ──
   if (phase === "result") {
-    const { type: t, scores: d } = calcResult(answers);
+    const { type: t, scores: d } = loadedResult ?? calcResult(answers);
 
     const AxisBar = ({ axisType, name }: {
       axisType: AxisType; name: string;

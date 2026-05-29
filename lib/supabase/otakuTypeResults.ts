@@ -54,3 +54,18 @@ export async function fetchOtakuTypeResults(userId: string): Promise<OtakuTypeRe
   if (error) throw error;
   return (data as OtakuTypeResultRow[]) ?? [];
 }
+
+export async function fetchOtakuTypeResult(
+  userId: string,
+  testVersion: OtakuTypeTestVersion,
+): Promise<OtakuTypeResultRow | null> {
+  const { data, error } = await supabase
+    .from("otaku_type_results")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("test_version", testVersion)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as OtakuTypeResultRow | null) ?? null;
+}

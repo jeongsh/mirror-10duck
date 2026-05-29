@@ -111,7 +111,17 @@ export async function getOshiAnalysisCharactersByIds(
     return [];
   }
 
-  return (data ?? []) as OshiAnalysisCharacter[];
+  return orderOshiAnalysisCharacters(ids, (data ?? []) as OshiAnalysisCharacter[]);
+}
+
+export function orderOshiAnalysisCharacters(
+  ids: string[],
+  characters: OshiAnalysisCharacter[],
+): OshiAnalysisCharacter[] {
+  const byId = new Map(characters.map((character) => [character.id, character]));
+  return ids
+    .map((id) => byId.get(id))
+    .filter((character): character is OshiAnalysisCharacter => Boolean(character));
 }
 
 /**

@@ -73,3 +73,18 @@ export async function fetchLatestOshiAnalysisResult(
   if (error) throw error;
   return (data as OshiAnalysisResultRow | null) ?? null;
 }
+
+export async function fetchOshiAnalysisResultById(
+  resultId: string,
+): Promise<OshiAnalysisResultRow | null> {
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("oshi_analysis_results")
+    .select("*")
+    .eq("id", resultId)
+    .gt("expires_at", now)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as OshiAnalysisResultRow | null) ?? null;
+}

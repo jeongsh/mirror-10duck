@@ -1,10 +1,13 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
-import { upsertOtakuTypeResult } from "@/lib/supabase/otakuTypeResults";
+import {
+  fetchOtakuTypeResult,
+  upsertOtakuTypeResult,
+} from "@/lib/supabase/otakuTypeResults";
 
 type V2Type = "idol" | "munchkin" | "school" | "animal" | "monster" | "sports" | "adventure" | "bishounen" | "family";
 
@@ -341,16 +344,53 @@ function calcResult(answers: (number | null)[]): { winner: V2Type; votes: Record
 // ─── 메인 페이지 ─────────────────────────────────────────────
 
 function OtakuTypeV2PageContent() {
+  const router = useRouter();
   const authUser = useAuthUser();
   const savedResultRef = useRef(false);
   const searchParams = useSearchParams();
+  const showSaved = searchParams.get("saved") === "1";
+  const [restoring, setRestoring] = useState(showSaved);
+  const [restoredWinner, setRestoredWinner] = useState<V2Type | null>(null);
   const [phase, setPhase] = useState<"intro" | "quiz" | "result">(
-    searchParams.get("start") === "1" ? "quiz" : "intro"
+    searchParams.get("start") === "1" ? "quiz" : "intro",
   );
   const [cur, setCur] = useState(0);
   const [answers, setAnswers] = useState<(number | null)[]>(new Array(QUESTIONS.length).fill(null));
 
   useEffect(() => {
+    if (!showSaved) return;
+    if (authUser === undefined) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      setRestoring(true);
+      try {
+        if (!authUser?.id) return;
+
+        const row = await fetchOtakuTypeResult(authUser.id, "v2");
+        if (cancelled) return;
+        if (!row) return;
+
+        const winner = row.result_code as V2Type;
+        if (!TYPES[winner]) return;
+
+        setRestoredWinner(winner);
+        setPhase("result");
+      } catch (error) {
+        console.error("[otaku-type/v2] saved result load failed:", error);
+      } finally {
+        if (!cancelled) setRestoring(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showSaved, authUser]);
+
+  useEffect(() => {
+    if (restoredWinner) return;
     if (phase !== "result" || !authUser?.id || savedResultRef.current) return;
     if (answers.some((answer) => answer === null)) return;
 
@@ -364,7 +404,7 @@ function OtakuTypeV2PageContent() {
       resultBadge: result.badge,
       scores: { votes },
     }).catch(console.error);
-  }, [phase, authUser?.id, answers]);
+  }, [phase, authUser?.id, answers, restoredWinner]);
 
   const select = (idx: number) => {
     const clickedAt = cur;
@@ -380,10 +420,21 @@ function OtakuTypeV2PageContent() {
 
   const reset = () => {
     savedResultRef.current = false;
+    setRestoredWinner(null);
     setPhase("intro");
     setCur(0);
     setAnswers(new Array(QUESTIONS.length).fill(null));
+    router.replace("/play/otaku-type/v2");
   };
+
+  if (restoring) {
+    return (
+      <main className="mx-auto flex max-w-[560px] flex-col items-center gap-6 py-24 px-4">
+        <div className="h-8 w-8 animate-spin border-2 border-[#534AB7] border-t-transparent rounded-full" />
+        <p className="text-sm text-gray-500">저장된 결과 불러오는 중...</p>
+      </main>
+    );
+  }
 
   // ── 인트로 ──
   if (phase === "intro") {
@@ -435,7 +486,7 @@ function OtakuTypeV2PageContent() {
 
   // ── 결과 ──
   if (phase === "result") {
-    const { winner } = calcResult(answers);
+    const winner = restoredWinner ?? calcResult(answers).winner;
     const t = TYPES[winner];
 
     return (
@@ -591,7 +642,14 @@ function OtakuTypeV2PageContent() {
 
 export default function OtakuTypeV2Page() {
   return (
-    <Suspense>
+    <Suspense
+      fallback={
+        <main className="mx-auto flex max-w-[560px] flex-col items-center gap-6 py-24 px-4">
+          <div className="h-8 w-8 animate-spin border-2 border-[#534AB7] border-t-transparent rounded-full" />
+          <p className="text-sm text-gray-500">불러오는 중...</p>
+        </main>
+      }
+    >
       <OtakuTypeV2PageContent />
     </Suspense>
   );

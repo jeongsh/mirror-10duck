@@ -1,17 +1,22 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { X, Download, Search, ChevronRight, RotateCcw, Plus, Pencil } from "lucide-react";
 import {
   searchOshiAnalysisCharacters,
   searchOshiAnalysisWorks,
   getOshiRecommendations,
+  getOshiAnalysisCharactersByIds,
   type OshiAnalysisCharacter,
   type OshiAnalysisWork,
 } from "@/lib/supabase/oshiAnalysis";
-import { analyzeOshi, type OshiAnalysisResult, type HexStat } from "@/lib/oshiAnalysis";
-import { saveOshiAnalysisResult } from "@/lib/supabase/oshiAnalysisResults";
+import { analyzeOshi, oshiAnalysisResultFromSaved, type OshiAnalysisResult, type HexStat } from "@/lib/oshiAnalysis";
+import {
+  fetchOshiAnalysisResultById,
+  saveOshiAnalysisResult,
+} from "@/lib/supabase/oshiAnalysisResults";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { catalogRequestPath } from "@/lib/catalogRequest";
 import { mapUrlsToDataUrls, resolveImageSrc } from "@/lib/imageDataUrl";
@@ -480,8 +485,26 @@ function ResultCard({
 }
 
 export default function OshiAnalysisPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex w-full flex-col items-center justify-center gap-6 py-24">
+          <div className="h-8 w-8 animate-spin border-2 border-gray-900 border-t-transparent" />
+          <p className="text-sm font-black text-gray-700">불러오는 중...</p>
+        </main>
+      }
+    >
+      <OshiAnalysisPageContent />
+    </Suspense>
+  );
+}
+
+function OshiAnalysisPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const savedId = searchParams.get("saved");
   const authUser = useAuthUser();
-  const [step, setStep] = useState<Step>("start");
+  const [step, setStep] = useState<Step>(() => (savedId ? "analyzing" : "start"));
 
   // Character list state
   const [characters, setCharacters] = useState<OshiAnalysisCharacter[]>([]);
@@ -511,6 +534,58 @@ export default function OshiAnalysisPage() {
   // Keep current query context in refs so loadMore always uses up-to-date values
   const currentContextRef = useRef({ query: "", workId: undefined as string | undefined });
   const loadMoreInProgressRef = useRef(false);
+
+  // ── Saved result deep link (?saved=uuid) ─────────────────────────────────
+  useEffect(() => {
+    if (!savedId) return;
+    if (authUser === undefined) {
+      setStep("analyzing");
+      setAnalyzingMessage("저장된 결과 불러오는 중...");
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      setStep("analyzing");
+      setAnalyzingMessage("저장된 결과 불러오는 중...");
+
+      try {
+        const row = await fetchOshiAnalysisResultById(savedId);
+        if (cancelled) return;
+
+        if (!row) {
+          setStep("start");
+          return;
+        }
+
+        const characters = await getOshiAnalysisCharactersByIds(row.selected_character_ids);
+        if (cancelled) return;
+
+        setSelected(characters);
+        setResult(oshiAnalysisResultFromSaved(row));
+        setRecommendations([]);
+        setStep("result");
+
+        void getOshiRecommendations(
+          (row.signature_tags ?? []).map((tag) => tag.tag),
+          row.selected_character_ids ?? [],
+          3,
+        )
+          .then((recs) => {
+            if (!cancelled) setRecommendations(recs);
+          })
+          .catch(() => {});
+      } catch (error) {
+        console.error("[oshi-analysis] saved result load failed:", error);
+        if (!cancelled) setStep("start");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [savedId, authUser]);
 
   // ── Unified fetch: runs when query / selectedWork / step changes ─────────
   useEffect(() => {
@@ -733,6 +808,7 @@ export default function OshiAnalysisPage() {
     setSelectedWork(null);
     setCharacters([]);
     setStep("start");
+    router.replace("/play/oshi-analysis");
   };
 
   const handleSelectWork = (work: OshiAnalysisWork) => {
@@ -849,7 +925,10 @@ export default function OshiAnalysisPage() {
           </button>
           <button
             type="button"
-            onClick={() => setStep("select")}
+            onClick={() => {
+              router.replace("/play/oshi-analysis");
+              setStep("select");
+            }}
             className="inline-flex items-center justify-center gap-2 border border-dashed border-gray-400 bg-white px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50"
           >
             최애 다시 선택

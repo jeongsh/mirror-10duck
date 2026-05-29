@@ -2,6 +2,8 @@ import { supabase } from "@/lib/supabase/client";
 
 const BUCKET = "oshi-card-shares";
 const SHARE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+export const MAX_OWNED_CARDS = 3;
+const OWNED_CARD_EXPIRES_AT = "2099-12-31T23:59:59.999Z";
 
 export type OshiCardShare = {
   id: string;
@@ -29,6 +31,12 @@ export type CreateOshiCardShareInput = {
   oshiAvatarDataUrl?: string;
   ogImageDataUrl?: string;
 };
+
+export type UpdateOshiCardShareInput = Omit<CreateOshiCardShareInput, "ownerId">;
+
+export function isPermanentOshiCardShare(share: OshiCardShare): boolean {
+  return share.owner_id !== null;
+}
 
 function dataUrlToBlob(dataUrl: string): Blob {
   const [meta, base64] = dataUrl.split(",");
@@ -117,15 +125,38 @@ async function uploadDataUrl(shareId: string, kind: "background" | "avatar" | "o
   return publicUrl;
 }
 
-export async function createOshiCardShare(input: CreateOshiCardShareInput): Promise<OshiCardShare> {
-  const id = crypto.randomUUID();
-  const expiresAt = new Date(Date.now() + SHARE_TTL_MS).toISOString();
-
-  const [backgroundImageUrl, oshiAvatarUrl, ogImageUrl] = await Promise.all([
-    uploadDataUrl(id, "background", input.backgroundImageDataUrl),
-    uploadDataUrl(id, "avatar", input.oshiAvatarDataUrl),
-    uploadDataUrl(id, "og", input.ogImageDataUrl),
+async function uploadShareImages(shareId: string, input: UpdateOshiCardShareInput) {
+  return Promise.all([
+    uploadDataUrl(shareId, "background", input.backgroundImageDataUrl),
+    uploadDataUrl(shareId, "avatar", input.oshiAvatarDataUrl),
+    uploadDataUrl(shareId, "og", input.ogImageDataUrl),
   ]);
+}
+
+export async function countOshiCardSharesForUser(userId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("oshi_card_shares")
+    .select("*", { count: "exact", head: true })
+    .eq("owner_id", userId);
+
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function createOshiCardShare(input: CreateOshiCardShareInput): Promise<OshiCardShare> {
+  if (input.ownerId) {
+    const count = await countOshiCardSharesForUser(input.ownerId);
+    if (count >= MAX_OWNED_CARDS) {
+      throw new Error(`카드는 최대 ${MAX_OWNED_CARDS}장까지 저장할 수 있습니다. 기존 카드를 삭제한 뒤 다시 시도해 주세요.`);
+    }
+  }
+
+  const id = crypto.randomUUID();
+  const expiresAt = input.ownerId
+    ? OWNED_CARD_EXPIRES_AT
+    : new Date(Date.now() + SHARE_TTL_MS).toISOString();
+
+  const [backgroundImageUrl, oshiAvatarUrl, ogImageUrl] = await uploadShareImages(id, input);
 
   const { data, error } = await supabase
     .from("oshi_card_shares")
@@ -149,6 +180,42 @@ export async function createOshiCardShare(input: CreateOshiCardShareInput): Prom
   return data as OshiCardShare;
 }
 
+export async function updateOshiCardShare(
+  id: string,
+  userId: string,
+  input: UpdateOshiCardShareInput,
+): Promise<OshiCardShare> {
+  const [backgroundImageUrl, oshiAvatarUrl, ogImageUrl] = await uploadShareImages(id, input);
+
+  const patch: Record<string, unknown> = {
+    nickname: input.nickname.trim() || null,
+    oshi: input.oshi.trim() || null,
+    works: input.works.slice(0, 5),
+    grade: input.grade,
+    type_id: input.typeId,
+  };
+
+  if (backgroundImageUrl) patch.background_image_url = backgroundImageUrl;
+  if (oshiAvatarUrl) patch.oshi_avatar_url = oshiAvatarUrl;
+  if (ogImageUrl) patch.og_image_url = ogImageUrl;
+
+  const { data, error } = await supabase
+    .from("oshi_card_shares")
+    .update(patch)
+    .eq("id", id)
+    .eq("owner_id", userId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as OshiCardShare;
+}
+
+export async function deleteOshiCardShare(id: string, userId: string): Promise<void> {
+  const { error } = await supabase.from("oshi_card_shares").delete().eq("id", id).eq("owner_id", userId);
+  if (error) throw error;
+}
+
 export async function fetchLatestOshiCardShareForUser(userId: string): Promise<OshiCardShare | null> {
   const shares = await fetchOshiCardSharesForUser(userId, 1);
   return shares[0] ?? null;
@@ -156,18 +223,32 @@ export async function fetchLatestOshiCardShareForUser(userId: string): Promise<O
 
 export async function fetchOshiCardSharesForUser(
   userId: string,
-  limit = 5,
+  limit = MAX_OWNED_CARDS,
 ): Promise<OshiCardShare[]> {
   const { data, error } = await supabase
     .from("oshi_card_shares")
     .select("*")
     .eq("owner_id", userId)
-    .gt("expires_at", new Date().toISOString())
     .order("created_at", { ascending: false })
     .limit(limit);
 
   if (error) throw error;
   return (data as OshiCardShare[]) ?? [];
+}
+
+export async function fetchOwnedOshiCardShareById(
+  id: string,
+  userId: string,
+): Promise<OshiCardShare | null> {
+  const { data, error } = await supabase
+    .from("oshi_card_shares")
+    .select("*")
+    .eq("id", id)
+    .eq("owner_id", userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as OshiCardShare | null) ?? null;
 }
 
 export async function fetchOshiCardShare(id: string): Promise<OshiCardShare | null> {

@@ -22,6 +22,33 @@ export type OshiAnalysisResult = {
   taggedCount: number;
 };
 
+export function confidenceLabelFromScore(confidence: number): string {
+  if (confidence >= 80) return "분석 신뢰도 높음";
+  if (confidence >= 50) return "분석 신뢰도 보통";
+  return "태그가 부족해서 대충 들켰습니다";
+}
+
+export function oshiAnalysisResultFromSaved(data: {
+  result_title: string;
+  result_summary: string;
+  hex_stats: HexStat[];
+  signature_tags: SignatureTag[];
+  confidence: number;
+  selected_count: number;
+  tagged_count: number;
+}): OshiAnalysisResult {
+  return {
+    typeName: data.result_title,
+    summary: data.result_summary,
+    hexStats: data.hex_stats,
+    signatureTags: data.signature_tags,
+    confidence: data.confidence,
+    confidenceLabel: confidenceLabelFromScore(data.confidence),
+    selectedCount: data.selected_count,
+    taggedCount: data.tagged_count,
+  };
+}
+
 /**
  * 전체 DB(약 1,714명) 기준으로 측정한 태그 보유 비율.
  * raw 빈도 점수는 모두 "성장형·다정" 같은 흔한 태그로 수렴하므로,
@@ -287,12 +314,7 @@ export function analyzeOshi(characters: OshiAnalysisCharacter[]): OshiAnalysisRe
   const base = count / 10;
   const tagCoverage = taggedCount / count;
   const confidence = Math.round((base * 0.4 + tagCoverage * 0.6) * 100);
-  const confidenceLabel =
-    confidence >= 80
-      ? "분석 신뢰도 높음"
-      : confidence >= 50
-        ? "분석 신뢰도 보통"
-        : "태그가 부족해서 대충 들켰습니다";
+  const confidenceLabel = confidenceLabelFromScore(confidence);
 
   // ── 유형명 / 한 줄 폭로 ──────────────────────────────────────
   const sortedAxes = [...hexStats].sort((a, b) => b.value - a.value);
