@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CSSProperties, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, PointerEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Download, ImagePlus, RefreshCcw, Save, Share2, X } from "lucide-react";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
@@ -196,6 +196,21 @@ function oshiNameStyle(name: string): CSSProperties {
 }
 
 export default function OshiCardPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex w-full flex-col items-center justify-center gap-6 py-24">
+          <div className="h-8 w-8 animate-spin border-2 border-gray-900 border-t-transparent" />
+          <p className="text-sm font-black text-gray-700">불러오는 중...</p>
+        </main>
+      }
+    >
+      <OshiCardPageContent />
+    </Suspense>
+  );
+}
+
+function OshiCardPageContent() {
   const authUser = useAuthUser();
   const router = useRouter();
   const searchParams = useSearchParams();

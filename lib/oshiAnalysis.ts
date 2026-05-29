@@ -1,4 +1,5 @@
 import type { OshiAnalysisCharacter } from "@/lib/supabase/oshiAnalysis";
+import type { OfficialCharacterPosition } from "@/types/official";
 
 export type HexStat = {
   key: string;
@@ -122,7 +123,7 @@ const DEFAULT_BASELINE = 0.03;
 
 type AxisMember =
   | { kind: "tag"; name: string }
-  | { kind: "pos"; name: string };
+  | { kind: "pos"; name: OfficialCharacterPosition };
 
 type AxisDef = {
   key: string;
@@ -131,7 +132,7 @@ type AxisDef = {
 };
 
 const t = (name: string): AxisMember => ({ kind: "tag", name });
-const p = (name: string): AxisMember => ({ kind: "pos", name });
+const p = (name: OfficialCharacterPosition): AxisMember => ({ kind: "pos", name });
 
 const AXES: AxisDef[] = [
   {
