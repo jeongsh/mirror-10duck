@@ -26,6 +26,7 @@
 | 애니·만화·게임 뉴스, 신작 알림, 방영/연재/출시 일정, 덕질 캘린더 | [news-release-calendar.md](./plans/news-release-calendar.md) | [moderation-notifications.md](./plans/moderation-notifications.md), [data-model.md](./plans/data-model.md), [character-community.md](./plans/character-community.md) |
 | Live2D, 캐릭터 리액션, 스티커 팩, 대표 캐릭터, 덕질 비서, 후순위 롤플레잉 | [character-community.md](./plans/character-community.md) | [LIVE2D_CHARACTER_GUIDE.md](./LIVE2D_CHARACTER_GUIDE.md), [ARCHITECTURE_OVERVIEW.md](./ARCHITECTURE_OVERVIEW.md) |
 | 오시(推し) 등록, 최애 작품/캐릭터 프로필 표시, 활동 배지 시스템 | [oshi-badges.md](./plans/oshi-badges.md) | [character-community.md](./plans/character-community.md), [data-model.md](./plans/data-model.md) |
+| 최애 캐릭터 선택 기반 취향분석, 캐릭터 태그 제안, 캐릭터 추가 요청 | [oshi-analysis.md](./plans/oshi-analysis.md) | [viral-entry-ia.md](./plans/viral-entry-ia.md), [oshi-badges.md](./plans/oshi-badges.md) |
 | 화면 완성도, 페이지별 완료 기준, UX 누락 점검 | [screen-acceptance.md](./plans/screen-acceptance.md) | 관련 도메인 문서 |
 | 후순위 실험/확장 후보 백로그 (채택 전 아이디어 포함) | [otaku-experiments.md](./plans/otaku-experiments.md) | [checklist.md](./plans/checklist.md), 관련 도메인 문서 |
 

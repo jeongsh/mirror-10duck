@@ -7,10 +7,14 @@ import { Download, Loader2, Plus, Trash2, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import {
   OFFICIAL_CATALOG_STATUS_OPTIONS,
+  OFFICIAL_CHARACTER_MEME_TAGS,
+  OFFICIAL_CHARACTER_POSITIONS,
+  OFFICIAL_CHARACTER_TAGS,
   OFFICIAL_WORK_CATEGORY_OPTIONS,
   joinList,
   normalizeOfficialSlug,
   splitList,
+  uniqueList,
 } from "@/lib/official/catalog";
 import { OSHI_TEMPLATE_PATH, parseOshiExcel } from "@/lib/official/excel";
 import { uploadOfficialCatalogImage } from "@/lib/official/storage";
@@ -27,13 +31,10 @@ type CharacterForm = {
   name: string;
   original_name: string;
   aliases: string;
-  birthday: string;
   gender: string;
-  age: string;
-  height: string;
-  voice_actor: string;
-  quote: string;
-  role_label: string;
+  positions: string;
+  tags: string;
+  meme_tags: string;
   description: string;
   profile_image_url: string;
   status: OfficialCatalogStatus;
@@ -46,13 +47,10 @@ const EMPTY_CHARACTER_FORM: CharacterForm = {
   name: "",
   original_name: "",
   aliases: "",
-  birthday: "",
   gender: "",
-  age: "",
-  height: "",
-  voice_actor: "",
-  quote: "",
-  role_label: "",
+  positions: "",
+  tags: "",
+  meme_tags: "",
   description: "",
   profile_image_url: "",
   status: "DRAFT",
@@ -267,13 +265,10 @@ export default function OfficialWorkDetailPage({
       name: character.name,
       original_name: character.original_name ?? "",
       aliases: joinList(character.aliases),
-      birthday: character.birthday ?? "",
       gender: character.gender ?? "",
-      age: character.age ?? "",
-      height: character.height ?? "",
-      voice_actor: character.voice_actor ?? "",
-      quote: character.quote ?? "",
-      role_label: character.role_label ?? "",
+      positions: joinList(character.positions),
+      tags: joinList(character.tags),
+      meme_tags: joinList(character.meme_tags),
       description: character.description ?? "",
       profile_image_url: character.profile_image_url ?? "",
       status: character.status,
@@ -285,19 +280,29 @@ export default function OfficialWorkDetailPage({
     setCharacterForm(EMPTY_CHARACTER_FORM);
   };
 
+  const toggleCharacterListValue = (
+    field: "positions" | "tags" | "meme_tags",
+    value: string,
+  ) => {
+    setCharacterForm((current) => {
+      const currentValues = splitList(current[field]);
+      const nextValues = currentValues.includes(value)
+        ? currentValues.filter((item) => item !== value)
+        : [...currentValues, value];
+      return { ...current, [field]: uniqueList(nextValues).join(", ") };
+    });
+  };
+
   const characterPayload = () => ({
     work_id: id,
     slug: normalizedCharacterSlug,
     name: characterForm.name.trim(),
     original_name: characterForm.original_name.trim() || null,
     aliases: splitList(characterForm.aliases),
-    birthday: characterForm.birthday || null,
     gender: characterForm.gender.trim() || null,
-    age: characterForm.age.trim() || null,
-    height: characterForm.height.trim() || null,
-    voice_actor: characterForm.voice_actor.trim() || null,
-    quote: characterForm.quote.trim() || null,
-    role_label: characterForm.role_label.trim() || null,
+    positions: uniqueList(splitList(characterForm.positions)),
+    tags: uniqueList(splitList(characterForm.tags)),
+    meme_tags: uniqueList(splitList(characterForm.meme_tags)),
     description: characterForm.description.trim(),
     profile_image_url: characterForm.profile_image_url.trim() || null,
     status: characterForm.status,
@@ -345,7 +350,6 @@ export default function OfficialWorkDetailPage({
       const { error } = await supabase.from("official_oshi_characters").upsert(
         rows.map((row) => ({
           ...row,
-          role_label: null,
           profile_image_url: null,
         })),
         { onConflict: "work_id,slug" },
@@ -585,8 +589,11 @@ export default function OfficialWorkDetailPage({
                         {character.original_name ? <div className="text-xs text-gray-400">{character.original_name}</div> : null}
                       </td>
                       <td className="p-3 text-gray-600">
-                        <div>{character.voice_actor || "-"}</div>
-                        <div className="text-xs text-gray-400">{[character.gender, character.age, character.height].filter(Boolean).join(" / ") || "-"}</div>
+                        <div className="text-xs font-semibold text-gray-700">{joinList(character.positions) || "-"}</div>
+                        <div className="mt-1 line-clamp-2 text-xs text-gray-400">{joinList(character.tags) || "-"}</div>
+                        {character.meme_tags?.length ? (
+                          <div className="mt-1 line-clamp-1 text-xs text-pink-500">{joinList(character.meme_tags)}</div>
+                        ) : null}
                       </td>
                       <td className="p-3 text-gray-600">{getCatalogLabel(character.status)}</td>
                       <td className="p-3 text-gray-600">{character.sort_order}</td>
@@ -639,37 +646,44 @@ export default function OfficialWorkDetailPage({
             <input value={characterForm.aliases} onChange={(event) => setCharacterForm((current) => ({ ...current, aliases: event.target.value }))} placeholder="쉼표로 구분" className="rounded border p-2 focus:border-black focus:outline-none" />
           </label>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <section className="space-y-3 rounded border border-dashed border-gray-300 p-3">
+            <h4 className="text-xs font-bold uppercase tracking-widest text-gray-500">캐릭터 속성 정보</h4>
             <label className="flex flex-col gap-1">
-              <span className="text-sm font-semibold">생일</span>
-              <input value={characterForm.birthday} onChange={(event) => setCharacterForm((current) => ({ ...current, birthday: event.target.value }))} className="rounded border p-2 focus:border-black focus:outline-none" />
+              <span className="text-sm font-semibold">포지션</span>
+              <input value={characterForm.positions} onChange={(event) => setCharacterForm((current) => ({ ...current, positions: event.target.value }))} placeholder="주인공, 라이벌" className="rounded border p-2 focus:border-black focus:outline-none" />
             </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-sm font-semibold">성별</span>
-              <input value={characterForm.gender} onChange={(event) => setCharacterForm((current) => ({ ...current, gender: event.target.value }))} className="rounded border p-2 focus:border-black focus:outline-none" />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-sm font-semibold">나이</span>
-              <input value={characterForm.age} onChange={(event) => setCharacterForm((current) => ({ ...current, age: event.target.value }))} className="rounded border p-2 focus:border-black focus:outline-none" />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-sm font-semibold">키</span>
-              <input value={characterForm.height} onChange={(event) => setCharacterForm((current) => ({ ...current, height: event.target.value }))} className="rounded border p-2 focus:border-black focus:outline-none" />
-            </label>
-          </div>
+            <div className="flex flex-wrap gap-1.5">
+              {OFFICIAL_CHARACTER_POSITIONS.map((position) => (
+                <button key={position} type="button" onClick={() => toggleCharacterListValue("positions", position)} className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${splitList(characterForm.positions).includes(position) ? "border-black bg-black text-white" : "border-gray-300 bg-white text-gray-600"}`}>
+                  {position}
+                </button>
+              ))}
+            </div>
 
-          <label className="flex flex-col gap-1">
-            <span className="text-sm font-semibold">성우</span>
-            <input value={characterForm.voice_actor} onChange={(event) => setCharacterForm((current) => ({ ...current, voice_actor: event.target.value }))} className="rounded border p-2 focus:border-black focus:outline-none" />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-sm font-semibold">대표대사</span>
-            <input value={characterForm.quote} onChange={(event) => setCharacterForm((current) => ({ ...current, quote: event.target.value }))} className="rounded border p-2 focus:border-black focus:outline-none" />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-sm font-semibold">역할/표기</span>
-            <input value={characterForm.role_label} onChange={(event) => setCharacterForm((current) => ({ ...current, role_label: event.target.value }))} placeholder="ex) 밀짚모자 일당" className="rounded border p-2 focus:border-black focus:outline-none" />
-          </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-sm font-semibold">태그</span>
+              <textarea value={characterForm.tags} onChange={(event) => setCharacterForm((current) => ({ ...current, tags: event.target.value }))} rows={3} placeholder="냉정, 카리스마, 성장형" className="rounded border p-2 focus:border-black focus:outline-none" />
+            </label>
+            <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto rounded border border-dashed border-gray-200 p-2">
+              {OFFICIAL_CHARACTER_TAGS.map((tag) => (
+                <button key={tag} type="button" onClick={() => toggleCharacterListValue("tags", tag)} className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${splitList(characterForm.tags).includes(tag) ? "border-black bg-black text-white" : "border-gray-300 bg-white text-gray-600"}`}>
+                  {tag}
+                </button>
+              ))}
+            </div>
+
+            <label className="flex flex-col gap-1">
+              <span className="text-sm font-semibold">밈 태그</span>
+              <textarea value={characterForm.meme_tags} onChange={(event) => setCharacterForm((current) => ({ ...current, meme_tags: event.target.value }))} rows={2} placeholder="밈캐, 짤 생성기" className="rounded border p-2 focus:border-black focus:outline-none" />
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {OFFICIAL_CHARACTER_MEME_TAGS.map((tag) => (
+                <button key={tag} type="button" onClick={() => toggleCharacterListValue("meme_tags", tag)} className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${splitList(characterForm.meme_tags).includes(tag) ? "border-pink-600 bg-pink-600 text-white" : "border-gray-300 bg-white text-gray-600"}`}>
+                  {tag}
+                </button>
+              ))}
+            </div>
+          </section>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1">

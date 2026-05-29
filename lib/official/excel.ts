@@ -1,8 +1,14 @@
 import type {
+  OfficialCharacterPosition,
   OfficialCatalogStatus,
   OfficialWorkCategory,
 } from "@/types/official";
-import { normalizeOfficialSlug, splitList } from "./catalog";
+import {
+  OFFICIAL_CHARACTER_POSITIONS,
+  normalizeOfficialSlug,
+  splitList,
+  uniqueList,
+} from "./catalog";
 
 type SheetRow = Record<string, unknown>;
 
@@ -37,12 +43,10 @@ export type OshiExcelPayload = {
   name: string;
   original_name: string | null;
   aliases: string[];
-  birthday: string | null;
   gender: string | null;
-  age: string | null;
-  height: string | null;
-  voice_actor: string | null;
-  quote: string | null;
+  positions: OfficialCharacterPosition[];
+  tags: string[];
+  meme_tags: string[];
   description: string;
   status: OfficialCatalogStatus;
   sort_order: number;
@@ -87,6 +91,27 @@ function status(row: SheetRow) {
 function category(row: SheetRow) {
   const value = text(row, "분류").toLowerCase() as OfficialWorkCategory;
   return CATEGORY_VALUES.has(value) ? value : "anime";
+}
+
+function listFromFlexibleCell(row: SheetRow, key: string) {
+  const value = text(row, key);
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return uniqueList(parsed.map((item) => String(item)));
+    }
+  } catch {
+    // 쉼표/줄바꿈 입력을 기본으로 지원하고, JSON 배열도 선택적으로 허용한다.
+  }
+  return uniqueList(splitList(value));
+}
+
+function positions(row: SheetRow) {
+  const allowed = new Set<string>(OFFICIAL_CHARACTER_POSITIONS);
+  return listFromFlexibleCell(row, "포지션").filter((item) =>
+    allowed.has(item),
+  ) as OfficialCharacterPosition[];
 }
 
 async function readRows(file: File): Promise<SheetRow[]> {
@@ -150,12 +175,10 @@ export async function parseOshiExcel(
         name,
         original_name: optionalText(row, "원문명"),
         aliases: splitList(text(row, "별칭")),
-        birthday: optionalText(row, "생일"),
         gender: optionalText(row, "성별"),
-        age: optionalText(row, "나이"),
-        height: optionalText(row, "키"),
-        voice_actor: optionalText(row, "성우"),
-        quote: optionalText(row, "대표대사"),
+        positions: positions(row),
+        tags: listFromFlexibleCell(row, "태그"),
+        meme_tags: listFromFlexibleCell(row, "밈 태그"),
         description: text(row, "소개"),
         status: status(row),
         sort_order: integer(row, "우선순위") ?? 0,

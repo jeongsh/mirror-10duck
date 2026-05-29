@@ -7,6 +7,19 @@ export type OfficialWorkCategory =
 
 export type OfficialCatalogStatus = "DRAFT" | "PUBLISHED" | "HIDDEN";
 
+export type OfficialCharacterPosition =
+  | "주인공"
+  | "서브주인공"
+  | "히로인"
+  | "라이벌"
+  | "빌런"
+  | "조력자"
+  | "스승"
+  | "마스코트"
+  | "흑막"
+  | "최종보스"
+  | "기타";
+
 export type OfficialWork = {
   id: string;
   slug: string;
@@ -65,13 +78,10 @@ export type OfficialOshiCharacter = {
   name: string;
   original_name: string | null;
   aliases: string[] | null;
-  birthday: string | null;
   gender: string | null;
-  age: string | null;
-  height: string | null;
-  voice_actor: string | null;
-  quote: string | null;
-  role_label: string | null;
+  positions: OfficialCharacterPosition[] | null;
+  tags: string[] | null;
+  meme_tags: string[] | null;
   description: string;
   profile_image_url: string | null;
   status: OfficialCatalogStatus;

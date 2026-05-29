@@ -797,7 +797,7 @@ function ProfilePageContent() {
       oshi_type: "character",
       title: selected.name,
       image_url: selected.profile_image_url ?? f.image_url,
-      affiliation: selected.role_label ?? "",
+      affiliation: selected.positions?.join(", ") ?? "",
       reference_work: work?.title ?? "",
       description: selected.description ? selected.description.slice(0, 100) : f.description,
     }));
@@ -2242,7 +2242,7 @@ function ProfilePageContent() {
                         {officialOshiForSelectedWork.map((item) => (
                           <option key={item.id} value={item.id}>
                             {item.name}
-                            {item.role_label ? ` · ${item.role_label}` : ""}
+                            {item.positions?.length ? ` · ${item.positions.join(", ")}` : ""}
                           </option>
                         ))}
                       </select>
