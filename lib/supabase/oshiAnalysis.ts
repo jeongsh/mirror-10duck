@@ -30,6 +30,27 @@ const CHARACTER_SELECT = [
   "official_works!inner(id, title, original_title, category, genres, cover_image_url)",
 ].join(", ");
 
+function compareOshiAnalysisCharacterNames(
+  a: OshiAnalysisCharacter,
+  b: OshiAnalysisCharacter,
+): number {
+  const byName = a.name.localeCompare(b.name, "ko", { sensitivity: "base" });
+  if (byName !== 0) return byName;
+
+  const aOriginal = a.original_name ?? "";
+  const bOriginal = b.original_name ?? "";
+  const byOriginal = aOriginal.localeCompare(bOriginal, "ko", { sensitivity: "base" });
+  if (byOriginal !== 0) return byOriginal;
+
+  return a.id.localeCompare(b.id);
+}
+
+export function sortOshiAnalysisCharactersByName(
+  characters: OshiAnalysisCharacter[],
+): OshiAnalysisCharacter[] {
+  return [...characters].sort(compareOshiAnalysisCharacterNames);
+}
+
 export async function searchOshiAnalysisCharacters(
   query: string,
   workId?: string,
@@ -52,17 +73,17 @@ export async function searchOshiAnalysisCharacters(
     req = req.or(`name.ilike.%${trimmed}%,original_name.ilike.%${trimmed}%`);
   }
 
-  const { data, error } = await req
-    .order("sort_order", { ascending: true })
-    .order("name", { ascending: true })
-    .range(offset, offset + limit - 1);
+  const { data, error } = await req;
 
   if (error) {
     console.error("[oshiAnalysis] search error:", error.message);
     return [];
   }
 
-  return (data ?? []) as OshiAnalysisCharacter[];
+  const sorted = sortOshiAnalysisCharactersByName(
+    (data ?? []) as OshiAnalysisCharacter[],
+  );
+  return sorted.slice(offset, offset + limit);
 }
 
 export async function searchOshiAnalysisWorks(
