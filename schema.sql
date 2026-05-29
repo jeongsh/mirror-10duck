@@ -1,5 +1,20 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
+-- Synced with live Supabase table inventory on 2026-05-29 after cleanup.
+-- Live public tables:
+-- badges, blocked_users, board_category_order, boards, catalog_edit_requests,
+-- character_add_requests, characters, comment_votes, comments, daily_missions,
+-- follows_board, follows_user, mentions, news_comments, news_items,
+-- news_reactions, notifications, official_character_tags,
+-- official_oshi_character_stats, official_oshi_character_tag_votes,
+-- official_oshi_characters, official_work_ott_platforms, official_works,
+-- oshi_analysis_results, oshi_card_shares, oshi_pair_members,
+-- oshi_registrations, otaku_type_results, ott_platforms, post_reactions,
+-- post_tags, post_votes, posts, profiles, release_events,
+-- release_item_reviews, release_items, reports, season_lineup_votes,
+-- season_retro_topics, tag_aliases, tags, user_badges,
+-- user_mission_progress, user_notification_settings,
+-- user_official_work_follows, user_release_follows, work_add_requests.
 
 CREATE TABLE public.boards (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -91,18 +106,6 @@ CREATE TABLE public.follows_user (
   CONSTRAINT follows_user_pkey PRIMARY KEY (follower_id, following_id),
   CONSTRAINT follows_user_follower_id_fkey FOREIGN KEY (follower_id) REFERENCES auth.users(id),
   CONSTRAINT follows_user_following_id_fkey FOREIGN KEY (following_id) REFERENCES auth.users(id)
-);
-CREATE TABLE public.moderation_logs (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  admin_id uuid NOT NULL,
-  action text NOT NULL,
-  target_type text NOT NULL,
-  target_id uuid NOT NULL,
-  reason text,
-  metadata jsonb,
-  CONSTRAINT moderation_logs_pkey PRIMARY KEY (id),
-  CONSTRAINT moderation_logs_admin_id_fkey FOREIGN KEY (admin_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.news_comments (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -299,20 +302,6 @@ CREATE TABLE public.release_items (
   CONSTRAINT release_items_pkey PRIMARY KEY (id),
   CONSTRAINT release_items_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
   CONSTRAINT release_items_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES auth.users(id)
-);
-CREATE TABLE public.release_reminder_settings (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  release_item_id uuid,
-  release_event_id uuid,
-  reminder_type text NOT NULL DEFAULT 'SAME_DAY'::text,
-  offset_minutes integer NOT NULL DEFAULT 0,
-  enabled boolean NOT NULL DEFAULT true,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT release_reminder_settings_pkey PRIMARY KEY (id),
-  CONSTRAINT release_reminder_settings_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
-  CONSTRAINT release_reminder_settings_release_item_id_fkey FOREIGN KEY (release_item_id) REFERENCES public.release_items(id),
-  CONSTRAINT release_reminder_settings_release_event_id_fkey FOREIGN KEY (release_event_id) REFERENCES public.release_events(id)
 );
 CREATE TABLE public.reports (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

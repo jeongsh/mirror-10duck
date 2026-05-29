@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { getUnreadNotificationCount } from "@/lib/community/notifications";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
+import { getProfile } from "@/lib/supabase/profiles";
 import {
   CREATE_NAV_GROUPS,
   PRIMARY_NAV_ITEMS,
@@ -20,6 +21,7 @@ export default function GlobalNavigation() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [showMenu, setShowMenu] = useState(false);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
+  const [profileNickname, setProfileNickname] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const createMenuRef = useRef<HTMLDivElement>(null);
 
@@ -38,10 +40,28 @@ export default function GlobalNavigation() {
   }, [showMenu, showCreateMenu]);
 
   const userId = authUser?.id ?? null;
-  const nickname = useMemo(() => {
-    const value = authUser?.user_metadata?.nickname;
-    return typeof value === "string" && value.trim() ? value : null;
-  }, [authUser?.user_metadata?.nickname]);
+  const nickname = useMemo(() => profileNickname, [profileNickname]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setProfileNickname(null);
+
+    if (!userId) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void getProfile(userId).then((profile) => {
+      if (cancelled) return;
+      const value = profile?.nickname?.trim() || profile?.display_name?.trim() || null;
+      setProfileNickname(value);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   useEffect(() => {
     let isMounted = true;

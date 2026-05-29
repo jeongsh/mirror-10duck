@@ -1,7 +1,7 @@
 "use client";
 
 import { SmilePlus, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createNotification } from "@/lib/community/notifications";
 import { bumpMissionProgress } from "@/lib/community/missions";
 import { grantExperience, XP_AMOUNTS } from "@/lib/supabase/experience";
@@ -11,7 +11,6 @@ import {
   setReaction,
   summarizeReactions,
 } from "@/lib/community/reactions";
-import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { getProfile } from "@/lib/supabase/profiles";
 import { useCharacterLibraryStore } from "@/store/useCharacterLibraryStore";
 import {
@@ -33,22 +32,9 @@ export default function ReactionBar({ postId, viewerId, authorId }: Props) {
   const [busy, setBusy] = useState<ReactionType | null>(null);
   const [open, setOpen] = useState(false);
 
-  const authUser = useAuthUser();
   const activeId = useCharacterLibraryStore((s) => s.activeId);
   const profiles = useCharacterLibraryStore((s) => s.profiles);
   const activeProfile = activeId ? profiles.find((p) => p.id === activeId) ?? null : null;
-
-  const profileDisplayName = useMemo(() => {
-    if (!authUser) return null;
-    const nickname = authUser.user_metadata?.nickname;
-    return typeof nickname === "string" && nickname.trim() ? nickname.trim() : null;
-  }, [authUser]);
-
-  const profileAvatarUrl = useMemo(() => {
-    if (!authUser) return null;
-    const avatarUrl = authUser.user_metadata?.avatar_url;
-    return typeof avatarUrl === "string" && avatarUrl ? avatarUrl : null;
-  }, [authUser]);
 
   const refresh = useCallback(async () => {
     const rows = await fetchReactionsByPost(postId);
@@ -100,8 +86,8 @@ export default function ReactionBar({ postId, viewerId, authorId }: Props) {
       currentMineType,
       characterId: activeProfile?.id ?? null,
       characterThumbnailUrl: activeProfile?.thumbnailUrl ?? null,
-      displayName: userProfile?.nickname || profileDisplayName,
-      avatarUrl: userProfile?.avatar_url || profileAvatarUrl,
+      displayName: userProfile?.nickname ?? null,
+      avatarUrl: userProfile?.avatar_url ?? null,
     });
 
     if (result.ok && !isSameType && viewerId) {

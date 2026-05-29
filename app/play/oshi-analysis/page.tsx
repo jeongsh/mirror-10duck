@@ -854,22 +854,14 @@ function OshiAnalysisPageContent() {
           </ol>
         </section>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <button
-            type="button"
-            onClick={() => setStep("select")}
-            className="inline-flex items-center justify-center gap-2 border border-dashed border-gray-700 bg-gray-900 px-4 py-3 text-sm font-black text-white hover:bg-gray-800"
-          >
-            분석 시작
-            <ChevronRight size={16} />
-          </button>
-          <Link
-            href="/profile?tab=oshi"
-            className="inline-flex items-center justify-center gap-2 border border-dashed border-gray-400 bg-white px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
-          >
-            내 프로필 최애로 시작
-          </Link>
-        </div>
+        <button
+          type="button"
+          onClick={() => setStep("select")}
+          className="inline-flex items-center justify-center gap-2 border border-dashed border-gray-700 bg-gray-900 px-4 py-3 text-sm font-black text-white hover:bg-gray-800"
+        >
+          분석 시작
+          <ChevronRight size={16} />
+        </button>
 
         <section className="border border-dashed border-gray-300 bg-gray-50 p-4">
           <p className="text-xs leading-5 text-gray-500">

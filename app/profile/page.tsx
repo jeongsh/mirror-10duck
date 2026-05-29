@@ -433,13 +433,6 @@ function ProfilePageContent() {
         ...({ bio: bio.trim() || null } as any),
       });
 
-      // 2. Auth 메타데이터 업데이트 (편의상 유지)
-      const { error } = await supabase.auth.updateUser({
-        data: { nickname, handle, avatar_url: tempAvatarUrl },
-      });
-
-      if (error) throw error;
-
       setMessage("성공적으로 저장되었습니다.");
       setAvatarUrl(tempAvatarUrl);
       setHandleUpdatedAt(newHandleUpdatedAt);

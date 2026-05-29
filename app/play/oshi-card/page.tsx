@@ -7,6 +7,7 @@ import { ArrowLeft, Download, ImagePlus, RefreshCcw, Save, Share2, X } from "luc
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { supabase } from "@/lib/supabase/client";
 import { getOshiList, upsertOshi } from "@/lib/supabase/oshi";
+import { getProfile } from "@/lib/supabase/profiles";
 import {
   createOshiCardShare,
   deleteOshiCardShare,
@@ -223,6 +224,7 @@ function OshiCardPageContent() {
   const skipNextShareUrlResetRef = useRef(false);
   const orientationPermissionRef = useRef<"unknown" | "granted" | "denied">("unknown");
   const [nickname, setNickname] = useState("");
+  const [profileNickname, setProfileNickname] = useState<string | null>(null);
   const [oshi, setOshi] = useState("");
   const [works, setWorks] = useState<string[]>([]);
   const [customWork, setCustomWork] = useState("");
@@ -300,12 +302,18 @@ function OshiCardPageContent() {
   useEffect(() => {
     if (authUser === undefined) return;
     if (!authUser?.id) {
+      setProfileNickname(null);
       setOwnedCards([]);
       setCardsLoading(false);
       return;
     }
 
     let cancelled = false;
+    void getProfile(authUser.id).then((profile) => {
+      if (cancelled) return;
+      setProfileNickname(profile?.nickname?.trim() || profile?.display_name?.trim() || null);
+    });
+
     setCardsLoading(true);
     fetchOshiCardSharesForUser(authUser.id)
       .then((shares) => {
@@ -435,7 +443,7 @@ function OshiCardPageContent() {
     [typeId],
   );
   const palette = cardType;
-  const displayName = nickname.trim() || authUser?.user_metadata?.nickname || "";
+  const displayName = nickname.trim() || profileNickname || "";
   const canSave = Boolean(authUser?.id && oshi.trim());
   const gradeStars = Math.max(1, GRADE_OPTIONS.indexOf(grade) + 1);
   const officialWorkSearchResults = useMemo(() => {
@@ -802,7 +810,7 @@ function OshiCardPageContent() {
             value={nickname}
             onChange={(event) => setNickname(event.target.value)}
             maxLength={16}
-            placeholder={authUser?.user_metadata?.nickname || "닉네임"}
+            placeholder={profileNickname || "닉네임"}
             className="min-w-0 flex-1 rounded border border-white/70 bg-black/35 px-2 py-1 text-xl font-black text-white outline-none placeholder:text-white/70"
           />
         ) : (
@@ -1010,7 +1018,7 @@ function OshiCardPageContent() {
             value={nickname}
             onChange={(event) => setNickname(event.target.value)}
             maxLength={16}
-            placeholder={authUser?.user_metadata?.nickname || "닉네임"}
+            placeholder={profileNickname || "닉네임"}
             className="min-w-0 flex-1 rounded-lg border border-white/70 bg-black/45 px-3 py-2 text-xl font-black text-white shadow-[0_8px_24px_rgba(0,0,0,.32),inset_0_1px_0_rgba(255,255,255,.22)] outline-none backdrop-blur placeholder:text-white/65 focus:border-[var(--card-foil)] focus:ring-2 focus:ring-[var(--card-accent)]/60"
           />
         ) : (
@@ -1443,7 +1451,7 @@ function OshiCardPageContent() {
                 value={nickname}
                 onChange={(event) => setNickname(event.target.value)}
                 maxLength={16}
-                placeholder={authUser?.user_metadata?.nickname || "예: 심연입구주민"}
+                placeholder={profileNickname || "예: 심연입구주민"}
                 className="border border-dashed border-gray-400 px-3 py-2 text-sm outline-none focus:border-gray-800"
               />
             </label>
