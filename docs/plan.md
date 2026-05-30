@@ -29,6 +29,8 @@
 | 최애 캐릭터 선택 기반 취향분석, 캐릭터 태그 제안, 캐릭터 추가 요청 | [oshi-analysis.md](./plans/oshi-analysis.md) | [viral-entry-ia.md](./plans/viral-entry-ia.md), [oshi-badges.md](./plans/oshi-badges.md) |
 | 화면 완성도, 페이지별 완료 기준, UX 누락 점검 | [screen-acceptance.md](./plans/screen-acceptance.md) | 관련 도메인 문서 |
 | 후순위 실험/확장 후보 백로그 (채택 전 아이디어 포함) | [otaku-experiments.md](./plans/otaku-experiments.md) | [checklist.md](./plans/checklist.md), 관련 도메인 문서 |
+| 바이럴 성장 기능 우선순위, 티어표·인기투표·월드컵 전략 | [viral-growth-priority.md](./plans/viral-growth-priority.md) | [viral-entry-ia.md](./plans/viral-entry-ia.md), [oshi-analysis.md](./plans/oshi-analysis.md) |
+| 기존 바이럴 기능 미니게임화, 최애카드·성향테스트·취향분석 리디자인 | [viral-minigame-polish.md](./plans/viral-minigame-polish.md) | [viral-growth-priority.md](./plans/viral-growth-priority.md), [oshi-analysis.md](./plans/oshi-analysis.md) |
 
 ## 2. 프로젝트 개요
 

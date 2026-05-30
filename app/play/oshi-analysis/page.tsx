@@ -12,7 +12,19 @@ import {
   type OshiAnalysisCharacter,
   type OshiAnalysisWork,
 } from "@/lib/supabase/oshiAnalysis";
-import { analyzeOshi, oshiAnalysisResultFromSaved, type OshiAnalysisResult, type HexStat } from "@/lib/oshiAnalysis";
+import {
+  analyzeOshi,
+  buildAnalysisLog,
+  buildResonance,
+  buildPartyJudgment,
+  buildDangerGauges,
+  oshiAnalysisResultFromSaved,
+  type OshiAnalysisResult,
+  type HexStat,
+  type Resonance,
+  type PartyJudgment,
+  type DangerGauge,
+} from "@/lib/oshiAnalysis";
 import {
   fetchOshiAnalysisResultById,
   saveOshiAnalysisResult,
@@ -371,12 +383,18 @@ function RadarChart({ stats, size = 280 }: { stats: HexStat[]; size?: number }) 
 function ResultCard({
   result,
   selected,
+  resonance,
+  partyJudgment,
+  dangerGauges,
   recommendations,
   imageDataUrls,
   cardRef,
 }: {
   result: OshiAnalysisResult;
   selected: OshiAnalysisCharacter[];
+  resonance: Resonance | null;
+  partyJudgment: PartyJudgment | null;
+  dangerGauges: DangerGauge[];
   recommendations: OshiAnalysisCharacter[];
   imageDataUrls: Record<string, string>;
   cardRef: React.RefObject<HTMLDivElement | null>;
@@ -414,6 +432,101 @@ function ResultCard({
                 name={char.name}
                 src={resolveImageSrc(char.profile_image_url, imageDataUrls)}
               />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 속성 공명 */}
+      {resonance && (resonance.items.length > 0 || resonance.alerts.length > 0) && (
+        <div className="mt-5">
+          <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-gray-400">
+            속성 공명
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {resonance.items.map((item) => (
+              <span
+                key={item.tag}
+                className="flex items-center gap-1 border border-dashed border-gray-700 bg-gray-50 px-2 py-1 text-xs font-black text-gray-900"
+              >
+                {item.tag}
+                <span className="text-indigo-600">Lv.{item.level}</span>
+              </span>
+            ))}
+            {resonance.alerts.map((alert) => (
+              <span
+                key={alert}
+                className="border border-red-400 bg-red-50 px-2 py-1 text-xs font-black text-red-700"
+              >
+                ⚠ {alert}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 최애 파티 판정 */}
+      {partyJudgment && partyJudgment.roles.length > 0 && (
+        <div className="mt-5">
+          <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-gray-400">
+            최애 파티 판정
+          </p>
+          <div className="flex flex-col gap-1.5">
+            {partyJudgment.roles.map((r) => (
+              <div key={r.role} className="flex items-baseline gap-2">
+                <span className="w-20 shrink-0 text-[10px] font-black text-gray-400">
+                  {r.role}
+                </span>
+                <span
+                  className={`text-xs font-black ${
+                    r.value === "없음"
+                      ? "text-red-600"
+                      : r.role === "위험 요소"
+                        ? "text-orange-600"
+                        : "text-gray-900"
+                  }`}
+                >
+                  {r.value}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 border-l-2 border-gray-900 pl-2 text-[11px] font-bold text-gray-700">
+            {partyJudgment.verdict}
+          </p>
+        </div>
+      )}
+
+      {/* 취향 위험도 게이지 */}
+      {dangerGauges.length > 0 && (
+        <div className="mt-5">
+          <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-gray-400">
+            취향 위험도
+          </p>
+          <div className="flex flex-col gap-2">
+            {dangerGauges.map((g) => (
+              <div key={g.label} className="flex items-center gap-3">
+                <span className="w-16 shrink-0 text-[10px] font-black text-gray-500">
+                  {g.label}
+                </span>
+                <div className="relative h-2 flex-1 bg-gray-100">
+                  <div
+                    className={`absolute inset-y-0 left-0 ${
+                      g.label === "정상성"
+                        ? g.value >= 60
+                          ? "bg-green-500"
+                          : g.value >= 30
+                            ? "bg-yellow-400"
+                            : "bg-red-500"
+                        : "bg-gray-900"
+                    }`}
+                    style={{ width: `${g.value}%` }}
+                  />
+                </div>
+                <span className="w-9 text-right text-[10px] font-black text-gray-700">
+                  {g.value}%
+                </span>
+              </div>
             ))}
           </div>
         </div>
@@ -523,10 +636,15 @@ function OshiAnalysisPageContent() {
   // Selection + result
   const [selected, setSelected] = useState<OshiAnalysisCharacter[]>([]);
   const [result, setResult] = useState<OshiAnalysisResult | null>(null);
+  const [resonance, setResonance] = useState<Resonance | null>(null);
+  const [partyJudgment, setPartyJudgment] = useState<PartyJudgment | null>(null);
+  const [dangerGauges, setDangerGauges] = useState<DangerGauge[]>([]);
   const [recommendations, setRecommendations] = useState<OshiAnalysisCharacter[]>([]);
   const [imageDataUrls, setImageDataUrls] = useState<Record<string, string>>({});
   const [imagesReady, setImagesReady] = useState(false);
   const [analyzingMessage, setAnalyzingMessage] = useState(ANALYZING_MESSAGES[0]);
+  const [logLines, setLogLines] = useState<string[]>([]);
+  const [visibleLogCount, setVisibleLogCount] = useState(0);
   const [busy, setBusy] = useState(false);
 
   const resultRef = useRef<HTMLDivElement>(null);
@@ -562,8 +680,12 @@ function OshiAnalysisPageContent() {
         const characters = await getOshiAnalysisCharactersByIds(row.selected_character_ids);
         if (cancelled) return;
 
+        const restored = oshiAnalysisResultFromSaved(row);
         setSelected(characters);
-        setResult(oshiAnalysisResultFromSaved(row));
+        setResult(restored);
+        setResonance(buildResonance(characters));
+        setPartyJudgment(buildPartyJudgment(characters, restored));
+        setDangerGauges(buildDangerGauges(characters, restored));
         setRecommendations([]);
         setStep("result");
 
@@ -704,28 +826,41 @@ function OshiAnalysisPageContent() {
   }, []);
 
   const handleStartAnalyze = async () => {
-    setStep("analyzing");
-    let msgIdx = 0;
-    setAnalyzingMessage(ANALYZING_MESSAGES[0]);
-    const interval = setInterval(() => {
-      msgIdx = (msgIdx + 1) % ANALYZING_MESSAGES.length;
-      setAnalyzingMessage(ANALYZING_MESSAGES[msgIdx]);
-    }, 400);
-
     const analyzed = analyzeOshi(selected);
+    const log = buildAnalysisLog(selected, analyzed);
+
+    setLogLines(log);
+    setVisibleLogCount(0);
+    setStep("analyzing");
+
     const recsPromise = getOshiRecommendations(
       analyzed.signatureTags.map((s) => s.tag),
       selected.map((c) => c.id),
       3
     ).catch(() => [] as OshiAnalysisCharacter[]);
 
+    // 로그를 한 줄씩 순차 공개 (마지막 결론 줄까지)
+    const REVEAL_MS = 360;
+    let shown = 0;
+    const interval = setInterval(() => {
+      shown += 1;
+      setVisibleLogCount(shown);
+      if (shown >= log.length) clearInterval(interval);
+    }, REVEAL_MS);
+
+    // 모든 줄이 공개되고 결론을 잠깐 보여줄 시간 확보 (최소 1.2초)
+    const totalRevealMs = log.length * REVEAL_MS + 500;
     const [, recs] = await Promise.all([
-      new Promise((resolve) => setTimeout(resolve, 1200)),
+      new Promise((resolve) => setTimeout(resolve, Math.max(1200, totalRevealMs))),
       recsPromise,
     ]);
     clearInterval(interval);
+    setVisibleLogCount(log.length);
 
     setResult(analyzed);
+    setResonance(buildResonance(selected));
+    setPartyJudgment(buildPartyJudgment(selected, analyzed));
+    setDangerGauges(buildDangerGauges(selected, analyzed));
     setRecommendations(recs as OshiAnalysisCharacter[]);
     setStep("result");
 
@@ -800,6 +935,9 @@ function OshiAnalysisPageContent() {
   const handleReset = () => {
     setSelected([]);
     setResult(null);
+    setResonance(null);
+    setPartyJudgment(null);
+    setDangerGauges([]);
     setRecommendations([]);
     setImageDataUrls({});
     setImagesReady(false);
@@ -807,6 +945,8 @@ function OshiAnalysisPageContent() {
     setWorkQuery("");
     setSelectedWork(null);
     setCharacters([]);
+    setLogLines([]);
+    setVisibleLogCount(0);
     setStep("start");
     router.replace("/play/oshi-analysis");
   };
@@ -875,6 +1015,44 @@ function OshiAnalysisPageContent() {
 
   // ── ANALYZING ────────────────────────────────────────────────────────────
   if (step === "analyzing") {
+    // 신규 분석: 선택한 최애 기반 실시간 로그 연출
+    if (logLines.length > 0) {
+      const visible = logLines.slice(0, visibleLogCount);
+      return (
+        <main className="flex w-full flex-col items-center justify-center py-20">
+          <section className="w-full max-w-md border border-dashed border-gray-700 bg-gray-900 p-5">
+            <div className="mb-4 flex items-center gap-2 border-b border-dashed border-gray-700 pb-3">
+              <div className="h-3.5 w-3.5 animate-spin border-2 border-green-400 border-t-transparent" />
+              <span className="text-[11px] font-black uppercase tracking-widest text-green-400">
+                취향 분석 중
+              </span>
+            </div>
+            <div className="flex min-h-[160px] flex-col gap-2 font-mono">
+              {visible.map((line, i) => {
+                const isConclusion = i === logLines.length - 1;
+                return (
+                  <p
+                    key={i}
+                    className={
+                      isConclusion
+                        ? "mt-1 text-sm font-black text-amber-300"
+                        : "text-xs font-bold text-green-300"
+                    }
+                  >
+                    {isConclusion ? line : `> ${line}`}
+                  </p>
+                );
+              })}
+              {visibleLogCount < logLines.length && (
+                <span className="inline-block h-3 w-2 animate-pulse bg-green-400" />
+              )}
+            </div>
+          </section>
+        </main>
+      );
+    }
+
+    // 저장된 결과 불러오는 경우 등
     return (
       <main className="flex w-full flex-col items-center justify-center gap-6 py-24">
         <div className="h-8 w-8 animate-spin border-2 border-gray-900 border-t-transparent" />
@@ -900,6 +1078,9 @@ function OshiAnalysisPageContent() {
         <ResultCard
           result={result}
           selected={selected}
+          resonance={resonance}
+          partyJudgment={partyJudgment}
+          dangerGauges={dangerGauges}
           recommendations={recommendations}
           imageDataUrls={imageDataUrls}
           cardRef={resultRef}
@@ -934,6 +1115,29 @@ function OshiAnalysisPageContent() {
             처음부터
           </button>
         </div>
+
+        {/* 다음 행동 CTA */}
+        <section className="border border-dashed border-gray-400 bg-white p-4">
+          <p className="mb-3 text-[10px] font-black uppercase tracking-wider text-gray-400">
+            이 취향으로 뭘 해볼까
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/play/oshi-card"
+              className="inline-flex items-center gap-1.5 border border-dashed border-gray-700 bg-gray-900 px-3 py-2 text-xs font-black text-white hover:bg-gray-800"
+            >
+              최종 보스급 최애 카드 만들기
+              <ChevronRight size={12} />
+            </Link>
+            <Link
+              href="/play/otaku-type"
+              className="inline-flex items-center gap-1.5 border border-dashed border-gray-500 bg-white px-3 py-2 text-xs font-black text-gray-700 hover:bg-gray-50"
+            >
+              오타쿠 성향 테스트 하기
+              <ChevronRight size={12} />
+            </Link>
+          </div>
+        </section>
 
         {result.confidence < 50 && (
           <section className="border border-dashed border-red-300 bg-red-50 p-4">
