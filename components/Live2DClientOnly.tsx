@@ -109,6 +109,8 @@ function Live2DClientOnlyEnabled() {
   }, [authUser, setActive, setLive2DEnabled, setProfile, setProfiles, setTracking]);
 
   const isCharacterManagePage = pathname.startsWith("/library/");
+  const isFortunePage = pathname.startsWith("/play/fortune");
+  const suppressGlobalLive2D = isCharacterManagePage || isFortunePage;
 
   return (
     <>
@@ -118,7 +120,7 @@ function Live2DClientOnlyEnabled() {
         onLoad={() => setCoreReady(true)}
         onReady={() => setCoreReady(true)}
       />
-      {authUser && !isCharacterManagePage && coreReady && isLive2DEnabled ? (
+      {authUser && !suppressGlobalLive2D && coreReady && isLive2DEnabled ? (
         <Live2DWrapper />
       ) : null}
     </>

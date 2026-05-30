@@ -124,6 +124,13 @@ type AssistantActionKey = AssistantSlotKey;
 const LIVE2D_BUBBLE_COOLDOWN_GLOBAL_MS = 60 * 1000;
 const LIVE2D_BUBBLE_COOLDOWN_PER_TYPE_MS = 5 * 60 * 1000;
 
+function patchPixiCancelResize(app: Application): void {
+  const target = app as unknown as { _cancelResize?: unknown };
+  if (typeof target._cancelResize !== "function") {
+    target._cancelResize = () => {};
+  }
+}
+
 function normalizeCharacterAction(action: CharacterActionKey): CharacterActionKey {
   if (action === "tap_body") return "attention";
   return action;
@@ -491,12 +498,8 @@ export default function Live2DWrapper() {
         });
 
         if (cancelled) {
-          app.destroy(true, {
-            children: true,
-            texture: true,
-            baseTexture: true,
-            textureSource: true,
-          } as unknown as Parameters<Application["destroy"]>[1]);
+          patchPixiCancelResize(app);
+          app.destroy(false);
           app = null;
           return;
         }
@@ -519,11 +522,7 @@ export default function Live2DWrapper() {
 
       if (modelRef.current) {
         try {
-          modelRef.current.destroy({
-            children: true,
-            texture: true,
-            baseTexture: true,
-          });
+          modelRef.current.destroy({ children: true });
         } catch (e) {
           console.warn("[Live2DWrapper] model destroy warning:", e);
         }
@@ -533,12 +532,8 @@ export default function Live2DWrapper() {
       const a = appRef.current ?? app;
       if (a) {
         try {
-          a.destroy(true, {
-            children: true,
-            texture: true,
-            baseTexture: true,
-            textureSource: true,
-          } as unknown as Parameters<Application["destroy"]>[1]);
+          patchPixiCancelResize(a);
+          a.destroy(false);
         } catch (e) {
           console.warn("[Live2DWrapper] app destroy warning:", e);
         }
@@ -572,11 +567,7 @@ export default function Live2DWrapper() {
       if (modelRef.current) {
         try {
           app.stage.removeChild(modelRef.current);
-          modelRef.current.destroy({
-            children: true,
-            texture: true,
-            baseTexture: true,
-          });
+          modelRef.current.destroy({ children: true });
         } catch (e) {
           console.warn("[Live2DWrapper] previous model destroy warning:", e);
         }
@@ -596,7 +587,7 @@ export default function Live2DWrapper() {
           autoFocus: true, // 항상 켜두되, 아래에서 focus 함수를 가로채서 제어합니다.
         });
         if (cancelled) {
-          localModel?.destroy({ children: true, texture: true, baseTexture: true });
+          localModel?.destroy({ children: true });
           return;
         }
 

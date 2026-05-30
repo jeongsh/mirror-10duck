@@ -42,6 +42,12 @@ export const CREATE_NAV_GROUPS: NavGroup[] = [
         status: "live",
       },
       {
+        href: "/play/fortune",
+        label: "오늘의 캐릭터 운세",
+        description: "별자리 운세와 취향 기반 캐릭터 추천을 함께 본다.",
+        status: "live",
+      },
+      {
         href: "/play/timeline",
         label: "덕질 연대기",
         description: "입덕작부터 인생작까지 개인 히스토리를 카드화한다.",
