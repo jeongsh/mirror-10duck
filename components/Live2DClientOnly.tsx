@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import Script from "next/script";
 import { usePathname } from "next/navigation";
+import Live2DCubismCoreScript from "./Live2DCubismCoreScript";
 import { getTrackingPreference, getPreferredCharacterId } from "@/lib/supabase/characterPreferences";
 import { getLive2DEnabledPreference } from "@/lib/supabase/characterPreferences";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
@@ -46,7 +46,24 @@ function Live2DClientOnlyEnabled() {
   useEffect(() => {
     if (typeof window !== "undefined" && window.Live2DCubismCore) {
       setCoreReady(true);
+      return;
     }
+
+    let cancelled = false;
+    const poll = async () => {
+      for (let i = 0; i < 160; i++) {
+        if (cancelled) return;
+        if (window.Live2DCubismCore) {
+          setCoreReady(true);
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -114,12 +131,7 @@ function Live2DClientOnlyEnabled() {
 
   return (
     <>
-      <Script
-        src="/live2dcubismcore.min.js"
-        strategy="afterInteractive"
-        onLoad={() => setCoreReady(true)}
-        onReady={() => setCoreReady(true)}
-      />
+      <Live2DCubismCoreScript onReady={() => setCoreReady(true)} />
       {authUser && !suppressGlobalLive2D && coreReady && isLive2DEnabled ? (
         <Live2DWrapper />
       ) : null}

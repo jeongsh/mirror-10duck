@@ -361,8 +361,10 @@ export default function FortunePage() {
     <>
       <style>{`
         #fortune-root {
-          position: fixed; inset: 0; z-index: 9999; overflow-y: auto; overflow-x: hidden;
-          overscroll-behavior: contain;
+          position: relative;
+          width: 100%;
+          min-height: calc(100dvh - var(--layout-header-height));
+          overflow-x: hidden;
           background:
             radial-gradient(ellipse 70% 50% at 50% -8%, #fbf3e3 0%, transparent 60%),
             linear-gradient(180deg, #f8f1e3 0%, #f1e5d1 55%, #ecddc6 100%);
@@ -370,7 +372,7 @@ export default function FortunePage() {
         }
         /* 은은한 별 장식 */
         #fortune-root::after {
-          content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .5;
+          content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .5;
           background-image:
             radial-gradient(1.5px 1.5px at 12% 18%, rgba(180,138,60,.5), transparent),
             radial-gradient(1px 1px at 26% 64%, rgba(74,58,114,.35), transparent),

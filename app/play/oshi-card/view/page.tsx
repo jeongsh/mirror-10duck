@@ -248,13 +248,13 @@ export default function OshiCardViewPage() {
       <OshiCardStyles />
       <style>{`
         #oshi-view-root {
-          position: fixed;
-          inset: 0;
-          z-index: 9999;
+          position: relative;
+          width: 100%;
+          min-height: calc(100dvh - var(--layout-header-height));
           display: flex;
           justify-content: center;
           padding: 32px 16px;
-          overflow-y: auto;
+          overflow-x: hidden;
         }
         #oshi-view-shell {
           width: min(100%, 420px);

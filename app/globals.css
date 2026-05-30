@@ -23,6 +23,11 @@
   --layout-column-gap: 32px;
   --layout-header-height: 57px;
   --layout-main-pt: 1.5rem; /* lg:pt-6 — 스크롤바 시작 위치와 동기화 */
+
+  /* 바이럴 세로 배너 — 공통 LeftSidebar 열(220px)과 동일 가로·세로 슬롯 */
+  --viral-ad-width: var(--layout-left-width);
+  --viral-ad-height: 600px;
+  --viral-ad-inset-x: max(1rem, calc((100vw - var(--layout-max)) / 2 + var(--layout-gutter)));
 }
 
 html,
@@ -41,6 +46,51 @@ body {
   body:has([data-layout-chrome]) {
     overflow: hidden;
     height: 100dvh;
+  }
+}
+
+/* 바이럴 — 페이지가 자체 배경(크림·그라데이션 등)을 전폭으로 깔도록 body 회색 제거 */
+body:has([data-layout-viral]) {
+  background: transparent;
+}
+
+/* 바이럴 광고 — /play/fortune, /play/oshi-card/view 공통 좌표 (LeftSidebar 열 정렬) */
+.viral-ad-slot {
+  display: none;
+  position: fixed;
+  z-index: 30;
+  top: calc(var(--layout-header-height) + var(--layout-main-pt));
+  width: var(--viral-ad-width);
+  height: var(--viral-ad-height);
+  pointer-events: none;
+}
+
+.viral-ad-slot--left {
+  left: var(--viral-ad-inset-x);
+}
+
+.viral-ad-slot--right {
+  right: var(--viral-ad-inset-x);
+}
+
+.viral-ad-slot__frame {
+  pointer-events: auto;
+  display: flex;
+  height: 100%;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px dashed rgb(156 163 175 / 0.35);
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.25;
+  color: rgb(156 163 175 / 0.7);
+}
+
+@media (min-width: 1024px) {
+  .viral-ad-slot {
+    display: block;
   }
 }
 
