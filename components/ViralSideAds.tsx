@@ -2,7 +2,7 @@
 export default function ViralSideAds() {
   return (
     <>
-      <aside className="viral-ad-slot viral-ad-slot--left" aria-label="좌측 광고">
+      <aside className="viral-ad-slot viral-ad-slot--left bg-gray-100/50" aria-label="좌측 광고">
         <div className="viral-ad-slot__frame">
           <span className="sr-only">광고</span>
           [Left
@@ -10,7 +10,7 @@ export default function ViralSideAds() {
           ad]
         </div>
       </aside>
-      <aside className="viral-ad-slot viral-ad-slot--right" aria-label="우측 광고">
+      <aside className="viral-ad-slot viral-ad-slot--right bg-gray-100/50" aria-label="우측 광고">
         <div className="viral-ad-slot__frame">
           <span className="sr-only">광고</span>
           [Right
