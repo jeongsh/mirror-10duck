@@ -24,6 +24,26 @@ export default function GlobalNavigation() {
   const [profileNickname, setProfileNickname] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const createMenuRef = useRef<HTMLDivElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+
+    const syncHeaderHeight = () => {
+      document.documentElement.style.setProperty(
+        "--layout-header-height",
+        `${nav.offsetHeight}px`,
+      );
+    };
+
+    syncHeaderHeight();
+
+    const observer = new ResizeObserver(syncHeaderHeight);
+    observer.observe(nav);
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!showMenu && !showCreateMenu) return;
@@ -134,8 +154,11 @@ export default function GlobalNavigation() {
   };
 
   return (
-    <nav className="sticky top-0 z-40 border-b border-dashed border-gray-500 bg-white/85 backdrop-blur">
-      <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-2 px-4 py-3">
+    <nav
+      ref={navRef}
+      className="sticky top-0 z-40 border-b border-dashed border-gray-500 bg-white/85 backdrop-blur"
+    >
+      <div className="mx-auto flex w-full max-w-[var(--layout-max)] flex-wrap items-center gap-2 px-4 py-3 min-[1920px]:pl-[var(--layout-gutter)] min-[1920px]:pr-8">
         <span className="border border-dashed border-gray-500 bg-gray-100 px-2 py-1 text-xs font-bold">
           SSIBDUK
         </span>

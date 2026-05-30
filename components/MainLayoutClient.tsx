@@ -1,8 +1,23 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import RightSidebar from "./RightSidebar";
 import DailyLoginXp from "./DailyLoginXp";
+import LeftSidebar from "./LeftSidebar";
+import Live2DClientOnly from "./Live2DClientOnly";
+import MainScrollArea from "./MainScrollArea";
+import RightSidebar from "./RightSidebar";
+
+const SHELL_CLASS = [
+  "relative mx-auto w-full max-w-[var(--layout-max)] px-4",
+  "min-[1920px]:pl-[var(--layout-gutter)] min-[1920px]:pr-0",
+].join(" ");
+
+const GRID_CLASS = [
+  "grid grid-cols-1 items-stretch",
+  "lg:grid-cols-[var(--layout-left-width)_minmax(0,1fr)_var(--layout-right-width)] lg:gap-x-[var(--layout-column-gap)]",
+  "lg:h-[calc(100dvh-var(--layout-header-height))] lg:overflow-hidden",
+  "min-[1920px]:grid-cols-[var(--layout-left-width)_var(--layout-main-width)_var(--layout-right-width)]",
+].join(" ");
 
 export default function MainLayoutClient({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -10,26 +25,23 @@ export default function MainLayoutClient({ children }: { children: React.ReactNo
   const isAuth = pathname?.startsWith("/auth");
   const hideChrome = isAdmin || isAuth;
 
-  const shellClassName = hideChrome
-    ? "relative w-full"
-    : "relative mx-auto w-full max-w-7xl px-4 pt-6 pb-4";
-
   return (
-    <div className={shellClassName}>
+    <div className={hideChrome ? "relative w-full" : SHELL_CLASS} data-layout-chrome={hideChrome ? undefined : ""}>
       <DailyLoginXp />
-      {!hideChrome && (
-        <div className="sticky top-20 z-10 hidden h-0 w-0 2xl:block">
-          <aside className="absolute right-[calc(100%+20px)] top-0 flex h-[600px] w-[200px] flex-col items-center justify-center border border-dashed border-gray-400 bg-gray-100/50 text-center text-xs text-gray-400">
-            [Left
-            <br />
-            promo banner]
-          </aside>
+      {hideChrome ? (
+        children
+      ) : (
+        <div className={GRID_CLASS}>
+          <LeftSidebar />
+          <MainScrollArea
+            className="min-h-0 min-w-0 w-full lg:h-full"
+            mobileClassName="min-h-0 min-w-0 w-full pb-[500px]"
+          >
+            <div className="lg:pt-6 lg:pb-4 lg:pr-4">{children}</div>
+          </MainScrollArea>
+          <RightSidebar characterSlot={<Live2DClientOnly />} />
         </div>
       )}
-      <div className="flex flex-col items-start gap-6 lg:flex-row">
-        <div className="min-w-0 flex-1 w-full">{children}</div>
-        {!hideChrome && <RightSidebar />}
-      </div>
     </div>
   );
 }

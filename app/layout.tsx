@@ -3,7 +3,6 @@ import localFont from "next/font/local";
 import { AuthProvider } from "@/lib/supabase/useAuthUser";
 import AttendanceRecorder from "@/components/AttendanceRecorder";
 import GlobalNavigation from "@/components/GlobalNavigation";
-import Live2DClientOnly from "@/components/Live2DClientOnly";
 import MainLayoutClient from "@/components/MainLayoutClient";
 import ScrollToTop from "@/components/ScrollToTop";
 import "./globals.css";
@@ -33,7 +32,6 @@ export default function RootLayout({
           <AttendanceRecorder />
           <GlobalNavigation />
           <MainLayoutClient>{children}</MainLayoutClient>
-          <Live2DClientOnly />
         </AuthProvider>
       </body>
     </html>

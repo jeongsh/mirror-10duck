@@ -1362,22 +1362,15 @@ export default function Live2DWrapper() {
   }
 
   return (
-    <aside
-      className="fixed bottom-0 right-0 z-50 select-none"
-      aria-label="[Live2D 캐릭터 영역]"
-    >
-
-      <div
-        className="relative"
-      >
+    <aside className="relative w-full max-w-[var(--layout-live2d-width)] select-none" aria-label="[Live2D 캐릭터 영역]">
+      <div className="relative">
         <canvas
           ref={canvasRef}
           width={CANVAS_W}
           height={CANVAS_H}
-          className="block bg-transparent touch-none"
+          className="block w-full max-w-[var(--layout-live2d-width)] bg-transparent touch-none"
           onPointerDown={schedulePointerFallbackAction}
           style={{
-            width: `min(${CANVAS_W}px, calc(100vw - 16px))`,
             height: "auto",
             aspectRatio: `${CANVAS_W} / ${CANVAS_H}`,
           }}
