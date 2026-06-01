@@ -45,6 +45,7 @@ function Live2DClientOnlyEnabled() {
   const setProfile = useCharacterStore((s) => s.setProfile);
   const setTracking = useCharacterStore((s) => s.setTracking);
   const setLive2DEnabled = useCharacterStore((s) => s.setLive2DEnabled);
+  const setEmotion = useCharacterStore((s) => s.setEmotion);
   const isLive2DEnabled = useCharacterStore((s) => s.isLive2DEnabled);
 
   useEffect(() => {
@@ -79,6 +80,7 @@ function Live2DClientOnlyEnabled() {
       setProfiles(BASE_PROFILES);
       setActive(MAO_PRO_PROFILE.id);
       setProfile(MAO_PRO_PROFILE);
+      setEmotion("idle");
       setTracking(true);
       setLive2DEnabled(getLive2DEnabledPreference(null, true));
       setIsInitializing(false);
@@ -130,7 +132,7 @@ function Live2DClientOnlyEnabled() {
     return () => {
       cancelled = true;
     };
-  }, [authUser, setActive, setLive2DEnabled, setProfile, setProfiles, setTracking]);
+  }, [authUser, setActive, setEmotion, setLive2DEnabled, setProfile, setProfiles, setTracking]);
 
   const isCharacterManagePage = pathname.startsWith("/library/");
   const isFortunePage = pathname.startsWith("/play/fortune");
@@ -156,9 +158,12 @@ function CharacterDisabledPanel() {
   const profile = useCharacterStore((s) => s.profile);
   const setLive2DEnabled = useCharacterStore((s) => s.setLive2DEnabled);
   const setMessage = useCharacterStore((s) => s.setMessage);
+  const setEmotion = useCharacterStore((s) => s.setEmotion);
   const characterName = profile?.name?.replace(/\s*\(.*?\)\s*$/g, "").trim() || "캐릭터";
 
   const enableCharacter = async () => {
+    const nextEmotion = Math.random() < 0.35 ? "happy" : "idle";
+    setEmotion(nextEmotion);
     setLive2DEnabled(true);
     setMessage(`${characterName}를 다시 불러왔어요.`);
     setSaving(true);
@@ -170,9 +175,9 @@ function CharacterDisabledPanel() {
     } finally {
       setSaving(false);
       window.setTimeout(() => {
-        if (useCharacterStore.getState().message) {
-          useCharacterStore.getState().setMessage(null);
-        }
+        const store = useCharacterStore.getState();
+        if (store.message) store.setMessage(null);
+        if (store.emotion === "happy") store.setEmotion("idle");
       }, 2600);
     }
   };
