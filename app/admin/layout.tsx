@@ -77,6 +77,41 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           >
             유저 관리
           </Link>
+          <div className="mt-2 flex flex-col border-t border-dashed border-gray-300 pt-3">
+            <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+              캐릭터 중간고사
+            </p>
+            <Link
+              href="/admin/character-exams"
+              className="rounded border border-transparent p-2 transition-colors hover:border-gray-300 hover:bg-gray-100"
+            >
+              시험 상품 관리
+            </Link>
+            <Link
+              href="/admin/character-exams/templates"
+              className="rounded border border-transparent p-2 pl-6 text-sm transition-colors hover:border-gray-300 hover:bg-gray-100"
+            >
+              문항 템플릿
+            </Link>
+            <Link
+              href="/admin/character-exams/results"
+              className="rounded border border-transparent p-2 pl-6 text-sm transition-colors hover:border-gray-300 hover:bg-gray-100"
+            >
+              결과지 템플릿
+            </Link>
+            <Link
+              href="/admin/character-exams/rules"
+              className="rounded border border-transparent p-2 pl-6 text-sm transition-colors hover:border-gray-300 hover:bg-gray-100"
+            >
+              출제 규칙
+            </Link>
+            <Link
+              href="/admin/character-exams/simulator"
+              className="rounded border border-transparent p-2 pl-6 text-sm transition-colors hover:border-gray-300 hover:bg-gray-100"
+            >
+              시뮬레이터
+            </Link>
+          </div>
         </nav>
       </aside>
       <main className="min-w-0 flex-1 overflow-y-auto px-8 py-6">{children}</main>

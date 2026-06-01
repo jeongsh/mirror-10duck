@@ -67,6 +67,17 @@ export const CREATE_NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: "캐릭터 탐구",
+    items: [
+      {
+        href: "/play/character-exam",
+        label: "캐릭터 중간고사",
+        description: "좋아하는 캐릭터를 얼마나 아는지 시험처럼 풀어보고 등급·생활기록부를 받는다.",
+        status: "live",
+      },
+    ],
+  },
+  {
     label: "참여형 놀이",
     items: [
       {
