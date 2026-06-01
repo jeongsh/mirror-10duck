@@ -280,6 +280,17 @@ function estimateSpeechDuration(text: string): number {
   return Math.min(Math.max(typingMs + readingMs, SPEECH_MIN_DURATION_MS), SPEECH_MAX_DURATION_MS);
 }
 
+/**
+ * 말풍선 안내 후 페이지를 이동하기까지의 지연.
+ * 대사가 전부 타이핑된 뒤(typingMs) 잠깐 읽을 시간을 더해, 대사가 끝나기 전에
+ * 화면이 넘어가지 않도록 한다. 너무 길게 기다리지 않도록 상한을 둔다.
+ */
+function estimateNavDelay(text: string): number {
+  const length = text.trim().length;
+  const typingMs = length * SPEECH_TYPING_SPEED_MS;
+  return Math.min(Math.max(typingMs + 1000, 1800), 4500);
+}
+
 function patchPixiCancelResize(app: Application): void {
   const target = app as unknown as { _cancelResize?: unknown };
   if (typeof target._cancelResize !== "function") {
@@ -1533,11 +1544,13 @@ export default function Live2DWrapper() {
     setAssistantOpen(false);
     setAssistantBusy(null);
     setWhatNowFlow(null);
-    setTemporaryMessage(message, ASSISTANT_RESPONSE_DURATION_MS);
+    // 대사가 다 끝난 뒤에 이동하도록, 타이핑+읽기 시간만큼 기다렸다가 router.push 한다.
+    const navDelay = estimateNavDelay(message);
+    setTemporaryMessage(message, navDelay + 600);
     useCharacterStore.getState().setEmotion(emotion);
     window.setTimeout(() => {
       router.push(href);
-    }, 650);
+    }, navDelay);
   }
 
   function startWhatNowFlow(source: "what_now" | "work_recommendation" = "what_now") {
