@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { X, Download, Search, ChevronRight, RotateCcw, Plus, Pencil } from "lucide-react";
+import { X, Download, Search, ChevronRight, RotateCcw, Plus } from "lucide-react";
 import {
   searchOshiAnalysisCharacters,
   searchOshiAnalysisWorks,
@@ -31,6 +31,7 @@ import {
 } from "@/lib/supabase/oshiAnalysisResults";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { catalogRequestPath } from "@/lib/catalogRequest";
+import OshiAnalysisResultLayout from "@/components/play/oshi-analysis/OshiAnalysisResultLayout";
 import { mapUrlsToDataUrls, resolveImageSrc } from "@/lib/imageDataUrl";
 
 const MIN_SELECT = 5;
@@ -179,53 +180,6 @@ function CharacterCard({
         )}
       </div>
     </button>
-  );
-}
-
-function SelectedInfoCard({ char }: { char: OshiAnalysisCharacter }) {
-  const topTags = [...(char.tags ?? []), ...(char.meme_tags ?? [])].slice(0, 3);
-
-  return (
-    <article className="flex flex-col border border-dashed border-gray-300 bg-white">
-      <div className="relative aspect-[3/4] w-full overflow-hidden bg-gray-100">
-        {char.profile_image_url ? (
-          <NoDragImage
-            src={char.profile_image_url}
-            alt={char.name}
-            className="pointer-events-none h-full w-full object-cover object-top"
-          />
-        ) : (
-          <CharacterSilhouette />
-        )}
-      </div>
-      <div className="flex flex-1 flex-col p-2">
-        <p className="truncate text-xs font-black text-gray-900">{char.name}</p>
-        <p className="truncate text-[10px] font-bold text-gray-500">{char.official_works.title}</p>
-        {topTags.length > 0 && (
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            {topTags.map((tag) => (
-              <span
-                key={tag}
-                className="border border-dashed border-gray-300 px-1 py-0.5 text-[9px] font-bold text-gray-500"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
-        <Link
-          href={catalogRequestPath("character-edit", {
-            id: char.id,
-            from: REQUEST_CTX.from,
-            returnTo: REQUEST_CTX.returnTo,
-          })}
-          className="mt-2 inline-flex w-full items-center justify-center gap-1 border border-dashed border-gray-400 px-2 py-1.5 text-[10px] font-bold text-gray-700 hover:bg-gray-50"
-        >
-          <Pencil size={11} />
-          수정 요청
-        </Link>
-      </div>
-    </article>
   );
 }
 
@@ -646,6 +600,7 @@ function OshiAnalysisPageContent() {
   const [logLines, setLogLines] = useState<string[]>([]);
   const [visibleLogCount, setVisibleLogCount] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [analyzedAt, setAnalyzedAt] = useState<Date | null>(null);
 
   const resultRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -687,12 +642,13 @@ function OshiAnalysisPageContent() {
         setPartyJudgment(buildPartyJudgment(characters, restored));
         setDangerGauges(buildDangerGauges(characters, restored));
         setRecommendations([]);
+        setAnalyzedAt(new Date(row.created_at));
         setStep("result");
 
         void getOshiRecommendations(
           (row.signature_tags ?? []).map((tag) => tag.tag),
           row.selected_character_ids ?? [],
-          3,
+          5,
         )
           .then((recs) => {
             if (!cancelled) setRecommendations(recs);
@@ -836,7 +792,7 @@ function OshiAnalysisPageContent() {
     const recsPromise = getOshiRecommendations(
       analyzed.signatureTags.map((s) => s.tag),
       selected.map((c) => c.id),
-      3
+      5,
     ).catch(() => [] as OshiAnalysisCharacter[]);
 
     // 로그를 한 줄씩 순차 공개 (마지막 결론 줄까지)
@@ -862,6 +818,7 @@ function OshiAnalysisPageContent() {
     setPartyJudgment(buildPartyJudgment(selected, analyzed));
     setDangerGauges(buildDangerGauges(selected, analyzed));
     setRecommendations(recs as OshiAnalysisCharacter[]);
+    setAnalyzedAt(new Date());
     setStep("result");
 
     if (authUser?.id) {
@@ -947,6 +904,7 @@ function OshiAnalysisPageContent() {
     setCharacters([]);
     setLogLines([]);
     setVisibleLogCount(0);
+    setAnalyzedAt(null);
     setStep("start");
     router.replace("/play/oshi-analysis");
   };
@@ -1064,18 +1022,8 @@ function OshiAnalysisPageContent() {
   // ── RESULT ───────────────────────────────────────────────────────────────
   if (step === "result" && result) {
     return (
-      <main className="flex w-full flex-col gap-6">
-        <section className="border border-dashed border-gray-500 bg-white p-5">
-          <Link href="/play" className="text-xs font-bold text-gray-500 hover:underline">
-            바이럴 허브로 돌아가기
-          </Link>
-          <h1 className="mt-3 text-2xl font-black text-gray-900">취향 분석 결과</h1>
-          <p className="mt-1 text-xs text-gray-500">
-            최애 {result.selectedCount}명 기반 · {result.confidenceLabel}
-          </p>
-        </section>
-
-        <ResultCard
+      <main className="flex w-full flex-col">
+        <OshiAnalysisResultLayout
           result={result}
           selected={selected}
           resonance={resonance}
@@ -1083,119 +1031,28 @@ function OshiAnalysisPageContent() {
           dangerGauges={dangerGauges}
           recommendations={recommendations}
           imageDataUrls={imageDataUrls}
-          cardRef={resultRef}
+          analyzedAt={analyzedAt}
+          busy={busy}
+          onShare={() => void handleDownload()}
+          onReselect={() => {
+            router.replace("/play/oshi-analysis");
+            setStep("select");
+          }}
+          onReset={handleReset}
         />
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={handleDownload}
-            className="inline-flex items-center justify-center gap-2 border border-dashed border-gray-700 bg-gray-900 px-3 py-2 text-xs font-bold text-white hover:bg-gray-800 disabled:opacity-50"
-          >
-            <Download size={14} />
-            이미지 저장
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              router.replace("/play/oshi-analysis");
-              setStep("select");
-            }}
-            className="inline-flex items-center justify-center gap-2 border border-dashed border-gray-400 bg-white px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50"
-          >
-            최애 다시 선택
-          </button>
-          <button
-            type="button"
-            onClick={handleReset}
-            className="inline-flex items-center justify-center gap-2 border border-dashed border-gray-300 bg-white px-3 py-2 text-xs font-bold text-gray-500 hover:bg-gray-50"
-          >
-            <RotateCcw size={14} />
-            처음부터
-          </button>
+        <div className="pointer-events-none fixed left-[-10000px] top-0 opacity-0" aria-hidden>
+          <ResultCard
+            result={result}
+            selected={selected}
+            resonance={resonance}
+            partyJudgment={partyJudgment}
+            dangerGauges={dangerGauges}
+            recommendations={recommendations}
+            imageDataUrls={imageDataUrls}
+            cardRef={resultRef}
+          />
         </div>
-
-        {/* 다음 행동 CTA */}
-        <section className="border border-dashed border-gray-400 bg-white p-4">
-          <p className="mb-3 text-[10px] font-black uppercase tracking-wider text-gray-400">
-            이 취향으로 뭘 해볼까
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/play/oshi-card"
-              className="inline-flex items-center gap-1.5 border border-dashed border-gray-700 bg-gray-900 px-3 py-2 text-xs font-black text-white hover:bg-gray-800"
-            >
-              최종 보스급 최애 카드 만들기
-              <ChevronRight size={12} />
-            </Link>
-            <Link
-              href="/play/otaku-type"
-              className="inline-flex items-center gap-1.5 border border-dashed border-gray-500 bg-white px-3 py-2 text-xs font-black text-gray-700 hover:bg-gray-50"
-            >
-              오타쿠 성향 테스트 하기
-              <ChevronRight size={12} />
-            </Link>
-          </div>
-        </section>
-
-        {result.confidence < 50 && (
-          <section className="border border-dashed border-red-300 bg-red-50 p-4">
-            <p className="text-xs font-bold text-red-700">
-              선택한 캐릭터 중 태그가 부족한 캐릭터가 많습니다. 태그 수정 제안으로 분석 정확도를
-              높일 수 있습니다.
-            </p>
-            {selected[0] && (
-              <Link
-                href={catalogRequestPath("character-edit", {
-                  id: selected[0].id,
-                  from: REQUEST_CTX.from,
-                  returnTo: REQUEST_CTX.returnTo,
-                })}
-                className="mt-2 inline-flex border border-dashed border-red-400 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-100"
-              >
-                태그 수정 제안하기
-              </Link>
-            )}
-          </section>
-        )}
-
-        <section className="border border-dashed border-gray-400 bg-white p-4">
-          <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">
-            선택한 최애 정보
-          </p>
-          <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
-            {selected.map((char) => (
-              <SelectedInfoCard key={char.id} char={char} />
-            ))}
-          </div>
-        </section>
-
-        <section className="border border-dashed border-gray-300 bg-gray-50 p-4">
-          <p className="text-xs leading-5 text-gray-500">
-            찾는 캐릭터가 없었나요?{" "}
-            <Link
-              href={catalogRequestPath("character-add", {
-                from: REQUEST_CTX.from,
-                returnTo: REQUEST_CTX.returnTo,
-              })}
-              className="font-bold text-gray-700 underline"
-            >
-              캐릭터 추가 요청
-            </Link>
-            하면 다음 분석에 넣을 수 있습니다.{" "}
-            <Link
-              href={catalogRequestPath("work-add", {
-                from: REQUEST_CTX.from,
-                returnTo: REQUEST_CTX.returnTo,
-              })}
-              className="font-bold text-gray-700 underline"
-            >
-              작품만 추가
-            </Link>
-            도 가능합니다.
-          </p>
-        </section>
       </main>
     );
   }
