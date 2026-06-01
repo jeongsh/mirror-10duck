@@ -2,14 +2,14 @@ import type { CharacterProfile } from "@/types/character";
 import { withRecommendedScenarioMap } from "@/types/character";
 import { PICHU_PROFILE, MAO_PRO_PROFILE } from "./defaultProfile";
 
-export const BASE_PROFILES: CharacterProfile[] = [PICHU_PROFILE, MAO_PRO_PROFILE];
+export const BASE_PROFILES: CharacterProfile[] = [MAO_PRO_PROFILE, PICHU_PROFILE];
 
 export const resolvePreferredProfile = (
   allProfiles: CharacterProfile[],
   preferredId?: string
 ) =>
   allProfiles.find((p) => p.id === preferredId) ??
-  allProfiles.find((p) => p.id === PICHU_PROFILE.id) ??
+  allProfiles.find((p) => p.id === MAO_PRO_PROFILE.id) ??
   null;
 
 export const mergeProfiles = (

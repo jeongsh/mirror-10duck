@@ -16,6 +16,29 @@ export async function fetchFollowedOfficialWorkIds(userId: string) {
   );
 }
 
+export async function fetchFollowedOfficialWorkTitles(userId: string) {
+  const { data, error } = await supabase
+    .from("user_official_work_follows")
+    .select("official_works(title, original_title)")
+    .eq("user_id", userId)
+    .eq("notify_enabled", true);
+
+  if (error) throw error;
+
+  const titles = new Set<string>();
+  for (const row of (data ?? []) as Array<{
+    official_works: { title?: string | null; original_title?: string | null } | { title?: string | null; original_title?: string | null }[] | null;
+  }>) {
+    const works = Array.isArray(row.official_works) ? row.official_works : row.official_works ? [row.official_works] : [];
+    for (const work of works) {
+      if (work.title) titles.add(work.title);
+      if (work.original_title) titles.add(work.original_title);
+    }
+  }
+
+  return titles;
+}
+
 export async function setOfficialWorkFollow(
   userId: string,
   officialWorkId: string,

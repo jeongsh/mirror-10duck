@@ -49,6 +49,11 @@ function isLockBrokenError(error: unknown): boolean {
   return message.includes("Lock broken");
 }
 
+function isMissingAuthSessionError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("Auth session missing") || message.includes("session_missing");
+}
+
 async function runQueuedAuthMutation(task: () => Promise<void>): Promise<void> {
   const run = authMutationQueue.then(async () => {
     try {
@@ -97,6 +102,7 @@ export async function saveLive2DEnabledPreference(enabled: boolean): Promise<voi
   saveLive2DEnabledLocally(enabled);
   await runQueuedAuthMutation(async () => {
     const { data, error: userError } = await supabase.auth.getUser();
+    if (userError && isMissingAuthSessionError(userError)) return;
     if (userError) throw userError;
     if (!data.user) return;
     const metadata = toMetadata(data.user.user_metadata);

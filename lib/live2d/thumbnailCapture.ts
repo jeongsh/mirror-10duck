@@ -25,6 +25,22 @@ function verticallyFlipCanvas(source: HTMLCanvasElement): HTMLCanvasElement {
   return output;
 }
 
+function cropCanvasToSquare(source: HTMLCanvasElement): HTMLCanvasElement {
+  const size = Math.min(source.width, source.height);
+  const output = document.createElement("canvas");
+  output.width = size;
+  output.height = size;
+
+  const context = output.getContext("2d");
+  if (!context) return source;
+
+  const sx = Math.round((source.width - size) / 2);
+  const sy = Math.round((source.height - size) * 0.18);
+  context.drawImage(source, sx, sy, size, size, 0, 0, size, size);
+
+  return output;
+}
+
 function patchCore6RenderOrders(model: any) {
   try {
     const core = (
@@ -60,14 +76,14 @@ export async function extractRendererThumbnail(
     const extractedCanvas =
       typeof maybeCanvas?.then === "function" ? await maybeCanvas : maybeCanvas;
     if (extractedCanvas instanceof HTMLCanvasElement) {
-      const blob = await canvasToPngBlob(verticallyFlipCanvas(extractedCanvas));
+      const blob = await canvasToPngBlob(cropCanvasToSquare(verticallyFlipCanvas(extractedCanvas)));
       if (blob) return blob;
     }
   } catch (e) {
     console.warn("[thumbnailCapture] renderer extract warning:", e);
   }
 
-  return canvasToPngBlob(fallbackCanvas);
+  return canvasToPngBlob(cropCanvasToSquare(fallbackCanvas));
 }
 
 export async function captureLive2DThumbnail(

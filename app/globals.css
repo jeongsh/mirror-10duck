@@ -42,6 +42,45 @@ body {
   box-sizing: border-box;
 }
 
+/* Live2D 말풍선 / 버튼 등장 모션 */
+@keyframes live2dBubbleIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes live2dRise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.live2d-bubble-in {
+  animation: live2dBubbleIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform-origin: bottom center;
+}
+
+.live2d-rise {
+  animation: live2dRise 260ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live2d-bubble-in,
+  .live2d-rise {
+    animation: none;
+  }
+}
+
 @media (min-width: 1024px) {
   body:has([data-layout-chrome]) {
     overflow: hidden;

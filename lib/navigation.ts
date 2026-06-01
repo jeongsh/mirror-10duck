@@ -89,9 +89,9 @@ export const CREATE_NAV_GROUPS: NavGroup[] = [
       },
       {
         href: "/play/recommend",
-        label: "애니 추천 룰렛",
-        description: "짧고 웃긴 추천 사유로 공유를 유도한다.",
-        status: "planned",
+        label: "애니 추천",
+        description: "캐릭터와 몇 가지 질문으로 볼 만한 애니를 고른다.",
+        status: "live",
       },
     ],
   },

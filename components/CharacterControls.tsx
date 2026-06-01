@@ -92,10 +92,13 @@ export default function CharacterControls() {
         <div className="mb-2 text-[11px] tracking-[0.2em] uppercase text-gray-500">
           [캐릭터 컨트롤 패널]
         </div>
-        <div className="mb-3">로그인 후 이용 가능한 기능입니다.</div>
+        <div className="mb-3">
+          비로그인 상태에서는 기본 캐릭터 체험과 표시 설정만 사용할 수 있습니다.
+        </div>
+        <GuestCharacterPanel />
         <Link
           href="/auth"
-          className="inline-block border border-dashed border-gray-500 bg-white px-3 py-1 text-xs tracking-widest uppercase"
+          className="mt-4 inline-block border border-dashed border-gray-500 bg-white px-3 py-1 text-xs tracking-widest uppercase"
         >
           [로그인 / 회원가입]
         </Link>
@@ -142,6 +145,45 @@ export default function CharacterControls() {
         </div>
       )}
     </section>
+  );
+}
+
+function GuestCharacterPanel() {
+  const isLive2DEnabled = useCharacterStore((s) => s.isLive2DEnabled);
+  const setLive2DEnabled = useCharacterStore((s) => s.setLive2DEnabled);
+  const [saving, setSaving] = useState(false);
+
+  const toggle = async () => {
+    const nextValue = !isLive2DEnabled;
+    setLive2DEnabled(nextValue);
+    useCharacterStore.getState().setMessage(
+      nextValue ? "캐릭터를 다시 불러왔어요." : "캐릭터를 숨겼어요. 알림은 기본 토스트로 보여드릴게요."
+    );
+    setSaving(true);
+    try {
+      await saveLive2DEnabledPreference(nextValue);
+    } finally {
+      setSaving(false);
+      setTimeout(() => {
+        useCharacterStore.getState().setMessage(null);
+      }, 2600);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={() => void toggle()}
+      disabled={saving}
+      className={
+        "border border-dashed px-3 py-1 text-xs tracking-widest uppercase disabled:opacity-50 " +
+        (isLive2DEnabled
+          ? "border-pink-600 bg-pink-100/70 text-pink-800"
+          : "border-gray-500 bg-gray-200/70 text-gray-600")
+      }
+    >
+      [Character Live2D: {saving ? "..." : isLive2DEnabled ? "ON" : "OFF"}]
+    </button>
   );
 }
 

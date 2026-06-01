@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import type { ReactNode, RefObject } from "react";
-import { usePathname } from "next/navigation";
+import { Children, useEffect, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent, ReactNode, RefObject } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Application, Ticker } from "pixi.js";
 import { Live2DModel, MotionPriority } from "@naari3/pixi-live2d-display";
 import { LIVE2D_VIEWPORT } from "@/lib/live2d/viewport";
@@ -13,6 +13,7 @@ import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import { formatDateTime, getCalendarEvents } from "@/lib/otaku/hub";
 import {
   ASSISTANT_SLOT_DEFINITIONS,
+  getGuestAssistantSlots,
   getAssistantSlots,
   type AssistantSlotDefinition,
   type AssistantSlotKey,
@@ -25,6 +26,8 @@ import {
   fetchUserNotificationSettings,
   type NotificationType,
 } from "@/lib/community/notifications";
+import { saveLive2DEnabledPreference } from "@/lib/supabase/characterPreferences";
+import { fetchFollowedOfficialWorkTitles } from "@/lib/supabase/officialWorkFollows";
 
 declare global {
   interface Window {
@@ -47,54 +50,168 @@ const DEFAULT_ACTION_LINES: Partial<Record<CharacterActionKey, string[]>> = {
   tap_other: ["작품을 찾아볼까요?", "추천이 필요할까요?", "도움이 필요하면 말해줘요."],
 };
 
-const ASSISTANT_PROMPT = "\ubb34\uc5c7\uc744 \ub3c4\uc640\ub4dc\ub9b4\uae4c\uc694?";
+const ASSISTANT_PROMPTS_AUTH = [
+  "불렀어요? 필요한 것부터 같이 골라봐요.",
+  "여기 있어요. 지금 뭐가 제일 궁금해요?",
+  "옆에서 거들게요. 어디부터 도와드릴까요?",
+  "지금 흐름에서 뭘 먼저 볼지 같이 정해봐요.",
+];
+const ASSISTANT_PROMPTS_GUEST = [
+  "처음이면 가볍게 둘러보는 것부터 도와드릴게요.",
+  "부담 갖지 말고, 궁금한 것부터 같이 봐요.",
+  "둘러보기 모드예요. 어디부터 구경해볼까요?",
+  "천천히 봐도 돼요. 제가 길잡이 해드릴게요.",
+];
+
+function pickRandomLine(lines: string[]): string {
+  return lines[Math.floor(Math.random() * lines.length)] ?? "";
+}
 const ASSISTANT_LOADING_MESSAGE = "\ud655\uc778 \uc911\uc774\uc5d0\uc694.";
 const ASSISTANT_RESPONSE_DURATION_MS = 4500;
 
-const PAGE_DIALOGUE_DURATION_MS = 3500;
+// 말풍선 버튼 공통 스타일. `live2d-rise` 로 순차 등장, hover/누름 마이크로 인터랙션 포함.
+const ASSISTANT_BUTTON_PRIMARY =
+  "live2d-rise inline-flex items-center rounded-full border border-pink-200 bg-pink-50 px-3 py-1.5 text-[11px] font-semibold text-pink-700 shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-pink-300 hover:bg-pink-100 hover:shadow active:translate-y-0 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-sm";
+const ASSISTANT_BUTTON_GHOST =
+  "live2d-rise inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-medium text-gray-500 transition-all duration-150 hover:-translate-y-0.5 hover:bg-gray-100 hover:text-gray-700 active:translate-y-0 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0";
+
 const PAGE_DIALOGUE_PRESETS: {
   match: (pathname: string) => boolean;
-  lines: string[];
+  guestLines: string[];
+  authLines: string[];
 }[] = [
   {
     match: (pathname) => pathname === "/",
-    lines: ["실시간 반응을 훑어볼까요?", "오늘 올라온 글을 같이 볼까요?"],
+    guestLines: [
+      "지금은 둘러보기 모드예요. 마음에 드는 채널부터 살짝 열어볼까요?",
+      "로그인하지 않아도 분위기는 볼 수 있어요. 저장과 활동 기록은 로그인 후에 이어져요.",
+      "처음 왔다면 실시간 베스트부터 보면 커뮤니티 결이 빨리 보여요.",
+      "아직 계정이 없어도 괜찮아요. 먼저 어떤 글이 오가는지 감만 잡아봐요.",
+      "제가 너무 앞서가진 않을게요. 궁금한 메뉴만 골라서 안내할게요.",
+    ],
+    authLines: [
+      "오늘 커뮤니티 흐름이 꽤 빠르게 바뀌고 있어요. 베스트부터 훑어볼까요?",
+      "읽을 만한 글과 답장할 만한 반응을 나눠서 챙겨볼게요.",
+      "오늘 들어온 반응이 있으면 제가 놓치지 않게 옆에서 정리해둘게요.",
+      "지금은 홈이에요. 새 글, 미션, 알림 중 먼저 처리할 걸 골라봐요.",
+      "잠깐만 봐도 괜찮아요. 필요한 것만 제가 짧게 추려드릴게요.",
+    ],
   },
   {
     match: (pathname) => pathname === "/feed",
-    lines: ["팔로우한 채널 새 글을 모아봤어요.", "피드에서 놓친 글을 확인해볼까요?"],
+    guestLines: [
+      "피드는 로그인 후 팔로우한 채널을 모아보는 곳이에요. 지금은 채널을 먼저 골라볼까요?",
+      "관심 채널을 정해두면 다음부터 여기에 새 글이 모여요.",
+      "아직 피드가 비어 보여도 정상이에요. 로그인 후 팔로우가 쌓이면 여기가 살아나요.",
+    ],
+    authLines: [
+      "팔로우한 채널 새 글을 모아뒀어요. 놓친 것부터 볼까요?",
+      "여긴 내가 고른 흐름만 모이는 곳이에요. 답장할 글도 같이 챙겨볼게요.",
+      "피드가 너무 많으면 반응 많은 글부터 먼저 보는 게 좋아요.",
+      "새 글을 다 보지 않아도 괜찮아요. 중요한 반응부터 잡아볼게요.",
+    ],
   },
   {
     match: (pathname) => pathname.startsWith("/board/") && pathname.includes("/write"),
-    lines: ["글을 쓰기 전에 스포일러 여부를 확인해볼까요?", "제목과 말머리를 먼저 정해볼까요?"],
+    guestLines: [
+      "글쓰기는 로그인 후 가능해요. 먼저 어떤 말머리가 잘 맞는지 둘러볼까요?",
+      "작성은 잠겨 있지만, 분위기를 보고 나중에 이어 쓰면 좋아요.",
+    ],
+    authLines: [
+      "쓰기 전에 스포일러 여부랑 말머리부터 정하면 반응이 덜 엇갈려요.",
+      "제목은 짧게, 본문은 핵심부터. 막히면 제가 임시저장 쪽도 챙겨볼게요.",
+      "작성 중에는 제가 크게 끼어들지 않고 필요한 것만 살짝 알려드릴게요.",
+      "글이 길어질 것 같으면 첫 문장에 결론을 먼저 놓는 게 좋아요.",
+      "댓글 싸움으로 번질 만한 표현은 한 번만 순하게 바꿔볼까요?",
+    ],
   },
   {
     match: (pathname) => pathname.startsWith("/board/"),
-    lines: ["이 채널의 최신 흐름을 볼까요?", "궁금한 글을 골라볼까요?"],
+    guestLines: [
+      "이 채널은 로그인 전에도 읽을 수 있어요. 댓글과 내 활동은 로그인 후 이어져요.",
+      "처음 보는 채널이면 최신글보다 반응 많은 글부터 보는 게 감 잡기 좋아요.",
+    ],
+    authLines: [
+      "이 채널의 최신 흐름을 보고 있어요. 답장할 만한 글이 있으면 제가 표시해둘게요.",
+      "말머리별로 분위기가 달라요. 지금은 제목과 반응 수를 같이 보면 좋아요.",
+      "댓글을 달기 전에 스포일러 표시가 필요한 글인지 한 번만 확인해요.",
+      "처음 보는 글이면 본문보다 댓글 흐름을 먼저 보는 것도 방법이에요.",
+      "반응이 뜨거운 글은 맥락을 놓치기 쉬워요. 원문부터 천천히 볼까요?",
+    ],
   },
   {
     match: (pathname) => pathname.startsWith("/profile"),
-    lines: ["프로필과 대표 캐릭터를 정리해볼까요?", "내 활동 기록을 확인해볼까요?"],
+    guestLines: [
+      "프로필은 로그인 후 내 캐릭터와 활동 기록이 같이 쌓이는 공간이에요.",
+      "기본 캐릭터 체험은 여기서 끝나지 않아요. 로그인하면 내 설정으로 저장돼요.",
+    ],
+    authLines: [
+      "프로필과 대표 캐릭터를 같이 정리해볼까요?",
+      "오늘 활동 기록과 캐릭터 표시가 어색한 곳이 없는지 같이 볼게요.",
+      "프로필은 내가 어떤 흐름으로 활동했는지 보여주는 공간이에요.",
+      "대표 캐릭터 썸네일이 마음에 안 들면 다시 생성해도 좋아요.",
+    ],
   },
   {
     match: (pathname) => pathname.startsWith("/works"),
-    lines: ["작품 정보를 같이 살펴볼까요?", "리뷰와 소식을 확인해볼까요?"],
+    guestLines: [
+      "작품 정보는 먼저 둘러보고, 관심작 저장은 로그인 후 이어갈 수 있어요.",
+      "궁금한 작품을 열어보면 이 서비스가 어떤 식으로 정리하는지 보일 거예요.",
+    ],
+    authLines: [
+      "작품 정보를 보고 있어요. 관심작으로 남길 만한지 같이 체크해볼까요?",
+      "리뷰와 소식을 분리해서 보면 스포일러를 피하기 쉬워요.",
+    ],
   },
   {
     match: (pathname) => pathname.startsWith("/news"),
-    lines: ["새 소식부터 확인해볼까요?", "공식 발표와 루머를 구분해서 볼게요."],
+    guestLines: [
+      "뉴스는 로그인 전에도 볼 수 있어요. 관심작 알림은 로그인하면 제가 챙겨드릴게요.",
+      "공식 소식 위주로 먼저 보면 헷갈리는 정보가 줄어요.",
+    ],
+    authLines: [
+      "새 소식부터 확인해볼까요? 관심작과 겹치는 건 제가 더 눈여겨볼게요.",
+      "공식 발표와 커뮤니티 반응은 따로 보는 게 좋아요.",
+      "뉴스는 제목만 보고 넘기기 쉬워요. 관심작이면 본문까지 열어볼게요.",
+      "새 소식이 많을 땐 공식 일정 변경부터 먼저 보는 게 안전해요.",
+    ],
   },
   {
     match: (pathname) => pathname.startsWith("/releases"),
-    lines: ["관심 신작 알림을 확인해볼까요?", "공식 일정이 바뀌었는지 같이 볼까요?"],
+    guestLines: [
+      "신작 일정은 먼저 둘러보고, 관심작 알림은 로그인 후 받을 수 있어요.",
+      "방영일이 가까운 작품부터 보면 지금 시즌 분위기가 보여요.",
+    ],
+    authLines: [
+      "관심 신작 알림을 확인해볼까요? 일정 변경도 같이 볼게요.",
+      "이번 주 볼 작품과 나중에 챙길 작품을 나눠두면 편해요.",
+      "신작은 첫 화 반응과 방영 시간을 같이 보면 선택이 쉬워져요.",
+      "관심작으로 남겨두면 다음에 제가 새 소식부터 챙겨드릴게요.",
+    ],
   },
   {
     match: (pathname) => pathname.startsWith("/calendar"),
-    lines: ["오늘 볼 일정부터 확인해볼까요?", "내 관심작 일정만 추려볼까요?"],
+    guestLines: [
+      "캘린더는 전체 일정을 보는 곳이에요. 내 관심작만 추리는 건 로그인 후 가능해요.",
+      "오늘 일정부터 보면 서비스가 어떤 식으로 챙겨주는지 바로 보여요.",
+    ],
+    authLines: [
+      "오늘 볼 일정부터 확인해볼까요? 관심작만 추려볼 수 있어요.",
+      "이번 주 일정이 몰려 있으면 제가 먼저 중요한 것부터 정리해볼게요.",
+      "달력에서 놓치기 쉬운 건 오늘 밤 일정이에요. 먼저 확인해볼까요?",
+      "관심작이 많아지면 전체 달력보다 내 일정만 보는 게 훨씬 편해요.",
+    ],
   },
   {
     match: (pathname) => pathname.startsWith("/reviews"),
-    lines: ["리뷰를 볼 때 스포일러 표시를 확인해요.", "평가 포인트를 같이 살펴볼까요?"],
+    guestLines: [
+      "리뷰를 볼 때는 스포일러 표시부터 확인해요. 처음이면 짧은 평가부터 보세요.",
+      "로그인하면 내가 본 작품과 관심작 기준으로 더 잘 골라볼 수 있어요.",
+    ],
+    authLines: [
+      "리뷰를 볼 때 스포일러 표시를 먼저 확인해요.",
+      "평가 포인트를 작품 정보와 같이 보면 판단이 더 쉬워요.",
+    ],
   },
 ];
 
@@ -120,9 +237,48 @@ interface SpeechAnchor {
 }
 
 type AssistantActionKey = AssistantSlotKey;
+type WhatNowMood = "light" | "immersive" | "reaction";
+type WhatNowTime = "short" | "medium" | "long";
+type WorkRecommendationDetail = "funny" | "healing" | "episodic" | "world" | "strategy" | "emotion" | "season" | "community" | "safe";
+type WorkRecommendationLength = "short" | "standard" | "long";
+type WorkRecommendationIntensity = "soft" | "balanced" | "strong";
+type WorkRecommendationResult = {
+  title: string;
+  items: string[];
+  reason: string;
+  filteredCount: number;
+};
+type WhatNowFlow =
+  | { step: "mood"; source: "what_now" | "work_recommendation" }
+  | { step: "time"; source: "what_now"; mood: WhatNowMood }
+  | { step: "work_detail"; source: "work_recommendation"; mood: WhatNowMood }
+  | { step: "work_length"; source: "work_recommendation"; mood: WhatNowMood; detail: WorkRecommendationDetail }
+  | { step: "work_intensity"; source: "work_recommendation"; mood: WhatNowMood; detail: WorkRecommendationDetail; length: WorkRecommendationLength }
+  | { step: "work_result"; source: "work_recommendation"; mood: WhatNowMood; detail: WorkRecommendationDetail; length: WorkRecommendationLength; intensity: WorkRecommendationIntensity; result: WorkRecommendationResult };
 
 const LIVE2D_BUBBLE_COOLDOWN_GLOBAL_MS = 60 * 1000;
 const LIVE2D_BUBBLE_COOLDOWN_PER_TYPE_MS = 5 * 60 * 1000;
+const CHARACTER_POINTER_FALLBACK_DELAY_MS = 80;
+const CHARACTER_POINTER_BOUNDS_PADDING = 24;
+const CHARACTER_HIDE_DELAY_MS = 1700;
+
+// 말풍선이 한 글자씩 "말하듯" 찍히는 속도(글자당 ms).
+const SPEECH_TYPING_SPEED_MS = 28;
+// 자동 닫힘 전 최소/최대 노출 시간.
+const SPEECH_MIN_DURATION_MS = 2600;
+const SPEECH_MAX_DURATION_MS = 8000;
+
+/**
+ * 문장 길이에 맞춰 말풍선 노출 시간을 계산한다.
+ * - 타이핑 애니메이션 시간 + 읽는 시간을 합산해, 짧은 대사는 가볍게 지나가고
+ *   긴 대사는 충분히 머무르도록 자연스러운 호흡을 준다.
+ */
+function estimateSpeechDuration(text: string): number {
+  const length = text.trim().length;
+  const typingMs = length * SPEECH_TYPING_SPEED_MS;
+  const readingMs = 1100 + length * 55;
+  return Math.min(Math.max(typingMs + readingMs, SPEECH_MIN_DURATION_MS), SPEECH_MAX_DURATION_MS);
+}
 
 function patchPixiCancelResize(app: Application): void {
   const target = app as unknown as { _cancelResize?: unknown };
@@ -136,14 +292,108 @@ function normalizeCharacterAction(action: CharacterActionKey): CharacterActionKe
   return action;
 }
 
-function hasActualHitAreas(model: Live2DModel | null): boolean {
-  const hitAreas = (
-    model?.internalModel as unknown as {
-      hitAreas?: Record<string, unknown>;
-    } | undefined
-  )?.hitAreas;
+function normalizeWorkTitle(title: string): string {
+  return title.replace(/\s+/g, "").toLowerCase();
+}
 
-  return Object.keys(hitAreas ?? {}).length > 0;
+function pickRandomItems<T>(items: T[], count: number): T[] {
+  const copied = [...items];
+  for (let i = copied.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copied[i], copied[j]] = [copied[j], copied[i]];
+  }
+  return copied.slice(0, count);
+}
+
+function buildWorkRecommendationResult(
+  mood: WhatNowMood,
+  detail: WorkRecommendationDetail,
+  length: WorkRecommendationLength,
+  intensity: WorkRecommendationIntensity,
+  followedTitles: Set<string>,
+): WorkRecommendationResult {
+  const key = `${mood}:${detail}`;
+  const pools: Record<string, { title: string; items: string[]; reason: string }> = {
+    "light:funny": {
+      title: "개그로 가볍게 웃는 타입",
+      items: ["은혼", "사이키 쿠스오의 재난", "아소비 아소바세", "월간순정 노자키 군", "히나마츠리", "남자고교생의 일상"],
+      reason: "한 화 단위로 웃고 빠질 수 있어서 피로도가 낮아요.",
+    },
+    "light:healing": {
+      title: "편하게 틀어두는 힐링 타입",
+      items: ["유루캠", "나츠메 우인장", "바라카몬", "논논비요리", "아리아", "빙과"],
+      reason: "큰 사건보다 분위기와 캐릭터 정으로 보는 쪽이에요.",
+    },
+    "light:episodic": {
+      title: "옴니버스 입문 타입",
+      items: ["짱구는 못말려", "스파이 패밀리", "일상", "케이온!", "코바야시네 메이드래곤", "아따맘마"],
+      reason: "앞뒤 맥락 부담이 적고 중간부터 봐도 따라가기 쉬워요.",
+    },
+    "immersive:world": {
+      title: "세계관에 빨려드는 타입",
+      items: ["진격의 거인", "강철의 연금술사", "메이드 인 어비스", "헌터X헌터", "던전밥", "도로헤도로"],
+      reason: "설정, 복선, 진실 추적이 강해서 연속 시청에 잘 맞아요.",
+    },
+    "immersive:strategy": {
+      title: "두뇌전과 긴장감 타입",
+      items: ["데스노트", "코드기어스", "약속의 네버랜드", "카이지", "원아웃", "싸이코패스"],
+      reason: "다음 수가 궁금해서 한 화만 보기 어려운 작품들이에요.",
+    },
+    "immersive:emotion": {
+      title: "감정선에 오래 남는 타입",
+      items: ["바이올렛 에버가든", "슈타인즈 게이트", "86 에이티식스", "클라나드", "4월은 너의 거짓말", "플라스틱 메모리즈"],
+      reason: "캐릭터의 선택과 후폭풍이 강하게 남는 쪽이에요.",
+    },
+    "reaction:season": {
+      title: "이번 분기 화제작 우선 타입",
+      items: ["이번 분기 인기작", "신작 1화 반응 좋은 작품", "방영 직후 언급 많은 작품", "원작 팬덤 반응 좋은 작품", "첫 주차 화제작"],
+      reason: "지금 같이 달릴 수 있어서 커뮤니티 대화에 바로 끼기 좋아요.",
+    },
+    "reaction:community": {
+      title: "댓글과 밈이 많은 타입",
+      items: ["밈 생성 중인 작품", "토론 많은 작품", "캐릭터 인기 높은 작품", "댓글 싸움 나는 작품", "짤이 많이 도는 작품"],
+      reason: "작품 자체보다 사람들 반응까지 같이 보는 재미가 커요.",
+    },
+    "reaction:safe": {
+      title: "실패 확률 낮은 인기작 타입",
+      items: ["평점 안정적인 작품", "입소문 오래 가는 작품", "완결 후 평가 좋은 작품", "입문 추천 단골 작품", "후반 평가가 좋은 작품"],
+      reason: "유행만 보고 고르기보다 반응이 검증된 쪽으로 좁혀요.",
+    },
+  };
+
+  const lengthHints: Record<WorkRecommendationLength, string[]> = {
+    short: ["짧게 보기 좋은", "진입 장벽 낮은", "한 화 맛보기 쉬운"],
+    standard: ["한두 화 보면 감 잡히는", "초반 흡입력이 있는", "주말에 이어보기 좋은"],
+    long: ["제대로 몰아보기 좋은", "긴 호흡으로 따라가기 좋은", "완주 만족감이 있는"],
+  };
+  const intensityHints: Record<WorkRecommendationIntensity, string[]> = {
+    soft: ["부담 낮은", "편하게 시작하기 좋은", "피곤할 때도 보기 좋은"],
+    balanced: ["취향 확인이 쉬운", "재미와 몰입 균형이 좋은", "무난하게 추천하기 좋은"],
+    strong: ["반응이 강하게 갈리는", "한번 잡으면 계속 보게 되는", "인상이 확 남는"],
+  };
+
+  const fallback = {
+      title: "가볍게 시작하는 추천",
+      items: ["짱구는 못말려", "은혼", "스파이 패밀리", "유루캠", "데스노트"],
+      reason: "처음 추천이라 부담 낮은 작품부터 잡았어요.",
+  };
+  const pool = pools[key] ?? fallback;
+  const followed = new Set([...followedTitles].map(normalizeWorkTitle));
+  const filtered = pool.items.filter((item) => !followed.has(normalizeWorkTitle(item)));
+  const backup = Object.values(pools)
+    .flatMap((item) => item.items)
+    .filter((item, index, arr) => arr.indexOf(item) === index)
+    .filter((item) => !followed.has(normalizeWorkTitle(item)));
+  const candidates = filtered.length >= 3 ? filtered : [...filtered, ...backup.filter((item) => !filtered.includes(item))];
+  const items = pickRandomItems(candidates.length > 0 ? candidates : pool.items, 3);
+  const reasonPrefix = `${pickRandomItems(lengthHints[length], 1)[0]}, ${pickRandomItems(intensityHints[intensity], 1)[0]} 쪽으로 골랐어요.`;
+
+  return {
+    title: pool.title,
+    items,
+    reason: `${reasonPrefix} ${pool.reason}`,
+    filteredCount: pool.items.length - filtered.length,
+  };
 }
 
 /**
@@ -187,18 +437,22 @@ export default function Live2DWrapper() {
   const [speechAnchor, setSpeechAnchor] = useState<SpeechAnchor | null>(null);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantBusy, setAssistantBusy] = useState<AssistantActionKey | null>(null);
+  const [whatNowFlow, setWhatNowFlow] = useState<WhatNowFlow | null>(null);
   const lastBubbleAtRef = useRef(0);
   const lastBubbleTypeAtRef = useRef<Map<NotificationType, number>>(new Map());
 
   const pathname = usePathname();
-  const assistantSlots = getAssistantSlots(pathname);
+  const router = useRouter();
   const modelPath = useCharacterStore((s) => s.modelPath);
   const authUser = useAuthUser();
   const userId = authUser?.id ?? null;
+  const isGuest = !authUser;
+  const assistantSlots = isGuest ? getGuestAssistantSlots(pathname) : getAssistantSlots(pathname);
   const setLoading = useCharacterStore((s) => s.setLoading);
   const setReady = useCharacterStore((s) => s.setReady);
   const setError = useCharacterStore((s) => s.setError);
   const setModelConfig = useCharacterStore((s) => s.setModelConfig);
+  const setLive2DEnabled = useCharacterStore((s) => s.setLive2DEnabled);
   // 캐릭터 모델이 실제로 그려지기 전엔 말풍선/페이지 인사를 띄우지 않는다.
   // (홈 진입/채널 이동 직후 모델보다 말풍선이 먼저 뜨는 문제 방지)
   const isReady = useCharacterStore((s) => s.isReady);
@@ -211,22 +465,28 @@ export default function Live2DWrapper() {
     }
   }
 
-  function setTemporaryMessage(message: string, durationMs = 3000) {
+  function setTemporaryMessage(message: string, durationMs?: number) {
     clearMessageTimeout();
-    suppressEmotionDialogueUntilRef.current = Date.now() + durationMs;
+    const effectiveDuration = durationMs ?? estimateSpeechDuration(message);
+    suppressEmotionDialogueUntilRef.current = Date.now() + effectiveDuration;
     useCharacterStore.getState().setMessage(message);
     messageTimeoutRef.current = setTimeout(() => {
       messageTimeoutRef.current = null;
       if (useCharacterStore.getState().message === message) {
         useCharacterStore.getState().setMessage(null);
       }
-    }, durationMs);
+    }, effectiveDuration);
   }
 
   function openAssistantMenu() {
     clearMessageTimeout();
     suppressEmotionDialogueUntilRef.current = Number.POSITIVE_INFINITY;
-    useCharacterStore.getState().setMessage(ASSISTANT_PROMPT);
+    const model = modelRef.current;
+    if (model) setSpeechAnchor(getModelSpeechAnchor(model));
+    setWhatNowFlow(null);
+    useCharacterStore
+      .getState()
+      .setMessage(pickRandomLine(isGuest ? ASSISTANT_PROMPTS_GUEST : ASSISTANT_PROMPTS_AUTH));
     setAssistantOpen(true);
   }
 
@@ -235,6 +495,7 @@ export default function Live2DWrapper() {
     suppressEmotionDialogueUntilRef.current = 0;
     setAssistantOpen(false);
     setAssistantBusy(null);
+    setWhatNowFlow(null);
     useCharacterStore.getState().setMessage(null);
   }
 
@@ -243,12 +504,42 @@ export default function Live2DWrapper() {
     suppressEmotionDialogueUntilRef.current = 0;
     setAssistantOpen(false);
     setAssistantBusy(null);
+    setWhatNowFlow(null);
     useCharacterStore.getState().setMessage(null);
   }
 
+  async function hideCharacterFromAssistant() {
+    clearMessageTimeout();
+    setAssistantOpen(false);
+    setAssistantBusy(null);
+    setWhatNowFlow(null);
+    const store = useCharacterStore.getState();
+    store.setEmotion("sad");
+    store.setMessage("아, 잠깐 숨어 있을게요. 그래도 필요한 알림은 아래에 띄워둘게요.");
+
+    try {
+      await saveLive2DEnabledPreference(false);
+      window.setTimeout(() => {
+        setLive2DEnabled(false);
+        const nextStore = useCharacterStore.getState();
+        nextStore.setMessage("캐릭터를 접어뒀어요. 알림은 토스트로 계속 보여드릴게요.");
+      }, CHARACTER_HIDE_DELAY_MS);
+    } catch (error) {
+      setLive2DEnabled(true);
+      useCharacterStore
+        .getState()
+        .setMessage(error instanceof Error ? `캐릭터 설정 저장 실패: ${error.message}` : "캐릭터 설정 저장에 실패했어요.");
+    } finally {
+      window.setTimeout(() => {
+        const state = useCharacterStore.getState();
+        if (state.emotion === "sad") state.setEmotion("idle");
+        if (state.message) state.setMessage(null);
+      }, CHARACTER_HIDE_DELAY_MS + 3200);
+    }
+  }
+
   function isCharacterClickBlocked(): boolean {
-    const state = useCharacterStore.getState();
-    return Boolean(assistantOpen || state.message || state.emotion !== "idle");
+    return assistantOpen;
   }
 
   const getMotionMeta = async (
@@ -454,8 +745,15 @@ export default function Live2DWrapper() {
     const preset = PAGE_DIALOGUE_PRESETS.find((item) => item.match(pathname));
     if (!preset) return;
 
-    const line = preset.lines[Math.floor(Math.random() * preset.lines.length)];
-    setTemporaryMessage(line, PAGE_DIALOGUE_DURATION_MS);
+    const lines = isGuest ? preset.guestLines : preset.authLines;
+    const line = lines[Math.floor(Math.random() * lines.length)];
+    // 페이지 진입 직후 인사는 살짝 늦게 띄워, 모델 등장과 겹치지 않고
+    // "이제 막 말을 거는" 느낌을 준다.
+    const greetingDelay = window.setTimeout(() => {
+      if (useCharacterStore.getState().message) return;
+      setTemporaryMessage(line);
+    }, 420);
+    return () => window.clearTimeout(greetingDelay);
   }, [pathname, isReady]);
 
   // --------------------------------------------------------------------
@@ -463,7 +761,6 @@ export default function Live2DWrapper() {
   // --------------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
-    let app: Application | null = null;
 
     const waitForCubismCore = async (timeoutMs = 5000) => {
       const start = Date.now();
@@ -477,8 +774,24 @@ export default function Live2DWrapper() {
       }
     };
 
+    // pixi Application 을 WebGL 컨텍스트까지 완전히 해제한다.
+    // dev 모드(StrictMode 이중 마운트 + HMR)에서 destroy 가 누락되면 컨텍스트가
+    // 누수되어 브라우저 WebGL 컨텍스트 한도를 넘기고 결국 탭이 멈춘다.
+    const destroyApp = (target: Application) => {
+      try {
+        patchPixiCancelResize(target);
+        target.destroy(false, { children: true, texture: true, context: true });
+      } catch (e) {
+        console.warn("[Live2DWrapper] app destroy warning:", e);
+      }
+      if (window.app === target) {
+        window.app = undefined;
+      }
+    };
+
     const boot = async () => {
       if (!canvasRef.current) return;
+      let app: Application | null = null;
       try {
         await waitForCubismCore();
         if (cancelled) return;
@@ -497,10 +810,11 @@ export default function Live2DWrapper() {
           height: CANVAS_H,
         });
 
+        // init() 이 끝나기 전에 cleanup 이 돌았다면(=cancelled), 이 시점이
+        // 컨텍스트를 안전하게 해제할 수 있는 유일한 지점이다. cleanup 은
+        // 초기화가 끝나지 않은 app 을 건드리지 않으므로 여기서 직접 정리한다.
         if (cancelled) {
-          patchPixiCancelResize(app);
-          app.destroy(false);
-          app = null;
+          destroyApp(app);
           return;
         }
 
@@ -509,6 +823,9 @@ export default function Live2DWrapper() {
         appRef.current = app;
         setAppReady(true);
       } catch (err) {
+        // 부트가 취소된 뒤 발생한 오류는 사용자에게 노출할 실제 에러가 아니다.
+        if (app) destroyApp(app);
+        if (cancelled) return;
         console.error("[Live2DWrapper] application boot 실패:", err);
         setError(err instanceof Error ? err.message : String(err));
       }
@@ -529,20 +846,11 @@ export default function Live2DWrapper() {
         modelRef.current = null;
       }
 
-      const a = appRef.current ?? app;
-      if (a) {
-        try {
-          patchPixiCancelResize(a);
-          a.destroy(false);
-        } catch (e) {
-          console.warn("[Live2DWrapper] app destroy warning:", e);
-        }
-      }
+      // 초기화가 끝난(appRef.current 가 채워진) app 만 정리한다.
+      // init() 진행 중인 app 은 boot() 가 cancelled 분기에서 안전하게 해제한다.
+      const a = appRef.current;
       appRef.current = null;
-
-      if (window.app === a) {
-        window.app = undefined;
-      }
+      if (a) destroyApp(a);
     };
   }, [setError]);
 
@@ -782,7 +1090,7 @@ export default function Live2DWrapper() {
             if (!nextStore.profile?.scenarioMap?.idle_return?.expressionId) {
               nextStore.setEmotion("idle");
             }
-          }, 5000);
+          }, Math.max(estimateSpeechDuration(message), 4200));
         }
       )
       .subscribe();
@@ -960,7 +1268,7 @@ export default function Live2DWrapper() {
         if (useCharacterStore.getState().message === line) {
           useCharacterStore.getState().setMessage(null);
         }
-      }, 3000);
+      }, estimateSpeechDuration(line));
     }
     return () => {
       cancelled = true;
@@ -1184,6 +1492,163 @@ export default function Live2DWrapper() {
     }
   }
 
+  function navigateAfterAssistantMessage(
+    href: string,
+    message: string,
+    emotion: "happy" | "wink" | "idle" = "happy",
+  ) {
+    setAssistantOpen(false);
+    setAssistantBusy(null);
+    setWhatNowFlow(null);
+    setTemporaryMessage(message, ASSISTANT_RESPONSE_DURATION_MS);
+    useCharacterStore.getState().setEmotion(emotion);
+    window.setTimeout(() => {
+      router.push(href);
+    }, 650);
+  }
+
+  function startWhatNowFlow(source: "what_now" | "work_recommendation" = "what_now") {
+    clearMessageTimeout();
+    setAssistantBusy(null);
+    setAssistantOpen(false);
+    setWhatNowFlow({ step: "mood", source });
+    suppressEmotionDialogueUntilRef.current = Number.POSITIVE_INFINITY;
+    useCharacterStore.getState().setEmotion("wink");
+    useCharacterStore
+      .getState()
+      .setMessage(
+        source === "work_recommendation"
+          ? "작품 추천은 취향을 먼저 맞춰볼게요. 어떤 작품이 끌려요?"
+          : "지금 뭐할지 같이 골라봐요. 어떤 쪽이 끌려요?",
+      );
+  }
+
+  function handleWhatNowMood(mood: WhatNowMood) {
+    if (!whatNowFlow || whatNowFlow.step !== "mood") return;
+    if (whatNowFlow.source === "work_recommendation") {
+      setWhatNowFlow({ step: "work_detail", source: "work_recommendation", mood });
+      const workPrompt =
+        mood === "light"
+          ? "일상, 개그, 옴니버스 쪽으로 볼게요. 어떤 맛이 좋아요?"
+          : mood === "immersive"
+            ? "한번 보면 빠져드는 쪽으로 볼게요. 어디에 더 끌려요?"
+            : "이번 분기 반응 좋은 쪽으로 볼게요. 어떤 기준으로 고를까요?";
+      useCharacterStore.getState().setMessage(workPrompt);
+      return;
+    }
+
+    setWhatNowFlow({ step: "time", source: "what_now", mood });
+    const prompt =
+      mood === "light"
+        ? "가볍게 즐길 수 있는 걸로 볼게요. 시간은 얼마나 있어요?"
+        : mood === "immersive"
+          ? "몰입할 작품 위주로 볼게요. 시간은 얼마나 돼요?"
+          : "사람들 반응이 모이는 쪽으로 볼게요. 시간은 얼마나 있어요?";
+    useCharacterStore.getState().setMessage(prompt);
+  }
+
+  function handleWhatNowTime(time: WhatNowTime) {
+    if (!whatNowFlow || whatNowFlow.step !== "time") return;
+
+    const { mood } = whatNowFlow;
+    if (mood === "immersive") {
+      navigateAfterAssistantMessage(
+        time === "short" ? "/releases" : time === "medium" ? "/play/oshi-analysis" : "/calendar",
+        time === "short"
+          ? "짧게 볼 수 있는 신작 소식부터 보여드릴게요. 관심 생기는 작품만 저장하면 돼요."
+          : time === "medium"
+            ? "몇 가지 취향을 더 물어보고 작품 쪽으로 좁혀볼게요."
+            : "시간이 있으면 이번 주 일정과 신작 흐름을 같이 보는 게 좋아요.",
+      );
+      return;
+    }
+
+    if (mood === "reaction") {
+      navigateAfterAssistantMessage(
+        time === "short" ? "/" : "/board",
+        time === "short"
+          ? "지금 반응이 빠른 글부터 보여드릴게요. 짧게 훑기 좋아요."
+          : "사람들 반응이 모이는 글 쪽으로 볼게요. 제목과 댓글 흐름부터 확인해요.",
+      );
+      return;
+    }
+
+    navigateAfterAssistantMessage(
+      time === "short" ? "/play/fortune" : time === "medium" ? "/play/otaku-type" : "/play/oshi-card",
+      time === "short"
+        ? "가볍게 운세부터 볼게요. 1분 안에 분위기 전환하기 좋아요."
+        : time === "medium"
+          ? "짧은 테스트로 취향을 먼저 열어볼게요. 결과에 따라 다음 볼거리도 이어갈 수 있어요."
+          : "조금 여유가 있으면 최애 카드 쪽이 좋아요. 만들면서 취향을 정리하기 좋아요.",
+      "wink",
+    );
+  }
+
+  function handleWorkRecommendationDetail(detail: WorkRecommendationDetail) {
+    if (!whatNowFlow || whatNowFlow.step !== "work_detail") return;
+    setWhatNowFlow({
+      step: "work_length",
+      source: "work_recommendation",
+      mood: whatNowFlow.mood,
+      detail,
+    });
+    useCharacterStore.getState().setMessage("좋아요. 이번엔 어느 정도 분량이 편해요?");
+  }
+
+  function handleWorkRecommendationLength(length: WorkRecommendationLength) {
+    if (!whatNowFlow || whatNowFlow.step !== "work_length") return;
+    setWhatNowFlow({
+      step: "work_intensity",
+      source: "work_recommendation",
+      mood: whatNowFlow.mood,
+      detail: whatNowFlow.detail,
+      length,
+    });
+    useCharacterStore.getState().setMessage("마지막으로, 어느 정도 자극이 좋아요?");
+  }
+
+  async function handleWorkRecommendationIntensity(intensity: WorkRecommendationIntensity) {
+    if (!whatNowFlow || whatNowFlow.step !== "work_intensity") return;
+    useCharacterStore.getState().setMessage("관심작은 빼고 후보를 섞어볼게요.");
+
+    let followedTitles = new Set<string>();
+    if (userId) {
+      try {
+        followedTitles = await fetchFollowedOfficialWorkTitles(userId);
+      } catch (error) {
+        console.warn("[Live2DWrapper] followed works warning:", error);
+      }
+    }
+
+    const result = buildWorkRecommendationResult(
+      whatNowFlow.mood,
+      whatNowFlow.detail,
+      whatNowFlow.length,
+      intensity,
+      followedTitles,
+    );
+    setWhatNowFlow({
+      step: "work_result",
+      source: "work_recommendation",
+      mood: whatNowFlow.mood,
+      detail: whatNowFlow.detail,
+      length: whatNowFlow.length,
+      intensity,
+      result,
+    });
+    useCharacterStore.getState().setEmotion("happy");
+    useCharacterStore.getState().setMessage(`${result.title} 쪽이면 이 후보부터 볼 만해요.`);
+  }
+
+  function openRecommendationViralPage() {
+    if (!whatNowFlow || whatNowFlow.step !== "work_result") return;
+    navigateAfterAssistantMessage(
+      "/play/recommend",
+      "정식 애니 추천 바이럴은 여기로 연결해둘게요. 지금은 개발 중 페이지로 먼저 보여드려요.",
+      "wink",
+    );
+  }
+
   async function runAssistantAction(action: AssistantActionKey) {
     if (assistantBusy) return;
     clearMessageTimeout();
@@ -1192,9 +1657,105 @@ export default function Live2DWrapper() {
     setAssistantOpen(false);
 
     try {
+      if (action === "what_now" || action === "work_recommendation") {
+        startWhatNowFlow(action);
+        return;
+      }
+
+      if (action === "recommended_posts") {
+        navigateAfterAssistantMessage("/", "지금 반응이 좋은 글부터 보여드릴게요. 짧게 보고 넘어가기 좋아요.");
+        return;
+      }
+
+      if (action === "guest_hot_posts") {
+        navigateAfterAssistantMessage("/", "실시간 베스트부터 보여드릴게요. 여기서 커뮤니티 분위기를 가장 빨리 볼 수 있어요.");
+        return;
+      }
+
+      if (action === "guest_browse") {
+        const target = pathname?.startsWith("/board") ? "/" : "/board";
+        navigateAfterAssistantMessage(
+          target,
+          target === "/board"
+            ? "채널 목록으로 안내할게요. 마음에 드는 말머리와 분위기부터 골라보면 돼요."
+            : "홈으로 돌아가서 실시간 흐름부터 다시 볼게요.",
+        );
+        return;
+      }
+
+      if (action === "guest_login") {
+        navigateAfterAssistantMessage("/auth", "로그인 화면으로 안내할게요. 캐릭터 설정과 활동 기록은 로그인 후부터 저장돼요.", "wink");
+        return;
+      }
+
+      if (action === "guest_login_benefits") {
+        setTemporaryMessage(
+          "로그인하면 캐릭터 표시 설정, 관심 채널, 미션, 알림, 답장할 글, 관심작 일정이 내 계정에 저장돼요.",
+          ASSISTANT_RESPONSE_DURATION_MS,
+        );
+        useCharacterStore.getState().setEmotion("wink");
+        return;
+      }
+
+      if (action === "guest_meet_character") {
+        setTemporaryMessage(
+          "지금은 기본 캐릭터 체험 모드예요. 로그인하면 내 캐릭터가 활동과 알림을 더 잘 챙겨드릴게요.",
+          ASSISTANT_RESPONSE_DURATION_MS,
+        );
+        useCharacterStore.getState().setEmotion("happy");
+        return;
+      }
+
+      if (action === "open_notifications") {
+        if (!userId) {
+          navigateAfterAssistantMessage("/auth", "알림은 로그인 후 볼 수 있어요. 먼저 계정을 연결해볼까요?", "wink");
+          return;
+        }
+        navigateAfterAssistantMessage("/notifications", "알림함으로 갈게요. 댓글, 답글, 반응을 한 번에 정리해볼 수 있어요.");
+        return;
+      }
+
+      if (action === "open_profile") {
+        if (!userId) {
+          navigateAfterAssistantMessage("/auth", "프로필은 로그인 후 생겨요. 캐릭터와 활동 기록을 같이 저장할 수 있어요.", "wink");
+          return;
+        }
+        navigateAfterAssistantMessage("/profile", "프로필로 갈게요. 캐릭터, 활동 기록, 레벨을 같이 확인해볼 수 있어요.");
+        return;
+      }
+
+      if (action === "open_character_room") {
+        if (!userId) {
+          navigateAfterAssistantMessage("/auth", "내 캐릭터 설정은 로그인 후 저장돼요. 먼저 계정에 연결해볼까요?", "wink");
+          return;
+        }
+        const activeProfile = useCharacterStore.getState().profile;
+        const target = activeProfile?.id ? `/library/${encodeURIComponent(activeProfile.id)}` : "/profile";
+        navigateAfterAssistantMessage(target, "캐릭터 설정으로 갈게요. 표시 위치, 표정, 썸네일을 조정할 수 있어요.");
+        return;
+      }
+
+      if (action === "open_write") {
+        if (!userId) {
+          navigateAfterAssistantMessage("/auth", "글쓰기는 로그인 후 가능해요. 먼저 계정을 연결해둘게요.", "wink");
+          return;
+        }
+        navigateAfterAssistantMessage("/feed/write", "글쓰기 화면으로 갈게요. 말머리와 스포일러 표시부터 같이 확인해요.");
+        return;
+      }
+
+      if (action === "open_notification_settings") {
+        if (!userId) {
+          navigateAfterAssistantMessage("/auth", "알림 설정은 로그인 후 저장돼요. 계정에 연결하면 캐릭터 말풍선도 조절할 수 있어요.", "wink");
+          return;
+        }
+        navigateAfterAssistantMessage("/settings/notifications", "알림 설정으로 갈게요. 목록 알림과 캐릭터 말풍선을 따로 조절할 수 있어요.");
+        return;
+      }
+
       if (action === "today_activity") {
         if (!userId) {
-          setTemporaryMessage("로그인하면 오늘 활동을 보여드릴게요.", ASSISTANT_RESPONSE_DURATION_MS);
+          setTemporaryMessage("오늘 활동 요약은 로그인 후 내 글과 댓글이 생기면 볼 수 있어요.", ASSISTANT_RESPONSE_DURATION_MS);
           return;
         }
         const summary = await fetchTodayActivitySummary(userId);
@@ -1205,7 +1766,7 @@ export default function Live2DWrapper() {
 
       if (action === "unreplied_queue") {
         if (!userId) {
-          setTemporaryMessage("로그인하면 미답글을 모아드릴게요.", ASSISTANT_RESPONSE_DURATION_MS);
+          setTemporaryMessage("미답글 큐는 로그인 후 내 글에 달린 댓글을 기준으로 모아드려요.", ASSISTANT_RESPONSE_DURATION_MS);
           return;
         }
         const queue = await fetchUnrepliedQueue(userId, 20);
@@ -1216,7 +1777,7 @@ export default function Live2DWrapper() {
 
       if (action === "daily_missions") {
         if (!userId) {
-          setTemporaryMessage("로그인하면 미션을 챙겨드릴게요.", ASSISTANT_RESPONSE_DURATION_MS);
+          setTemporaryMessage("오늘 미션은 로그인 후 출석, 댓글, 추천 활동을 기준으로 채워져요.", ASSISTANT_RESPONSE_DURATION_MS);
           return;
         }
         const board = await fetchMissionBoard(userId);
@@ -1232,7 +1793,9 @@ export default function Live2DWrapper() {
         const message =
           todayEvents.length > 0
             ? `오늘은 ${todayEvents.slice(0, 3).map((event) => event.title).join(", ")} 일정이 있어요.`
-            : "오늘 관심 일정은 아직 없어요.";
+            : userId
+              ? "오늘 관심 일정은 아직 없어요. 관심작을 추가하면 여기서 바로 챙겨드릴게요."
+              : "로그인하면 관심작 기준으로 오늘 일정을 따로 추려드릴 수 있어요.";
         setTemporaryMessage(message, ASSISTANT_RESPONSE_DURATION_MS);
         useCharacterStore.getState().setEmotion("happy");
         return;
@@ -1246,7 +1809,9 @@ export default function Live2DWrapper() {
         const message =
           weekEvents.length > 0
             ? `이번 주엔 ${weekEvents.map((event) => `${formatDateTime(event.startsAt)} ${event.title}`).join(", ")}가 있어요.`
-            : "이번 주 관심 일정은 아직 비어 있어요.";
+            : userId
+              ? "이번 주 관심 일정은 아직 비어 있어요. 새로 팔로우한 작품이 생기면 제가 챙겨둘게요."
+              : "로그인하면 이번 주 관심작 일정만 따로 추려볼 수 있어요.";
         setTemporaryMessage(message, ASSISTANT_RESPONSE_DURATION_MS);
         useCharacterStore.getState().setEmotion("happy");
         return;
@@ -1257,7 +1822,9 @@ export default function Live2DWrapper() {
         const message =
           unreadCount > 0
             ? `최애 새 소식 ${unreadCount}건이 있어요.`
-            : "관심작 새 소식은 아직 없어요.";
+            : userId
+              ? "관심작 새 소식은 아직 없어요. 새 알림이 오면 제가 먼저 알려드릴게요."
+              : "로그인하면 관심작을 저장하고 새 소식을 받을 수 있어요.";
         setTemporaryMessage(message, ASSISTANT_RESPONSE_DURATION_MS);
         useCharacterStore.getState().setEmotion("happy");
         return;
@@ -1312,12 +1879,51 @@ export default function Live2DWrapper() {
     return count ?? 0;
   }
 
-  function schedulePointerFallbackAction() {
+  function isPointerInsideModelBounds(event: ReactPointerEvent<HTMLCanvasElement>): boolean {
+    const model = modelRef.current;
+    const canvas = canvasRef.current;
+    if (!model || !canvas) return false;
+
+    try {
+      const bounds = (
+        model as unknown as {
+          getBounds?: () => { x: number; y: number; width: number; height: number };
+        }
+      ).getBounds?.();
+
+      if (
+        !bounds ||
+        !Number.isFinite(bounds.x) ||
+        !Number.isFinite(bounds.y) ||
+        !Number.isFinite(bounds.width) ||
+        !Number.isFinite(bounds.height) ||
+        bounds.width <= 0 ||
+        bounds.height <= 0
+      ) {
+        return true;
+      }
+
+      const rect = canvas.getBoundingClientRect();
+      const x = ((event.clientX - rect.left) / rect.width) * CANVAS_W;
+      const y = ((event.clientY - rect.top) / rect.height) * CANVAS_H;
+
+      return (
+        x >= bounds.x - CHARACTER_POINTER_BOUNDS_PADDING &&
+        x <= bounds.x + bounds.width + CHARACTER_POINTER_BOUNDS_PADDING &&
+        y >= bounds.y - CHARACTER_POINTER_BOUNDS_PADDING &&
+        y <= bounds.y + bounds.height + CHARACTER_POINTER_BOUNDS_PADDING
+      );
+    } catch {
+      return true;
+    }
+  }
+
+  function schedulePointerFallbackAction(event: ReactPointerEvent<HTMLCanvasElement>) {
     if (isCharacterClickBlocked()) return;
 
     const model = modelRef.current;
     if (!model) return;
-    if (hasActualHitAreas(model)) return;
+    if (!isPointerInsideModelBounds(event)) return;
     if (pointerFallbackTimeoutRef.current) {
       clearTimeout(pointerFallbackTimeoutRef.current);
     }
@@ -1325,7 +1931,7 @@ export default function Live2DWrapper() {
       pointerFallbackTimeoutRef.current = null;
       if (Date.now() - lastHitAtRef.current < 250) return;
       playAction("attention");
-    }, 120);
+    }, CHARACTER_POINTER_FALLBACK_DELAY_MS);
   }
 
   function getModelSpeechAnchor(model: Live2DModel): SpeechAnchor {
@@ -1381,13 +1987,24 @@ export default function Live2DWrapper() {
         )}
 
         {isReady && (
-          <SpeechBubble anchor={speechAnchor} bubbleRef={speechBubbleRef}>
+          <SpeechBubble anchor={speechAnchor} bubbleRef={speechBubbleRef} onClose={closeSpeechBubble}>
+            {whatNowFlow && (
+              <WhatNowChoices
+                flow={whatNowFlow}
+                onMood={handleWhatNowMood}
+                onTime={handleWhatNowTime}
+                onWorkDetail={handleWorkRecommendationDetail}
+                onWorkLength={handleWorkRecommendationLength}
+                onWorkIntensity={handleWorkRecommendationIntensity}
+                onOpenRecommendation={openRecommendationViralPage}
+              />
+            )}
             {assistantOpen && (
               <AssistantQuickActions
                 slots={assistantSlots}
                 busyAction={assistantBusy}
                 onAction={runAssistantAction}
-                onClose={closeAssistantMenu}
+                onHideCharacter={hideCharacterFromAssistant}
               />
             )}
           </SpeechBubble>
@@ -1461,30 +2078,239 @@ function Live2DStatusBadge() {
   );
 }
 
+function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReduced(query.matches);
+    const onChange = (event: MediaQueryListEvent) => setReduced(event.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+  return reduced;
+}
+
+/**
+ * 말풍선 텍스트를 한 글자씩 찍어 "말하는 듯한" 느낌을 준다.
+ * 새 대사로 바뀌면 처음부터 다시 타이핑하고, 동작 최소화 설정이면 즉시 전체를 보여준다.
+ */
+function useTypewriter(text: string, speedMs = SPEECH_TYPING_SPEED_MS): { shown: string; done: boolean } {
+  const reduceMotion = usePrefersReducedMotion();
+  const [shown, setShown] = useState(text);
+
+  useEffect(() => {
+    if (!text) {
+      setShown("");
+      return;
+    }
+    if (reduceMotion) {
+      setShown(text);
+      return;
+    }
+    setShown("");
+    let index = 0;
+    const timer = setInterval(() => {
+      index += 1;
+      setShown(text.slice(0, index));
+      if (index >= text.length) clearInterval(timer);
+    }, speedMs);
+    return () => clearInterval(timer);
+  }, [text, speedMs, reduceMotion]);
+
+  return { shown, done: shown.length >= text.length };
+}
+
 function SpeechBubble({
   anchor,
   bubbleRef,
+  onClose,
   children,
 }: {
   anchor: SpeechAnchor | null;
   bubbleRef: RefObject<HTMLDivElement | null>;
+  onClose: () => void;
   children?: ReactNode;
 }) {
   const message = useCharacterStore((s) => s.message);
-  if (!message && !children) return null;
-  const x = anchor?.x ?? CANVAS_W / 2;
+  const rawMessage = typeof message === "string" ? message.trim() : "";
+  const childNodes = children ? Children.toArray(children) : [];
+  const hasChildren = childNodes.length > 0;
+  const lastMessageRef = useRef("");
+  if (rawMessage) lastMessageRef.current = rawMessage;
+  // 메뉴/선택지가 떠 있는 동안에는 자동 닫힘 타이머나 알림이 메시지를 비워도
+  // 마지막 안내 문구를 유지해, 말풍선만 남고 텍스트가 사라지는 상황을 막는다.
+  const cleanMessage = rawMessage || (hasChildren ? lastMessageRef.current : "");
+  const { shown, done } = useTypewriter(cleanMessage);
+  if (!cleanMessage && !hasChildren) {
+    lastMessageRef.current = "";
+    return null;
+  }
   const y = anchor?.y ?? Math.round(CANVAS_H * 0.18);
   return (
     <div
       ref={bubbleRef}
-      className="absolute -translate-x-1/2 -translate-y-full bg-white px-4 py-3 rounded-2xl shadow-lg border-2 border-pink-200 text-sm font-semibold text-gray-800 min-w-[160px] max-w-[min(280px,80vw)] text-center pointer-events-auto z-10 before:content-[''] before:absolute before:-bottom-2 before:left-1/2 before:-translate-x-1/2 before:w-4 before:h-4 before:bg-white before:rotate-45 before:border-b-2 before:border-r-2 before:border-pink-200"
+      className="pointer-events-none absolute z-10 w-max max-w-[90%] -translate-x-1/2 -translate-y-full"
       style={{
-        left: `${(x / CANVAS_W) * 100}%`,
+        left: "50%",
         top: `${(y / CANVAS_H) * 100}%`,
       }}
     >
-      {message && <div>{message}</div>}
-      {children}
+      <div className="live2d-bubble-in pointer-events-auto relative w-full break-words whitespace-normal rounded-2xl border-2 border-pink-200 bg-white px-4 py-3 text-center text-sm font-semibold leading-5 text-gray-800 shadow-lg before:absolute before:-bottom-2 before:left-1/2 before:h-4 before:w-4 before:-translate-x-1/2 before:rotate-45 before:border-b-2 before:border-r-2 before:border-pink-200 before:bg-white before:content-['']">
+        {hasChildren && (
+          <button
+            type="button"
+            aria-label="말풍선 닫기"
+            className="absolute -right-2.5 -top-2.5 z-20 flex h-7 w-7 items-center justify-center rounded-full border-2 border-pink-200 bg-white text-sm font-black leading-none text-gray-400 shadow-sm transition-colors hover:bg-pink-50 hover:text-pink-600"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        )}
+        {cleanMessage && (
+          // 타이핑 중 폭이 출렁이지 않도록, 완성된 문장을 invisible sizer 로 깔고
+          // 그 위에 현재까지 찍힌 글자를 겹쳐서 보여준다.
+          <div className="grid">
+            <span aria-hidden className="invisible col-start-1 row-start-1">
+              {cleanMessage}
+            </span>
+            <span aria-hidden className="col-start-1 row-start-1">
+              {shown}
+              {!done && (
+                <span className="ml-0.5 inline-block h-3.5 w-0.5 -translate-y-0.5 animate-pulse rounded-full bg-pink-400 align-middle" />
+              )}
+            </span>
+            <span className="sr-only" aria-live="polite">
+              {cleanMessage}
+            </span>
+          </div>
+        )}
+        {childNodes}
+      </div>
+    </div>
+  );
+}
+
+function WhatNowChoices({
+  flow,
+  onMood,
+  onTime,
+  onWorkDetail,
+  onWorkLength,
+  onWorkIntensity,
+  onOpenRecommendation,
+}: {
+  flow: WhatNowFlow;
+  onMood: (mood: WhatNowMood) => void;
+  onTime: (time: WhatNowTime) => void;
+  onWorkDetail: (detail: WorkRecommendationDetail) => void;
+  onWorkLength: (length: WorkRecommendationLength) => void;
+  onWorkIntensity: (intensity: WorkRecommendationIntensity) => void;
+  onOpenRecommendation: () => void;
+}) {
+  if (flow.step === "work_result") {
+    return (
+      <div className="mx-auto mt-2 w-full max-w-[320px] overflow-hidden text-center">
+        <p className="mx-auto max-w-[280px] break-keep text-xs font-bold leading-5 text-gray-600">{flow.result.reason}</p>
+        <div className="mx-auto mt-2 flex max-w-[280px] flex-wrap justify-center gap-1.5">
+          {flow.result.items.map((item, idx) => (
+            <span
+              key={item}
+              className="live2d-rise max-w-full rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-bold text-gray-700 whitespace-normal break-keep text-center"
+              style={{ animationDelay: `${idx * 45}ms` }}
+            >
+              {item}
+            </span>
+          ))}
+        </div>
+        <div className="mt-2 flex flex-wrap justify-center gap-1.5">
+          <button
+            type="button"
+            className={ASSISTANT_BUTTON_PRIMARY}
+            style={{ animationDelay: "135ms" }}
+            onClick={onOpenRecommendation}
+          >
+            추천 페이지 보기
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const choices =
+    flow.step === "mood"
+      ? flow.source === "work_recommendation"
+        ? [
+            { key: "light", label: "편하게 볼 작품" },
+            { key: "immersive", label: "몰입감 있는 작품" },
+            { key: "reaction", label: "반응 좋은 작품" },
+          ]
+        : [
+            { key: "light", label: "가볍게 즐기기" },
+            { key: "immersive", label: "몰입할 작품" },
+            { key: "reaction", label: "사람들 반응" },
+          ]
+      : flow.step === "work_detail"
+        ? flow.mood === "light"
+          ? [
+              { key: "funny", label: "개그" },
+              { key: "healing", label: "힐링" },
+              { key: "episodic", label: "옴니버스" },
+            ]
+          : flow.mood === "immersive"
+            ? [
+                { key: "world", label: "세계관" },
+                { key: "strategy", label: "두뇌전" },
+                { key: "emotion", label: "감정선" },
+              ]
+            : [
+                { key: "season", label: "이번 분기" },
+                { key: "community", label: "댓글/밈" },
+                { key: "safe", label: "검증된 인기작" },
+              ]
+        : flow.step === "work_length"
+          ? [
+              { key: "short", label: "짧게" },
+              { key: "standard", label: "한두 쿨" },
+              { key: "long", label: "길게" },
+            ]
+          : flow.step === "work_intensity"
+            ? [
+                { key: "soft", label: "편안하게" },
+                { key: "balanced", label: "적당히" },
+                { key: "strong", label: "강하게" },
+              ]
+        : [
+            { key: "short", label: "잠깐 (1분)" },
+            { key: "medium", label: "조금 (5분)" },
+            { key: "long", label: "넉넉히" },
+          ];
+
+  return (
+    <div className="mt-2 flex max-w-[420px] flex-wrap items-center justify-center gap-1.5">
+      {choices.map((choice, idx) => (
+        <button
+          key={choice.key}
+          type="button"
+          className={ASSISTANT_BUTTON_PRIMARY}
+          style={{ animationDelay: `${idx * 45}ms` }}
+          onClick={() => {
+            if (flow.step === "mood") {
+              onMood(choice.key as WhatNowMood);
+            } else if (flow.step === "work_detail") {
+              onWorkDetail(choice.key as WorkRecommendationDetail);
+            } else if (flow.step === "work_length") {
+              onWorkLength(choice.key as WorkRecommendationLength);
+            } else if (flow.step === "work_intensity") {
+              void onWorkIntensity(choice.key as WorkRecommendationIntensity);
+            } else if (flow.step === "time") {
+              onTime(choice.key as WhatNowTime);
+            }
+          }}
+        >
+          {choice.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -1493,16 +2319,13 @@ function AssistantQuickActions({
   slots,
   busyAction,
   onAction,
-  onClose,
+  onHideCharacter,
 }: {
   slots: AssistantSlotKey[];
   busyAction: AssistantActionKey | null;
   onAction: (action: AssistantActionKey) => void;
-  onClose: () => void;
+  onHideCharacter: () => void;
 }) {
-  const buttonClass =
-    "rounded-full border border-pink-200 bg-pink-50 px-3 py-1 text-[11px] font-semibold text-pink-700 shadow-sm hover:bg-pink-100 disabled:opacity-50";
-
   const definitions: AssistantSlotDefinition[] = slots.map(
     (key) => ASSISTANT_SLOT_DEFINITIONS[key],
   );
@@ -1510,27 +2333,36 @@ function AssistantQuickActions({
   return (
     <div
       data-testid="assistant-quick-actions"
-      className="mt-2 flex flex-wrap items-center justify-center gap-1"
+      className="mt-2 flex max-w-[420px] flex-wrap items-center justify-center gap-1.5"
     >
-      {definitions.map((definition) => (
-        <button
-          key={definition.key}
-          type="button"
-          data-testid={`assistant-action-${definition.key}`}
-          className={buttonClass}
-          disabled={busyAction !== null}
-          onClick={() => onAction(definition.key)}
-        >
-          {busyAction === definition.key ? definition.busyLabel : definition.label}
-        </button>
-      ))}
+      {definitions.map((definition, idx) => {
+        const isBusy = busyAction === definition.key;
+        return (
+          <button
+            key={definition.key}
+            type="button"
+            data-testid={`assistant-action-${definition.key}`}
+            className={ASSISTANT_BUTTON_PRIMARY}
+            style={{ animationDelay: `${idx * 45}ms` }}
+            disabled={busyAction !== null}
+            onClick={() => onAction(definition.key)}
+          >
+            {isBusy && (
+              <span className="mr-1 inline-block h-2.5 w-2.5 animate-spin rounded-full border border-pink-400 border-t-transparent align-[-1px]" />
+            )}
+            {isBusy ? definition.busyLabel : definition.label}
+          </button>
+        );
+      })}
       <button
         type="button"
-        data-testid="assistant-action-close"
-        className="rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] text-gray-500 hover:bg-gray-100"
-        onClick={onClose}
+        data-testid="assistant-action-hide-character"
+        className={ASSISTANT_BUTTON_GHOST}
+        style={{ animationDelay: `${definitions.length * 45}ms` }}
+        disabled={busyAction !== null}
+        onClick={onHideCharacter}
       >
-        {"\ub2eb\uae30"}
+        잠깐 숨기기
       </button>
     </div>
   );
