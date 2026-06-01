@@ -2,9 +2,9 @@ import { supabase } from "@/lib/supabase/client";
 import { setOfficialWorkFollow } from "@/lib/supabase/officialWorkFollows";
 
 export async function getCurrentUserId() {
-  const { data, error } = await supabase.auth.getUser();
+  const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
-  return data.user?.id ?? null;
+  return data.session?.user?.id ?? null;
 }
 
 export async function fetchFollowedReleaseIds(userId: string) {
