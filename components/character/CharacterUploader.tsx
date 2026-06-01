@@ -647,6 +647,51 @@ export function CharacterUploadPreview({
 
   useEffect(() => {
     const model = modelRef.current;
+    const app = appRef.current;
+    if (!model || !app || !profile || profile.outfits.length === 0) return;
+
+    const core = (
+      model.internalModel as unknown as {
+        coreModel?: {
+          getPartIndex?: (id: string) => number;
+          setPartOpacityByIndex?: (i: number, v: number) => void;
+        };
+      }
+    ).coreModel;
+    if (!core?.getPartIndex || !core.setPartOpacityByIndex) return;
+
+    const partOpacities: Record<string, number> = {};
+    for (const group of profile.outfits) {
+      const selected = group.defaultPartId ?? group.parts[0]?.id;
+      for (const part of group.parts) {
+        const opacity = part.id === selected ? 1 : 0;
+        for (const partId of part.partIds) {
+          partOpacities[partId] = opacity;
+        }
+      }
+    }
+
+    const applyPartOpacities = () => {
+      try {
+        for (const [partId, opacity] of Object.entries(partOpacities)) {
+          const idx = core.getPartIndex?.(partId) ?? -1;
+          if (idx >= 0) core.setPartOpacityByIndex?.(idx, opacity);
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+
+    applyPartOpacities();
+    app.ticker?.add?.(applyPartOpacities);
+    return () => {
+      const ticker = app?.ticker as { remove?: (fn: () => void) => void } | null | undefined;
+      ticker?.remove?.(applyPartOpacities);
+    };
+  }, [profile, previewReadySeq]);
+
+  useEffect(() => {
+    const model = modelRef.current;
     if (!model) return;
     model.scale.set(view.scale);
     model.x = view.x;

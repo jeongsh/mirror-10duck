@@ -443,6 +443,7 @@ export default function Live2DWrapper() {
 
   const pathname = usePathname();
   const router = useRouter();
+  const profile = useCharacterStore((s) => s.profile);
   const modelPath = useCharacterStore((s) => s.modelPath);
   const authUser = useAuthUser();
   const userId = authUser?.id ?? null;
@@ -453,6 +454,8 @@ export default function Live2DWrapper() {
   const setError = useCharacterStore((s) => s.setError);
   const setModelConfig = useCharacterStore((s) => s.setModelConfig);
   const setLive2DEnabled = useCharacterStore((s) => s.setLive2DEnabled);
+  const selectedOutfits = useCharacterStore((s) => s.selectedOutfits);
+  const setPartOpacities = useCharacterStore((s) => s.setPartOpacities);
   // 캐릭터 모델이 실제로 그려지기 전엔 말풍선/페이지 인사를 띄우지 않는다.
   // (홈 진입/채널 이동 직후 모델보다 말풍선이 먼저 뜨는 문제 방지)
   const isReady = useCharacterStore((s) => s.isReady);
@@ -1276,12 +1279,30 @@ export default function Live2DWrapper() {
   }, [emotion, appReady, isReady, modelPath]);
 
   // --------------------------------------------------------------------
+  // Effect 4.5 · 프로필 outfit 선택값을 실제 파츠 opacity 로 동기화
+  // --------------------------------------------------------------------
+  useEffect(() => {
+    if (!profile || profile.outfits.length === 0) return;
+    const next: Record<string, number> = {};
+    for (const group of profile.outfits) {
+      const selected = selectedOutfits[group.id] ?? group.defaultPartId ?? group.parts[0]?.id;
+      for (const option of group.parts) {
+        const visible = option.id === selected ? 1 : 0;
+        for (const partId of option.partIds) next[partId] = visible;
+      }
+    }
+    if (Object.keys(next).length > 0) setPartOpacities(next);
+  }, [profile, selectedOutfits, setPartOpacities]);
+
+  // --------------------------------------------------------------------
   // Effect 5 · 파츠 opacity (옷/포즈 토글)
   // --------------------------------------------------------------------
   const partOpacities = useCharacterStore((s) => s.partOpacities);
   useEffect(() => {
     if (!appReady || !modelRef.current) return;
     const model = modelRef.current;
+    const app = appRef.current;
+    if (!app) return;
     try {
       const core = (
         model.internalModel as unknown as {
@@ -1292,10 +1313,22 @@ export default function Live2DWrapper() {
         }
       ).coreModel;
       if (!core?.getPartIndex || !core.setPartOpacityByIndex) return;
-      for (const [partId, opacity] of Object.entries(partOpacities)) {
-        const idx = core.getPartIndex(partId);
-        if (idx >= 0) core.setPartOpacityByIndex(idx, opacity);
-      }
+      const applyPartOpacities = () => {
+        const values = useCharacterStore.getState().partOpacities;
+        for (const [partId, opacity] of Object.entries(values)) {
+          const idx = core.getPartIndex?.(partId) ?? -1;
+          if (idx >= 0) core.setPartOpacityByIndex?.(idx, opacity);
+        }
+      };
+      applyPartOpacities();
+      app.ticker?.add?.(applyPartOpacities);
+      return () => {
+        const ticker = app?.ticker as
+          | { remove?: (fn: () => void) => void }
+          | null
+          | undefined;
+        ticker?.remove?.(applyPartOpacities);
+      };
     } catch (e) {
       console.warn("[Live2DWrapper] part opacity warning:", e);
     }
@@ -2009,6 +2042,7 @@ export default function Live2DWrapper() {
             )}
           </SpeechBubble>
         )}
+
       </div>
     </aside>
   );

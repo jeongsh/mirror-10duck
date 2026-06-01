@@ -231,6 +231,8 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
   const isTracking = useCharacterStore((s) => s.isTracking);
   const setEmotion = useCharacterStore((s) => s.setEmotion);
   const setTracking = useCharacterStore((s) => s.setTracking);
+  const selectedOutfits = useCharacterStore((s) => s.selectedOutfits);
+  const selectOutfit = useCharacterStore((s) => s.selectOutfit);
 
   const [targetId, setTargetId] = useState<string>("");
   const [thumbnailBusy, setThumbnailBusy] = useState(false);
@@ -367,6 +369,18 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
       setLoadedProfile(next);
       if (patch.defaultView) setModelConfig(patch.defaultView);
     }
+  };
+
+  const updateTargetOutfit = (groupId: string, partId: string) => {
+    patchTarget({
+      outfits: target.outfits.map((group) =>
+        group.id === groupId ? { ...group, defaultPartId: partId } : group
+      ),
+    });
+    if (activeId === target.id) {
+      selectOutfit(groupId, partId);
+    }
+    showToast("success", "의상 선택을 저장했습니다.");
   };
 
   const updatePreviewView = (view: CharacterViewConfig) => {
@@ -768,6 +782,52 @@ export default function LibraryManagerPanel({ initialTargetId }: { initialTarget
             </div>
           </div>
         </div>
+      </Section>
+
+      <Section title="의상">
+        {target.outfits.length === 0 ? (
+          <label className="flex max-w-md items-center gap-3">
+            <span className="w-20 shrink-0 text-[11px] font-bold text-gray-500">옷</span>
+            <select
+              disabled
+              value=""
+              className="min-w-0 flex-1 border border-dashed border-gray-300 bg-gray-50 px-3 py-2 text-xs font-bold text-gray-400 outline-none"
+            >
+              <option value="">등록된 옷 없음</option>
+            </select>
+          </label>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2">
+            {target.outfits.map((group) => {
+              const selected =
+                activeId === target.id
+                  ? selectedOutfits[group.id] ?? group.defaultPartId ?? group.parts[0]?.id ?? ""
+                  : group.defaultPartId ?? group.parts[0]?.id ?? "";
+              return (
+                <label key={group.id} className="flex items-center gap-3">
+                  <span className="w-20 shrink-0 truncate text-[11px] font-bold text-gray-500">
+                    {group.name}
+                  </span>
+                  <select
+                    value={selected}
+                    onChange={(event) => updateTargetOutfit(group.id, event.target.value)}
+                    className="min-w-0 flex-1 border border-dashed border-gray-400 bg-white px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:border-pink-400"
+                  >
+                    {group.parts.length === 0 ? (
+                      <option value="">옵션 없음</option>
+                    ) : (
+                      group.parts.map((part) => (
+                        <option key={part.id} value={part.id}>
+                          {part.label}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </label>
+              );
+            })}
+          </div>
+        )}
       </Section>
 
       <Section title="썸네일">
