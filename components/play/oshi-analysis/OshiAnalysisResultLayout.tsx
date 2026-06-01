@@ -169,22 +169,6 @@ function buildPositionDistribution(chars: OshiAnalysisCharacter[]) {
   }));
 }
 
-function collectRecommendedWorks(
-  selected: OshiAnalysisCharacter[],
-  recommendations: OshiAnalysisCharacter[],
-): OshiAnalysisWork[] {
-  const seen = new Set<string>();
-  const works: OshiAnalysisWork[] = [];
-  for (const c of [...recommendations, ...selected]) {
-    const w = c.official_works;
-    if (!seen.has(w.id)) {
-      seen.add(w.id);
-      works.push(w);
-    }
-  }
-  return works.slice(0, 5);
-}
-
 function formatAnalyzedAt(date: Date | null) {
   if (!date) return "—";
   const y = date.getFullYear();
@@ -335,6 +319,7 @@ export default function OshiAnalysisResultLayout({
   partyJudgment,
   dangerGauges,
   recommendations,
+  recommendedWorks,
   imageDataUrls,
   analyzedAt,
   busy,
@@ -348,6 +333,7 @@ export default function OshiAnalysisResultLayout({
   partyJudgment: PartyJudgment | null;
   dangerGauges: DangerGauge[];
   recommendations: OshiAnalysisCharacter[];
+  recommendedWorks: OshiAnalysisWork[];
   imageDataUrls: Record<string, string>;
   analyzedAt: Date | null;
   busy: boolean;
@@ -360,7 +346,6 @@ export default function OshiAnalysisResultLayout({
     ? resolveImageSrc(heroChar.profile_image_url, imageDataUrls)
     : null;
   const positionDist = buildPositionDistribution(selected);
-  const recommendedWorks = collectRecommendedWorks(selected, recommendations);
   const coreStats =
     dangerGauges.length > 0
       ? dangerGauges.map((g) => ({ label: g.label, value: g.value }))
@@ -673,7 +658,9 @@ export default function OshiAnalysisResultLayout({
               ))}
             </div>
           ) : (
-            <p className="text-xs text-gray-500">연결된 작품 정보가 없습니다.</p>
+            <p className="text-xs text-gray-500">
+              취향 태그와 맞는 작품을 불러오는 중이거나 없습니다.
+            </p>
           )}
         </LayoutCard>
       </section>

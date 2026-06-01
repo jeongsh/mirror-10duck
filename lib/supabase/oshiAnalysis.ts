@@ -176,13 +176,72 @@ export async function getOshiRecommendations(
 
   const tagSet = new Set(tags);
   const scored = ((data ?? []) as OshiAnalysisCharacter[])
-    .map((char) => {
-      const charTags = [...(char.tags ?? []), ...(char.meme_tags ?? [])];
-      const overlap = charTags.reduce((sum, tag) => sum + (tagSet.has(tag) ? 1 : 0), 0);
-      return { char, overlap };
-    })
+    .map((char) => ({
+      char,
+      overlap: scoreTagOverlap([...(char.tags ?? []), ...(char.meme_tags ?? [])], tagSet),
+    }))
     .filter((s) => s.overlap > 0)
     .sort((a, b) => b.overlap - a.overlap || a.char.sort_order - b.char.sort_order);
 
   return scored.slice(0, limit).map((s) => s.char);
+}
+
+function scoreTagOverlap(charTags: string[], tagSet: Set<string>): number {
+  return charTags.reduce((sum, tag) => sum + (tagSet.has(tag) ? 1 : 0), 0);
+}
+
+/**
+ * 시그니처 태그와 맞는 캐릭터를 작품(work) 단위로 묶어 추천한다.
+ * 캐릭터 추천과 달리, 한 작품 안의 태그 겹침을 합산해 작품 순위를 매긴다.
+ */
+export async function getOshiWorkRecommendations(
+  tags: string[],
+  excludeWorkIds: string[],
+  limit = 5,
+): Promise<OshiAnalysisWork[]> {
+  if (!tags.length) return [];
+
+  const excludeSet = new Set(excludeWorkIds);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("official_oshi_characters")
+    .select(CHARACTER_SELECT)
+    .eq("status", "PUBLISHED")
+    .overlaps("tags", tags)
+    .limit(300);
+
+  if (error) {
+    console.error("[oshiAnalysis] work recommendation error:", error.message);
+    return [];
+  }
+
+  const tagSet = new Set(tags);
+  const workScores = new Map<string, { work: OshiAnalysisWork; score: number; matches: number }>();
+
+  for (const char of (data ?? []) as OshiAnalysisCharacter[]) {
+    const work = char.official_works;
+    if (!work || excludeSet.has(work.id)) continue;
+
+    const overlap = scoreTagOverlap([...(char.tags ?? []), ...(char.meme_tags ?? [])], tagSet);
+    if (overlap === 0) continue;
+
+    const prev = workScores.get(work.id);
+    if (prev) {
+      prev.score += overlap;
+      prev.matches += 1;
+    } else {
+      workScores.set(work.id, { work, score: overlap, matches: 1 });
+    }
+  }
+
+  return [...workScores.values()]
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        b.matches - a.matches ||
+        a.work.title.localeCompare(b.work.title, "ko", { sensitivity: "base" }),
+    )
+    .slice(0, limit)
+    .map((entry) => entry.work);
 }

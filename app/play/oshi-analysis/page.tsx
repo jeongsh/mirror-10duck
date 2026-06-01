@@ -8,6 +8,7 @@ import {
   searchOshiAnalysisCharacters,
   searchOshiAnalysisWorks,
   getOshiRecommendations,
+  getOshiWorkRecommendations,
   getOshiAnalysisCharactersByIds,
   type OshiAnalysisCharacter,
   type OshiAnalysisWork,
@@ -594,6 +595,7 @@ function OshiAnalysisPageContent() {
   const [partyJudgment, setPartyJudgment] = useState<PartyJudgment | null>(null);
   const [dangerGauges, setDangerGauges] = useState<DangerGauge[]>([]);
   const [recommendations, setRecommendations] = useState<OshiAnalysisCharacter[]>([]);
+  const [recommendedWorks, setRecommendedWorks] = useState<OshiAnalysisWork[]>([]);
   const [imageDataUrls, setImageDataUrls] = useState<Record<string, string>>({});
   const [imagesReady, setImagesReady] = useState(false);
   const [analyzingMessage, setAnalyzingMessage] = useState(ANALYZING_MESSAGES[0]);
@@ -642,16 +644,25 @@ function OshiAnalysisPageContent() {
         setPartyJudgment(buildPartyJudgment(characters, restored));
         setDangerGauges(buildDangerGauges(characters, restored));
         setRecommendations([]);
+    setRecommendedWorks([]);
+        setRecommendedWorks([]);
         setAnalyzedAt(new Date(row.created_at));
         setStep("result");
 
-        void getOshiRecommendations(
-          (row.signature_tags ?? []).map((tag) => tag.tag),
-          row.selected_character_ids ?? [],
-          5,
-        )
-          .then((recs) => {
-            if (!cancelled) setRecommendations(recs);
+        const signatureTags = (row.signature_tags ?? []).map((tag) => tag.tag);
+        const excludeWorkIds = [
+          ...new Set(characters.map((c) => c.official_works.id)),
+        ];
+
+        void Promise.all([
+          getOshiRecommendations(signatureTags, row.selected_character_ids ?? [], 5),
+          getOshiWorkRecommendations(signatureTags, excludeWorkIds, 5),
+        ])
+          .then(([recs, works]) => {
+            if (!cancelled) {
+              setRecommendations(recs);
+              setRecommendedWorks(works);
+            }
           })
           .catch(() => {});
       } catch (error) {
@@ -789,11 +800,12 @@ function OshiAnalysisPageContent() {
     setVisibleLogCount(0);
     setStep("analyzing");
 
-    const recsPromise = getOshiRecommendations(
-      analyzed.signatureTags.map((s) => s.tag),
-      selected.map((c) => c.id),
-      5,
-    ).catch(() => [] as OshiAnalysisCharacter[]);
+    const signatureTags = analyzed.signatureTags.map((s) => s.tag);
+    const excludeWorkIds = [...new Set(selected.map((c) => c.official_works.id))];
+    const recsPromise = Promise.all([
+      getOshiRecommendations(signatureTags, selected.map((c) => c.id), 5),
+      getOshiWorkRecommendations(signatureTags, excludeWorkIds, 5),
+    ]).catch(() => [[], []] as [OshiAnalysisCharacter[], OshiAnalysisWork[]]);
 
     // 로그를 한 줄씩 순차 공개 (마지막 결론 줄까지)
     const REVEAL_MS = 360;
@@ -806,10 +818,11 @@ function OshiAnalysisPageContent() {
 
     // 모든 줄이 공개되고 결론을 잠깐 보여줄 시간 확보 (최소 1.2초)
     const totalRevealMs = log.length * REVEAL_MS + 500;
-    const [, recs] = await Promise.all([
+    const [, recsResult] = await Promise.all([
       new Promise((resolve) => setTimeout(resolve, Math.max(1200, totalRevealMs))),
       recsPromise,
     ]);
+    const [recs, works] = recsResult;
     clearInterval(interval);
     setVisibleLogCount(log.length);
 
@@ -817,7 +830,8 @@ function OshiAnalysisPageContent() {
     setResonance(buildResonance(selected));
     setPartyJudgment(buildPartyJudgment(selected, analyzed));
     setDangerGauges(buildDangerGauges(selected, analyzed));
-    setRecommendations(recs as OshiAnalysisCharacter[]);
+    setRecommendations(recs);
+    setRecommendedWorks(works);
     setAnalyzedAt(new Date());
     setStep("result");
 
@@ -896,6 +910,7 @@ function OshiAnalysisPageContent() {
     setPartyJudgment(null);
     setDangerGauges([]);
     setRecommendations([]);
+    setRecommendedWorks([]);
     setImageDataUrls({});
     setImagesReady(false);
     setQuery("");
@@ -1030,6 +1045,7 @@ function OshiAnalysisPageContent() {
           partyJudgment={partyJudgment}
           dangerGauges={dangerGauges}
           recommendations={recommendations}
+          recommendedWorks={recommendedWorks}
           imageDataUrls={imageDataUrls}
           analyzedAt={analyzedAt}
           busy={busy}
