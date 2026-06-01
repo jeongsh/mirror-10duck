@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { getLayoutChromeMode } from "@/lib/layoutChrome";
 import DailyLoginXp from "./DailyLoginXp";
 import LeftSidebar from "./LeftSidebar";
@@ -21,9 +22,20 @@ const GRID_CLASS = [
   "min-[1920px]:grid-cols-[var(--layout-left-width)_var(--layout-main-width)_var(--layout-right-width)]",
 ].join(" ");
 
+const LG_MEDIA = "(min-width: 1024px)";
+
 export default function MainLayoutClient({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const layoutMode = getLayoutChromeMode(pathname);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia(LG_MEDIA);
+    const sync = () => setIsDesktop(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   if (layoutMode === "none") {
     return (
@@ -45,12 +57,13 @@ export default function MainLayoutClient({ children }: { children: React.ReactNo
         <LeftSidebar />
         <MainScrollArea
           className="min-h-0 min-w-0 w-full lg:h-full"
-          mobileClassName="min-h-0 min-w-0 w-full pb-[500px]"
+          mobileClassName="min-h-0 min-w-0 w-full pb-24"
         >
           <div className="lg:pt-6 lg:pb-4 lg:pr-4">{children}</div>
         </MainScrollArea>
-        <RightSidebar characterSlot={<Live2DClientOnly />} />
+        {isDesktop ? <RightSidebar characterSlot={<Live2DClientOnly variant="desktop" />} /> : null}
       </div>
+      {!isDesktop ? <Live2DClientOnly variant="mobile" /> : null}
     </div>
   );
 }
