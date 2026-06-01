@@ -14,10 +14,8 @@ export default function RightSidebar({ characterSlot }: RightSidebarProps) {
   return (
     <aside
       className={[
-        "z-10 shrink-0",
-        "fixed bottom-0 right-0 w-[min(var(--layout-right-width),calc(100vw-1rem))]",
-        "md:top-[var(--layout-header-height)] md:bottom-0 md:h-auto",
-        "lg:static lg:h-full lg:min-h-0 lg:w-[var(--layout-right-width)]",
+        "z-10 hidden shrink-0",
+        "lg:static lg:block lg:h-full lg:min-h-0 lg:w-[var(--layout-right-width)]",
       ].join(" ")}
       aria-label="[Character zone]"
     >

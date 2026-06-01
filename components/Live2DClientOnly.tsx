@@ -21,6 +21,10 @@ import {
   resolvePreferredProfile,
 } from "@/lib/live2d/profileSync";
 
+type Live2DClientOnlyProps = {
+  variant?: "desktop" | "mobile";
+};
+
 const Live2DWrapper = dynamic(() => import("./Live2DWrapper"), {
   ssr: false,
   loading: () => (
@@ -30,15 +34,16 @@ const Live2DWrapper = dynamic(() => import("./Live2DWrapper"), {
   ),
 });
 
-export default function Live2DClientOnly() {
-  return <Live2DClientOnlyEnabled />;
+export default function Live2DClientOnly({ variant = "desktop" }: Live2DClientOnlyProps) {
+  return <Live2DClientOnlyEnabled variant={variant} />;
 }
 
-function Live2DClientOnlyEnabled() {
+function Live2DClientOnlyEnabled({ variant }: Required<Live2DClientOnlyProps>) {
   const pathname = usePathname();
   const authUser = useAuthUser();
   const [coreReady, setCoreReady] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const setProfiles = useCharacterLibraryStore((s) => s.setProfiles);
   const setActive = useCharacterLibraryStore((s) => s.setActive);
@@ -138,16 +143,100 @@ function Live2DClientOnlyEnabled() {
   const isFortunePage = pathname.startsWith("/play/fortune");
   const suppressGlobalLive2D = isCharacterManagePage || isFortunePage;
 
+  useEffect(() => {
+    if (variant !== "mobile") return;
+    setMobileOpen(false);
+  }, [pathname, variant]);
+
   return (
     <>
       <Live2DCubismCoreScript onReady={() => setCoreReady(true)} />
       <CharacterFallbackToast enabled={!isLive2DEnabled || suppressGlobalLive2D} />
-      {!suppressGlobalLive2D && coreReady && isLive2DEnabled ? (
+      {!suppressGlobalLive2D && coreReady && isLive2DEnabled && variant === "mobile" ? (
+        <MobileLive2DLauncher open={mobileOpen} onOpen={() => setMobileOpen(true)} onClose={() => setMobileOpen(false)} />
+      ) : !suppressGlobalLive2D && coreReady && isLive2DEnabled ? (
         <Live2DWrapper />
       ) : !suppressGlobalLive2D && !isInitializing ? (
         <CharacterDisabledPanel />
       ) : null}
     </>
+  );
+}
+
+function MobileLive2DLauncher({
+  open,
+  onOpen,
+  onClose,
+}: {
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+}) {
+  const profile = useCharacterStore((s) => s.profile);
+  const setEmotion = useCharacterStore((s) => s.setEmotion);
+  const characterName = profile?.name?.replace(/\s*\(.*?\)\s*$/g, "").trim() || "캐릭터";
+
+  const handleOpen = () => {
+    setEmotion(Math.random() < 0.35 ? "happy" : "idle");
+    onOpen();
+  };
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        aria-label={`${characterName}와 대화하기`}
+        onClick={handleOpen}
+        className="fixed bottom-5 right-4 z-50 h-16 w-16 overflow-hidden rounded-full border-2 border-pink-200 bg-white shadow-xl outline-none transition hover:-translate-y-0.5 hover:border-pink-300 hover:shadow-2xl focus-visible:ring-2 focus-visible:ring-pink-300"
+      >
+        {profile?.thumbnailUrl ? (
+          <img
+            src={profile.thumbnailUrl}
+            alt=""
+            className="absolute inset-0 h-full w-full scale-125 object-cover object-top"
+          />
+        ) : (
+          <span className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-pink-50 via-white to-sky-50 text-lg font-black text-pink-500">
+            캐
+          </span>
+        )}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex min-h-dvh flex-col bg-gray-950/45 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${characterName} 대화`}
+    >
+      <div className="flex items-center justify-between border-b border-pink-100 bg-white px-4 py-3 shadow-sm">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-black text-gray-900">{characterName}</p>
+          <p className="text-xs font-semibold text-gray-500">캐릭터 대화</p>
+        </div>
+        <button
+          type="button"
+          aria-label="캐릭터 대화 닫기"
+          onClick={onClose}
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-lg font-black leading-none text-gray-500 shadow-sm hover:bg-gray-100"
+        >
+          ×
+        </button>
+      </div>
+      <div className="relative flex flex-1 flex-col overflow-hidden bg-gradient-to-b from-pink-50 via-white to-gray-100">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-white/80 to-transparent" />
+        <div className="relative flex flex-1 items-end justify-center pt-6">
+          <div className="w-full max-w-[360px]">
+            <Live2DWrapper />
+          </div>
+        </div>
+        <div className="border-t border-pink-100 bg-white/90 px-4 py-3 text-center text-xs font-semibold text-gray-500 backdrop-blur">
+          캐릭터를 누르면 지금 할 일과 작품 추천을 이어서 고를 수 있어요.
+        </div>
+      </div>
+    </div>
   );
 }
 
