@@ -1,28 +1,19 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import dynamic from "next/dynamic";
+import Image from "next/image";
 import Link from "next/link";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import {
   fetchOtakuTypeResult,
   upsertOtakuTypeResult,
 } from "@/lib/supabase/otakuTypeResults";
-import {
-  FORTUNE_STAGE_BG,
-  type FortuneMotionTrigger,
-} from "@/lib/fortune/fortuneLive2DStage";
 
-const FortuneStage = dynamic(
-  () => import("@/components/play/fortune/FortuneLive2DStage"),
-  {
-    ssr: false,
-    loading: () => (
-      <div style={{ aspectRatio: "480 / 540", background: FORTUNE_STAGE_BG }} className="w-full" />
-    ),
-  }
-);
+// 캐릭터 이미지 3종
+const CHAR_USUAL   = "/taku-test/v3/usual.webp";
+const CHAR_QUESTION = "/taku-test/v3/question.webp";
+const CHAR_ANSWER  = "/taku-test/v3/answer.webp";
 
 // ── Typewriter ────────────────────────────────────────────────
 function useTypewriter(text: string, speed = 26) {
@@ -46,9 +37,6 @@ interface OptionData {
   text: string;
   score: 0 | 1 | 2 | 3;
   reaction: string;
-  expressionId: string;
-  motionGroup: string;
-  motionIndex: number;
 }
 
 interface QuestionData {
@@ -68,9 +56,6 @@ interface TierData {
   sub: string;
   traits: [string, string, string];
   dialogue: string;
-  expressionId: string;
-  motionGroup: string;
-  motionIndex: number;
 }
 
 type GamePhase = "intro" | "quiz" | "result";
@@ -82,80 +67,80 @@ const QUESTIONS: QuestionData[] = [
     num: 1,
     dialogue: "첫 번째 질문이에요. 한 주에 애니를 얼마나 보고 있어요?",
     options: [
-      { text: "거의 안 봐요. 생각날 때 가끔요.", score: 0, reaction: "으음... 그렇군요.", expressionId: "exp_05", motionGroup: "Idle", motionIndex: 0 },
-      { text: "1-2편 정도는 챙겨 봐요.", score: 1, reaction: "입문은 한 편이에요.", expressionId: "exp_01", motionGroup: "Idle", motionIndex: 0 },
-      { text: "5편 이상, 여러 작품 동시 진행이에요.", score: 2, reaction: "꽤 많이 챙겨 보는 편이네요.", expressionId: "exp_03", motionGroup: "", motionIndex: 1 },
-      { text: "매일 최소 2시간 이상이에요.", score: 3, reaction: "이미 루틴이 된 거군요. 인정해요.", expressionId: "exp_04", motionGroup: "", motionIndex: 3 },
+      { text: "거의 안 봐요. 생각날 때 가끔요.", score: 0, reaction: "으음... 그렇군요." },
+      { text: "1-2편 정도는 챙겨 봐요.", score: 1, reaction: "입문은 한 편이에요." },
+      { text: "5편 이상, 여러 작품 동시 진행이에요.", score: 2, reaction: "꽤 많이 챙겨 보는 편이네요." },
+      { text: "매일 최소 2시간 이상이에요.", score: 3, reaction: "이미 루틴이 된 거군요. 인정해요." },
     ],
   },
   {
     num: 2,
     dialogue: "두 번째. 소장 중인 굿즈나 피규어가 있나요?",
     options: [
-      { text: "없어요. 딱히 사고 싶지도 않아요.", score: 0, reaction: "현실적이네요.", expressionId: "exp_05", motionGroup: "Idle", motionIndex: 0 },
-      { text: "마음에 드는 건 하나둘 샀어요.", score: 1, reaction: "조금씩 모으고 있는 거군요.", expressionId: "exp_01", motionGroup: "Idle", motionIndex: 0 },
-      { text: "선반 하나는 채웠어요.", score: 2, reaction: "꽤 모았네요. 선반이 꽉 찼군요.", expressionId: "exp_03", motionGroup: "", motionIndex: 2 },
-      { text: "방 전체가 반은 굿즈예요.", score: 3, reaction: "...방이요?! 그게 진짜 오타쿠예요.", expressionId: "exp_04", motionGroup: "", motionIndex: 3 },
+      { text: "없어요. 딱히 사고 싶지도 않아요.", score: 0, reaction: "현실적이네요." },
+      { text: "마음에 드는 건 하나둘 샀어요.", score: 1, reaction: "조금씩 모으고 있는 거군요." },
+      { text: "선반 하나는 채웠어요.", score: 2, reaction: "꽤 모았네요. 선반이 꽉 찼군요." },
+      { text: "방 전체가 반은 굿즈예요.", score: 3, reaction: "...방이요?! 그게 진짜 오타쿠예요." },
     ],
   },
   {
     num: 3,
     dialogue: "세 번째. 좋아하는 성우를 알고 있어요?",
     options: [
-      { text: "성우가 누군지 잘 모르겠어요.", score: 0, reaction: "그렇군요.", expressionId: "exp_05", motionGroup: "Idle", motionIndex: 0 },
-      { text: "유명한 분 몇 명은 알아요.", score: 1, reaction: "조금은 아는군요.", expressionId: "exp_01", motionGroup: "Idle", motionIndex: 0 },
-      { text: "좋아하는 성우 탑 5는 확실히 있어요.", score: 2, reaction: "탑 5라니... 취향이 확실한 편이네요.", expressionId: "exp_03", motionGroup: "", motionIndex: 1 },
-      { text: "생일이랑 출연작 다 외우고 있어요.", score: 3, reaction: "생일까지요?! 그건 찐이에요.", expressionId: "exp_04", motionGroup: "", motionIndex: 3 },
+      { text: "성우가 누군지 잘 모르겠어요.", score: 0, reaction: "그렇군요." },
+      { text: "유명한 분 몇 명은 알아요.", score: 1, reaction: "조금은 아는군요." },
+      { text: "좋아하는 성우 탑 5는 확실히 있어요.", score: 2, reaction: "탑 5라니... 취향이 확실한 편이네요." },
+      { text: "생일이랑 출연작 다 외우고 있어요.", score: 3, reaction: "생일까지요?! 그건 찐이에요." },
     ],
   },
   {
     num: 4,
     dialogue: "네 번째. 같은 작품을 반복해서 본 적 있어요?",
     options: [
-      { text: "한 번 보면 다음 작품으로 가요.", score: 0, reaction: "효율적인 감상 방식이네요.", expressionId: "exp_05", motionGroup: "Idle", motionIndex: 0 },
-      { text: "좋아하는 건 두 번은 봐요.", score: 1, reaction: "두 번은 볼 만큼 좋아한다는 거네요.", expressionId: "exp_01", motionGroup: "Idle", motionIndex: 0 },
-      { text: "명작이면 3회 이상은 당연히 봐요.", score: 2, reaction: "3회 이상이라니, 확실히 좋아하는 거네요.", expressionId: "exp_03", motionGroup: "", motionIndex: 2 },
-      { text: "대사를 외울 때까지 돌려봐요.", score: 3, reaction: "...외울 때까지요. 진짜예요.", expressionId: "exp_04", motionGroup: "", motionIndex: 3 },
+      { text: "한 번 보면 다음 작품으로 가요.", score: 0, reaction: "효율적인 감상 방식이네요." },
+      { text: "좋아하는 건 두 번은 봐요.", score: 1, reaction: "두 번은 볼 만큼 좋아한다는 거네요." },
+      { text: "명작이면 3회 이상은 당연히 봐요.", score: 2, reaction: "3회 이상이라니, 확실히 좋아하는 거네요." },
+      { text: "대사를 외울 때까지 돌려봐요.", score: 3, reaction: "...외울 때까지요. 진짜예요." },
     ],
   },
   {
     num: 5,
     dialogue: "다섯 번째. 오프라인 이벤트에 가본 적 있어요?",
     options: [
-      { text: "딱히 가보고 싶다는 생각이 없어요.", score: 0, reaction: "그렇군요.", expressionId: "exp_05", motionGroup: "Idle", motionIndex: 0 },
-      { text: "한두 번 다녀온 적은 있어요.", score: 1, reaction: "한두 번은 가봤군요.", expressionId: "exp_01", motionGroup: "Idle", motionIndex: 0 },
-      { text: "자주 챙겨서 가는 편이에요.", score: 2, reaction: "자주 가는 편이라니, 적극적이네요.", expressionId: "exp_03", motionGroup: "", motionIndex: 1 },
-      { text: "원정 포함, 빠진 적이 거의 없어요.", score: 3, reaction: "원정까지요... 정말 진심이군요.", expressionId: "exp_04", motionGroup: "", motionIndex: 3 },
+      { text: "딱히 가보고 싶다는 생각이 없어요.", score: 0, reaction: "그렇군요." },
+      { text: "한두 번 다녀온 적은 있어요.", score: 1, reaction: "한두 번은 가봤군요." },
+      { text: "자주 챙겨서 가는 편이에요.", score: 2, reaction: "자주 가는 편이라니, 적극적이네요." },
+      { text: "원정 포함, 빠진 적이 거의 없어요.", score: 3, reaction: "원정까지요... 정말 진심이군요." },
     ],
   },
   {
     num: 6,
     dialogue: "여섯 번째. 애니 OST나 애니송을 자주 찾아 들어요?",
     options: [
-      { text: "노래까지 찾아 듣진 않아요.", score: 0, reaction: "그렇군요.", expressionId: "exp_05", motionGroup: "Idle", motionIndex: 0 },
-      { text: "좋아하는 건 저장해두는 편이에요.", score: 1, reaction: "저장해두는군요.", expressionId: "exp_01", motionGroup: "Idle", motionIndex: 0 },
-      { text: "애니송 플리가 따로 있어요.", score: 2, reaction: "전용 플리가 있다니, 꽤 진심이에요.", expressionId: "exp_03", motionGroup: "", motionIndex: 2 },
-      { text: "CD나 블루레이까지 구매해요.", score: 3, reaction: "실물 앨범까지요!? 완전 찐이에요.", expressionId: "exp_04", motionGroup: "", motionIndex: 3 },
+      { text: "노래까지 찾아 듣진 않아요.", score: 0, reaction: "그렇군요." },
+      { text: "좋아하는 건 저장해두는 편이에요.", score: 1, reaction: "저장해두는군요." },
+      { text: "애니송 플리가 따로 있어요.", score: 2, reaction: "전용 플리가 있다니, 꽤 진심이에요." },
+      { text: "CD나 블루레이까지 구매해요.", score: 3, reaction: "실물 앨범까지요!? 완전 찐이에요." },
     ],
   },
   {
     num: 7,
     dialogue: "일곱 번째. 애니 관련 커뮤니티 활동을 해요?",
     options: [
-      { text: "커뮤니티는 딱히...", score: 0, reaction: "혼자 조용히 감상하는 타입이군요.", expressionId: "exp_05", motionGroup: "Idle", motionIndex: 0 },
-      { text: "가끔 둘러보는 정도예요.", score: 1, reaction: "관망하는 타입이네요.", expressionId: "exp_01", motionGroup: "Idle", motionIndex: 0 },
-      { text: "자주 글 쓰고 댓글도 달아요.", score: 2, reaction: "활발하게 활동하는군요.", expressionId: "exp_03", motionGroup: "", motionIndex: 1 },
-      { text: "운영진이거나 직접 커뮤니티를 운영해요.", score: 3, reaction: "운영진이라고요!? 그건 레전드예요.", expressionId: "exp_04", motionGroup: "", motionIndex: 3 },
+      { text: "커뮤니티는 딱히...", score: 0, reaction: "혼자 조용히 감상하는 타입이군요." },
+      { text: "가끔 둘러보는 정도예요.", score: 1, reaction: "관망하는 타입이네요." },
+      { text: "자주 글 쓰고 댓글도 달아요.", score: 2, reaction: "활발하게 활동하는군요." },
+      { text: "운영진이거나 직접 커뮤니티를 운영해요.", score: 3, reaction: "운영진이라고요!? 그건 레전드예요." },
     ],
   },
   {
     num: 8,
     dialogue: "마지막이에요. 주변에 애니를 전도하거나 입문시킨 적 있어요?",
     options: [
-      { text: "굳이 꺼내지는 않아요.", score: 0, reaction: "혼자 즐기는 타입이군요.", expressionId: "exp_05", motionGroup: "Idle", motionIndex: 0 },
-      { text: "물어보면 이야기해주는 편이에요.", score: 1, reaction: "물어볼 때만 말하는군요.", expressionId: "exp_01", motionGroup: "Idle", motionIndex: 0 },
-      { text: "자연스럽게 화제로 만들어요.", score: 2, reaction: "자연스럽게 끌어들이는 타입이네요.", expressionId: "exp_03", motionGroup: "", motionIndex: 2 },
-      { text: "모르는 사람도 입문시키는 편이에요.", score: 3, reaction: "전도사네요... 덕질 생태계를 넓히는 사람.", expressionId: "exp_04", motionGroup: "", motionIndex: 3 },
+      { text: "굳이 꺼내지는 않아요.", score: 0, reaction: "혼자 즐기는 타입이군요." },
+      { text: "물어보면 이야기해주는 편이에요.", score: 1, reaction: "물어볼 때만 말하는군요." },
+      { text: "자연스럽게 화제로 만들어요.", score: 2, reaction: "자연스럽게 끌어들이는 타입이네요." },
+      { text: "모르는 사람도 입문시키는 편이에요.", score: 3, reaction: "전도사네요... 덕질 생태계를 넓히는 사람." },
     ],
   },
 ];
@@ -172,9 +157,6 @@ const TIERS: TierData[] = [
     sub: "애니를 즐기지 않는 건 아니지만, 덕질이라 부르기엔 아직 가볍네요. 언젠가 빠지는 날이 올지도 모르지만, 지금은 일반인이에요.",
     traits: ["애니를 가끔 보긴 하지만 찾아보진 않아요", "굿즈나 이벤트엔 별로 관심이 없어요", "덕질이라는 단어가 나에게 해당한다고 생각 못 했어요"],
     dialogue: "...흠. 일반인이에요. 오타쿠와는 꽤 거리가 있군요. 그것도 나름 행복한 삶이에요.",
-    expressionId: "exp_05",
-    motionGroup: "Idle",
-    motionIndex: 0,
   },
   {
     minScore: 5,
@@ -187,9 +169,6 @@ const TIERS: TierData[] = [
     sub: "가볍게 시작했지만 이미 발은 들여놓은 상태예요. 좋아하는 작품도 생겼고, 취향도 조금씩 만들어지고 있어요. 슬슬 빠져들기 시작했을지 몰라요.",
     traits: ["좋아하는 작품이 몇 개 생겼어요", "취향은 있지만 깊이 파고들진 않아요", "덕질의 맛을 조금씩 알아가고 있는 중이에요"],
     dialogue: "나쁘지 않아요. 패션 오타쿠... 조금만 더 빠지면 달라질 것 같은 느낌이에요.",
-    expressionId: "exp_01",
-    motionGroup: "Idle",
-    motionIndex: 0,
   },
   {
     minScore: 10,
@@ -202,9 +181,6 @@ const TIERS: TierData[] = [
     sub: "취향도 확실하고, 덕질도 생활의 일부가 된 단계예요. 굿즈도 모으고, 이벤트도 가고, 커뮤니티도 활동하고... 어느새 오타쿠가 되어있었던 거예요.",
     traits: ["덕질이 일상의 일부로 자리 잡았어요", "취향이 뚜렷하고 작품 감상도 깊어요", "주변에서 '애니 많이 보는 사람'으로 불러요"],
     dialogue: "인정해요. 충분히 오타쿠예요. 이 정도면 당당히 말해도 되는 수준이에요.",
-    expressionId: "exp_03",
-    motionGroup: "",
-    motionIndex: 1,
   },
   {
     minScore: 16,
@@ -217,9 +193,6 @@ const TIERS: TierData[] = [
     sub: "덕질의 깊이가 남달라요. 좋아하는 것에 시간과 돈과 감정을 아낌없이 쏟는 타입이에요. 주변 사람들도 '저 사람은 진짜 오타쿠야'라고 인정하는 수준이에요.",
     traits: ["덕질이 정체성의 일부가 되어있어요", "좋아하는 것에 아낌없이 투자해요", "주변에서 오타쿠 대표로 인정받아요"],
     dialogue: "...대단하네요. 진성 오타쿠예요. 저도 솔직히 인정할 수밖에 없어요.",
-    expressionId: "exp_04",
-    motionGroup: "",
-    motionIndex: 3,
   },
   {
     minScore: 21,
@@ -232,9 +205,6 @@ const TIERS: TierData[] = [
     sub: "이건... 저도 혀를 내두를 수준이에요. 오타쿠로서의 헌신, 열정, 투자량이 모두 최고치에 달해 있어요. 오타쿠계의 끝판왕, 전설이에요.",
     traits: ["오타쿠가 삶의 방식 그 자체예요", "덕질에서만큼은 타협하지 않아요", "주변 오타쿠들에게도 존경받는 레전드예요"],
     dialogue: "잠깐, 저보다... 더 오타쿠잖아요. 이건 진짜 찐이에요. 감탄했어요.",
-    expressionId: "exp_04",
-    motionGroup: "",
-    motionIndex: 3,
   },
 ];
 
@@ -259,19 +229,7 @@ function OtakuTypeV3Content() {
   const [restoring, setRestoring] = useState(showSaved);
   const [restoredTier, setRestoredTier] = useState<TierData | null>(null);
 
-  // Live2D controls
-  const [expressionId, setExpressionId] = useState("exp_01");
-  const [motionTrigger, setMotionTrigger] = useState<FortuneMotionTrigger | null>(null);
-  const motionNonceRef = useRef(0);
-  const [ambient, setAmbient] = useState(true);
-  const [talking, setTalking] = useState(false);
-
-  const fireMotion = useCallback((group: string, index: number) => {
-    motionNonceRef.current++;
-    setMotionTrigger({ group, index, nonce: motionNonceRef.current, priority: 3 });
-  }, []);
-
-  // Current dialogue text
+  // 현재 대화 텍스트
   const dialogue = (() => {
     if (gamePhase === "intro") return "안녕하세요! 저는 마오예요. 오늘은 '얼마나 오타쿠인지' 진단해드릴게요. 솔직하게 답해줘요, 결과가 달라질 수 있으니까요.";
     if (gamePhase === "result") {
@@ -288,16 +246,12 @@ function OtakuTypeV3Content() {
 
   const { shown, done: typingDone } = useTypewriter(dialogue);
 
-  // Skip typing on click
-  const skipTyping = useCallback(() => {
-    // useTypewriter re-triggers on text change; we can't skip from outside easily.
-    // Instead we expose a "force done" approach by immediately moving on after click.
-  }, []);
-
-  // Sync talking state
-  useEffect(() => {
-    setTalking(!typingDone && dialogue.length > 0);
-  }, [typingDone, dialogue]);
+  // 현재 표시할 캐릭터 이미지 결정
+  const charImage = (() => {
+    if (gamePhase === "quiz" && quizStep === "reacting") return CHAR_ANSWER;
+    if (gamePhase === "quiz") return CHAR_QUESTION;
+    return CHAR_USUAL;
+  })();
 
   // Load saved result
   useEffect(() => {
@@ -313,9 +267,6 @@ function OtakuTypeV3Content() {
         const tier = TIERS.find((t) => t.code === row.result_code);
         if (!tier) return;
         setRestoredTier(tier);
-        setExpressionId(tier.expressionId);
-        fireMotion(tier.motionGroup, tier.motionIndex);
-        setAmbient(false);
         setGamePhase("result");
       } catch {
         /* ignore */
@@ -324,7 +275,7 @@ function OtakuTypeV3Content() {
       }
     })();
     return () => { cancelled = true; };
-  }, [showSaved, authUser, fireMotion]);
+  }, [showSaved, authUser]);
 
   // Save result when reaching result phase
   useEffect(() => {
@@ -350,9 +301,6 @@ function OtakuTypeV3Content() {
     setCurQ(0);
     setScores([]);
     setChosenIdx(null);
-    setAmbient(false);
-    setExpressionId("exp_03");
-    fireMotion("", 1);
   };
 
   const handleChoose = (optIdx: number) => {
@@ -365,29 +313,21 @@ function OtakuTypeV3Content() {
       next[curQ] = opt.score;
       return next;
     });
-    setExpressionId(opt.expressionId);
-    fireMotion(opt.motionGroup, opt.motionIndex);
     setQuizStep("reacting");
   };
 
   const handleNext = () => {
     const nextQ = curQ + 1;
     if (nextQ >= QUESTIONS.length) {
-      const total = scores.reduce((s, v) => s + v, 0);
-      const tier = getTier(total);
-      setExpressionId(tier.expressionId);
-      fireMotion(tier.motionGroup, tier.motionIndex);
       setGamePhase("result");
     } else {
       setCurQ(nextQ);
       setChosenIdx(null);
-      setExpressionId("exp_03");
-      fireMotion("", 1);
       setQuizStep("asking");
     }
   };
 
-  // When typing finishes in "asking" step → switch to "choosing"
+  // 타이핑 완료 → choosing으로
   useEffect(() => {
     if (gamePhase !== "quiz" || quizStep !== "asking" || !typingDone) return;
     setQuizStep("choosing");
@@ -401,9 +341,6 @@ function OtakuTypeV3Content() {
     setCurQ(0);
     setScores([]);
     setChosenIdx(null);
-    setExpressionId("exp_01");
-    setAmbient(true);
-    fireMotion("Idle", 0);
     router.replace("/play/otaku-type/v3");
   };
 
@@ -545,14 +482,15 @@ function OtakuTypeV3Content() {
         .v3-start-btn:hover { filter: brightness(1.1); }
       `}</style>
 
-      {/* 전체 뷰포트를 채우는 VN 레이아웃 */}
+      {/* 전체 뷰포트를 채우는 VN 레이아웃 — 결과 화면에서는 스크롤 허용 */}
       <div
         className="v3-root"
         style={{
-          height: "calc(100dvh - var(--layout-header-height, 56px))",
+          height: gamePhase === "result" ? "auto" : "calc(100dvh - var(--layout-header-height, 56px))",
+          minHeight: "calc(100dvh - var(--layout-header-height, 56px))",
           display: "flex",
           flexDirection: "column",
-          overflow: "hidden",
+          overflow: gamePhase === "result" ? "visible" : "hidden",
         }}
       >
         {/* 최대 너비 컨테이너 — flex col, 전체 높이 */}
@@ -594,58 +532,43 @@ function OtakuTypeV3Content() {
             )}
           </div>
 
-          {/* ── Character area (flex-1: 남은 공간 전부) ── */}
+          {/* ── Character zone: flex-1 — 남은 공간 전부, 이미지 꽉 채움 ── */}
           <div
-            className="shrink-0"
             style={{
               flex: "1 1 0",
               minHeight: 0,
+              overflow: "hidden",
               display: "flex",
               justifyContent: "center",
-              alignItems: "flex-end",   // 캐릭터를 아래 기준 정렬 → 머리가 항상 보임
-              overflow: "hidden",
+              alignItems: "stretch",
             }}
           >
+            {/* 너비 제한 + 세로 꽉 채움 */}
             <div
               style={{
                 width: "clamp(220px, 72vw, 460px)",
                 position: "relative",
-                flexShrink: 0,
+                overflow: "hidden",
+                borderRadius: "14px 14px 0 0",
+                border: "1px solid rgba(192,132,252,0.3)",
+                borderBottom: "none",
+                boxShadow: "0 -4px 20px rgba(124,58,237,0.18)",
               }}
             >
-              {/* 캐릭터 카드 — 위만 둥근 모서리, 아래는 텍스트박스와 이음 */}
+              <Image
+                src={charImage}
+                alt="마오"
+                fill
+                priority
+                style={{ objectFit: "cover", objectPosition: "top center" }}
+              />
+              {/* 이름 오버레이 */}
               <div
                 style={{
-                  overflow: "hidden",
-                  borderRadius: "14px 14px 0 0",
-                  border: "1px solid rgba(192,132,252,0.3)",
-                  borderBottom: "none",
-                  background: "#fff",
-                  boxShadow: "0 -4px 20px rgba(124,58,237,0.18)",
-                }}
-              >
-                <FortuneStage
-                  expressionId={expressionId}
-                  motionTrigger={motionTrigger}
-                  ambient={ambient}
-                  talking={talking}
-                  tracking={false}
-                />
-              </div>
-              {/* 이름 칩 — 캐릭터 하단에 그라데이션 오버레이로 */}
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  height: 36,
-                  background: "linear-gradient(0deg, rgba(10,6,24,0.9) 0%, transparent 100%)",
-                  display: "flex",
-                  alignItems: "flex-end",
-                  justifyContent: "center",
-                  paddingBottom: 4,
-                  pointerEvents: "none",
+                  position: "absolute", bottom: 0, left: 0, right: 0, height: 36,
+                  background: "linear-gradient(0deg, rgba(10,6,24,0.88) 0%, transparent 100%)",
+                  display: "flex", alignItems: "flex-end", justifyContent: "center",
+                  paddingBottom: 4, pointerEvents: "none",
                 }}
               >
                 <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.18em", color: "#c084fc" }}>마오</span>
@@ -653,38 +576,26 @@ function OtakuTypeV3Content() {
             </div>
           </div>
 
-          {/* ── VN 텍스트박스 (화면 하단에 고정) ── */}
+          {/* ── Textbox zone: 고정 높이 ── */}
           <div
-            className="v3-rise v3-textbox shrink-0"
-            style={{ padding: "10px 14px 12px" }}
+            className="v3-textbox"
+            style={{ flexShrink: 0, height: 278, overflow: "hidden", padding: "10px 14px 10px" }}
           >
-            {/* 이름 태그 행 */}
-            <div className="flex items-center gap-2 mb-1.5">
-              <span
-                style={{
-                  background: "rgba(192,132,252,0.15)",
-                  border: "1px solid rgba(192,132,252,0.45)",
-                  color: "#c084fc",
-                  borderRadius: 6,
-                  padding: "1px 8px",
-                  fontSize: 11,
-                  fontWeight: 800,
-                }}
-              >
+            {/* 이름 태그 */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <span style={{ background: "rgba(192,132,252,0.15)", border: "1px solid rgba(192,132,252,0.45)", color: "#c084fc", borderRadius: 6, padding: "1px 8px", fontSize: 11, fontWeight: 800 }}>
                 마오
               </span>
               <span style={{ fontSize: 10, color: "rgba(192,132,252,0.4)" }}>오타쿠 심사관</span>
               {gamePhase === "quiz" && (
-                <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, color: "rgba(192,132,252,0.45)" }}>
-                  Q{QUESTIONS[curQ]?.num}
-                </span>
+                <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, color: "rgba(192,132,252,0.45)" }}>Q{QUESTIONS[curQ]?.num}</span>
               )}
             </div>
 
-            {/* 대화 텍스트 — 탭하면 다음으로 */}
+            {/* 대화 텍스트 */}
             <div
               className="cursor-pointer select-none"
-              style={{ marginBottom: 10 }}
+              style={{ marginBottom: 8 }}
               onClick={() => {
                 if (!typingDone) return;
                 if (gamePhase === "quiz" && quizStep === "reacting") handleNext();
@@ -692,21 +603,15 @@ function OtakuTypeV3Content() {
             >
               <p
                 className={!typingDone ? "v3-caret" : ""}
-                style={{
-                  fontSize: 13,
-                  fontWeight: 500,
-                  lineHeight: 1.65,
-                  color: "#f3e8ff",
-                  minHeight: 44,
-                }}
+                style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.6, color: "#f3e8ff", minHeight: 38 }}
               >
                 {shown}
               </p>
             </div>
 
-            {/* 선택지 / 버튼 (타이핑 완료 후 등장) */}
+            {/* 선택지 / 버튼 */}
             {typingDone && (
-              <div className="v3-rise" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div className="v3-rise" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
 
                 {/* 인트로 */}
                 {gamePhase === "intro" && (
@@ -717,7 +622,7 @@ function OtakuTypeV3Content() {
 
                 {/* 선택지 */}
                 {gamePhase === "quiz" && quizStep === "choosing" && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     {QUESTIONS[curQ]?.options.map((opt, i) => (
                       <button key={i} className="v3-choice" onClick={() => handleChoose(i)}>
                         {opt.text}
