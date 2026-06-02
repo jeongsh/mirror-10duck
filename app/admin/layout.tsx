@@ -36,6 +36,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             작품/최애캐 관리
           </Link>
           <Link
+            href="/admin/catalog-requests"
+            className="rounded border border-transparent p-2 pl-6 text-sm transition-colors hover:border-gray-300 hover:bg-gray-100"
+          >
+            캐릭터·작품 요청
+          </Link>
+          <Link
             href="/admin/boards"
             className="rounded border border-transparent p-2 transition-colors hover:border-gray-300 hover:bg-gray-100"
           >

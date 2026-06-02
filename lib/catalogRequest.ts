@@ -89,3 +89,13 @@ export function catalogRequestPath(
 export function reasonLabel(value: string) {
   return CATALOG_REQUEST_REASONS.find((r) => r.value === value)?.label ?? value;
 }
+
+export const CATALOG_REQUEST_STATUSES = [
+  { value: "PENDING", label: "대기" },
+  { value: "APPROVED", label: "승인" },
+  { value: "REJECTED", label: "반려" },
+] as const;
+
+export function catalogRequestStatusLabel(value: string) {
+  return CATALOG_REQUEST_STATUSES.find((s) => s.value === value)?.label ?? value;
+}

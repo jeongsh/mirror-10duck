@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { catalogRequestPath } from "@/lib/catalogRequest";
 import { CREATE_NAV_GROUPS } from "@/lib/navigation";
 
 const FLOW_STEPS = [
@@ -81,7 +82,13 @@ export default function PlayHubPage() {
               </li>
             ))}
           </ol>
-          <div className="mt-4 border-t border-dashed border-gray-300 pt-3">
+          <div className="mt-4 flex flex-col gap-2 border-t border-dashed border-gray-300 pt-3">
+            <Link
+              href={catalogRequestPath("hub", { from: "play-hub" })}
+              className="inline-flex w-full justify-center border border-dashed border-gray-500 bg-white px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50"
+            >
+              애니 · 캐릭터 등록 요청
+            </Link>
             <Link
               href="/profile?tab=oshi"
               className="inline-flex w-full justify-center border border-dashed border-gray-700 bg-gray-900 px-3 py-2 text-xs font-bold text-white hover:bg-gray-800"
