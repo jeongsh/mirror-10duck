@@ -23,6 +23,15 @@ export async function getClinicCandidates(limit = 120): Promise<AnimeCandidate[]
   const mapped = ((data ?? []) as Parameters<typeof mapWorkToClinicCandidate>[0][]).map(
     mapWorkToClinicCandidate,
   );
+
+  // DB 후보가 충분하면 시드(FALLBACK)를 강제로 섞지 않는다. 시드가 항상 풀에 들어가면
+  // 카구야/토라도라 같은 시드 작품이 반복 노출되므로, 후보가 적을 때만 백필로 보충한다.
+  if (mapped.length >= 24) {
+    const byTitle = new Map<string, AnimeCandidate>();
+    for (const item of mapped) byTitle.set(item.title, item);
+    return [...byTitle.values()];
+  }
+
   return mergeCandidates(mapped);
 }
 

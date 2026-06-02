@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { X, Download, Search, ChevronRight, RotateCcw, Plus } from "lucide-react";
+import { X, Share2, Search, ChevronRight, RotateCcw, Plus } from "lucide-react";
 import {
   searchOshiAnalysisCharacters,
   searchOshiAnalysisWorks,
@@ -602,6 +602,7 @@ function OshiAnalysisPageContent() {
   const [logLines, setLogLines] = useState<string[]>([]);
   const [visibleLogCount, setVisibleLogCount] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [analyzedAt, setAnalyzedAt] = useState<Date | null>(null);
 
   const resultRef = useRef<HTMLDivElement>(null);
@@ -844,62 +845,36 @@ function OshiAnalysisPageContent() {
     }
   };
 
-  const handleDownload = async () => {
-    const el = resultRef.current;
-    if (!el) return;
-    setBusy(true);
+  const handleShare = async () => {
     try {
-      const urls = [
-        ...selected.map((c) => c.profile_image_url),
-        ...recommendations.map((c) => c.profile_image_url),
-      ].filter((url): url is string => Boolean(url));
+      const shareUrl = window.location.href;
+      let copiedLink = false;
 
-      const captureMap = imagesReady ? { ...imageDataUrls } : await mapUrlsToDataUrls(urls);
-      if (!imagesReady) setImageDataUrls(captureMap);
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        copiedLink = true;
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1800);
+      } catch {
+        /* ignore */
+      }
 
-      const restores: Array<{ img: HTMLImageElement; src: string }> = [];
-      el.querySelectorAll("img").forEach((node) => {
-        const img = node as HTMLImageElement;
-        const original = img.getAttribute("src") ?? "";
-        const inlined = captureMap[original] ?? (original.startsWith("data:") ? original : null);
-        if (inlined && inlined !== original) {
-          restores.push({ img, src: original });
-          img.setAttribute("src", inlined);
-        }
-      });
+      const canOpenNativeShare =
+        typeof navigator.share === "function" &&
+        (window.matchMedia("(pointer: coarse)").matches ||
+          /Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
 
-      await Promise.all(
-        [...el.querySelectorAll("img")].map(
-          (img) =>
-            new Promise<void>((resolve) => {
-              if (img.complete) resolve();
-              else {
-                img.onload = () => resolve();
-                img.onerror = () => resolve();
-              }
-            })
-        )
-      );
+      if (canOpenNativeShare) {
+        await navigator.share({ url: shareUrl });
+        return;
+      }
 
-      const { domToBlob } = await import("modern-screenshot");
-      const blob = await domToBlob(el, {
-        scale: 2,
-        type: "image/png",
-        fetchFn: async (url) => captureMap[url] ?? false,
-      });
-
-      restores.forEach(({ img, src }) => img.setAttribute("src", src));
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `oshi-analysis-${Date.now()}.png`;
-      a.click();
-      URL.revokeObjectURL(url);
+      if (!copiedLink) {
+        setCopied(false);
+      }
     } catch (err) {
-      console.error("download failed:", err);
-    } finally {
-      setBusy(false);
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      console.error("oshi-analysis share failed:", err);
     }
   };
 
@@ -1049,7 +1024,8 @@ function OshiAnalysisPageContent() {
           imageDataUrls={imageDataUrls}
           analyzedAt={analyzedAt}
           busy={busy}
-          onShare={() => void handleDownload()}
+          copied={copied}
+          onShare={() => void handleShare()}
           onReselect={() => {
             router.replace("/play/oshi-analysis");
             setStep("select");

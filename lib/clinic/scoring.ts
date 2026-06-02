@@ -147,6 +147,104 @@ function allergyPenalty(candidate: AnimeCandidate, allergies: string[], strict: 
 
 const PRESCRIPTION_SLOTS: Prescription["slot"][] = ["1차 처방", "2차 처방", "3차 처방"];
 
+// 같은 계열(클러스터) 작품이 1·2·3차에 몰리지 않도록, 태그를 큰 묶음으로 분류한다.
+const TAG_CLUSTER: Record<string, string> = {
+  로맨스: "romance",
+  학원: "romance",
+  캐릭터성: "character",
+  아이돌: "character",
+  사제관계: "relationship",
+  유사가족: "relationship",
+  구원서사: "relationship",
+  라이벌: "relationship",
+  스포츠: "battle",
+  액션: "battle",
+  이능력: "battle",
+  판타지: "world",
+  정치극: "world",
+  디스토피아: "world",
+  SF: "world",
+  추리: "mystery",
+  미스터리: "mystery",
+  후유증: "after",
+  감정선: "after",
+  일상: "healing",
+  코미디: "healing",
+  음악: "healing",
+  성장: "growth",
+  잔인함: "world",
+};
+
+function getClusters(candidate: AnimeCandidate): Set<string> {
+  const set = new Set<string>();
+  for (const tag of candidate.tags) {
+    const cluster = TAG_CLUSTER[tag];
+    if (cluster) set.add(cluster);
+  }
+  return set;
+}
+
+type RankedCandidate = {
+  candidate: AnimeCandidate;
+  score: number;
+  warnings: string[];
+  matchedTags: string[];
+};
+
+// 점수 가중 랜덤 추출. 점수가 높을수록 뽑힐 확률이 높지만, 매번 1등만 나오지 않고
+// 상위권 안에서 회전한다. (weight는 양수로 보정)
+function weightedSample(pool: Array<{ item: RankedCandidate; weight: number }>): number {
+  const total = pool.reduce((sum, p) => sum + p.weight, 0);
+  if (total <= 0) return 0;
+  let r = Math.random() * total;
+  for (let i = 0; i < pool.length; i += 1) {
+    r -= pool[i].weight;
+    if (r <= 0) return i;
+  }
+  return pool.length - 1;
+}
+
+// "몇 개만 돌아가며 나오는" 문제 해결: 상위 점수만 자르지 않고,
+// 점수 상위권(shortlist)에서 점수 가중 랜덤으로 3개를 뽑는다.
+// 이미 뽑힌 작품과 같은 계열(클러스터)이면 가중치를 크게 낮춰 다양성도 확보한다.
+function pickDiversePrescriptions(ranked: RankedCandidate[], count = 3): RankedCandidate[] {
+  if (ranked.length <= count) return ranked.slice(0, count);
+
+  // 관련성 있는 상위권만 후보로 둔다(최소 12개, 최대 전체의 절반). 너무 동떨어진 작품은 제외.
+  const shortlistSize = Math.min(ranked.length, Math.max(12, Math.ceil(ranked.length * 0.5)));
+  const shortlist = ranked.slice(0, shortlistSize);
+
+  const baseScore = shortlist[shortlist.length - 1]?.score ?? 0;
+  const picked: RankedCandidate[] = [];
+  const usedClusters = new Map<string, number>();
+  const pool = [...shortlist];
+
+  while (picked.length < count && pool.length > 0) {
+    const weighted = pool.map((item) => {
+      // 점수를 양수 가중치로 변환(최하위 후보 기준 + 완만한 가산).
+      let weight = item.score - baseScore + 60;
+      if (weight < 1) weight = 1;
+
+      // 이미 뽑힌 작품과 겹치는 클러스터마다 가중치를 60%씩 깎아 같은 계열 반복을 억제.
+      let overlap = 0;
+      for (const cluster of getClusters(item.candidate)) overlap += usedClusters.get(cluster) ?? 0;
+      weight *= Math.pow(0.4, overlap);
+
+      return { item, weight };
+    });
+
+    const idx = weightedSample(weighted);
+    const [chosen] = pool.splice(idx, 1);
+    picked.push(chosen);
+    for (const cluster of getClusters(chosen.candidate)) {
+      usedClusters.set(cluster, (usedClusters.get(cluster) ?? 0) + 1);
+    }
+  }
+
+  // 처방 슬롯 순서는 점수 높은 순으로 다시 정렬해 1차가 가장 강한 매칭이 되도록.
+  return picked.sort((a, b) => b.score - a.score);
+}
+
 export function buildPrescriptions(
   candidates: AnimeCandidate[],
   scores: Record<Axis, number>,
@@ -176,17 +274,22 @@ export function buildPrescriptions(
 
   const ranked = candidates
     .map((candidate) => {
-      let score = 0;
+      let tagScore = 0;
       const matchedTags: string[] = [];
 
       candidate.tags.forEach((tag) => {
         const tagAxes = TAG_AXIS[tag] ?? {};
-        const before = score;
+        const before = tagScore;
         Object.entries(tagAxes).forEach(([axis, weight]) => {
-          score += (adjustedScores[axis as Axis] ?? 0) * (weight ?? 0);
+          tagScore += (adjustedScores[axis as Axis] ?? 0) * (weight ?? 0);
         });
-        if (score > before) matchedTags.push(tag);
+        if (tagScore > before) matchedTags.push(tag);
       });
+
+      // 태그(장르)가 많을수록 단순 합이 커져 다장르 작품이 무조건 상위를 독점하던 문제를
+      // sqrt 정규화로 완화한다. 적합도가 높은 작품은 여전히 상위지만 "장르 개수빨"은 줄어든다.
+      const weightedTagCount = matchedTags.length;
+      let score = weightedTagCount > 0 ? tagScore / Math.sqrt(weightedTagCount) : 0;
 
       if (lengthAnswer === "short" && candidate.length === "short") score += 320;
       if (lengthAnswer === "short" && candidate.length === "long") score -= 260;
@@ -205,7 +308,9 @@ export function buildPrescriptions(
     })
     .sort((a, b) => b.score - a.score);
 
-  return ranked.slice(0, 3).map((item, index): Prescription => {
+  const selected = pickDiversePrescriptions(ranked, 3);
+
+  return selected.map((item, index): Prescription => {
     const hasWarning = item.warnings.length > 0;
     const category: PrescriptionCategory =
       hasWarning && item.score > 900

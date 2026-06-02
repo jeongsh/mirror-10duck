@@ -631,16 +631,38 @@ export default function AnimeRecommendPage() {
     setStep("loading");
   };
 
-  const shareText = `[과몰입 클리닉 진단 결과]
+  const handleShare = async () => {
+    try {
+      const shareUrl = window.location.href;
+      let copiedLink = false;
 
-진단명: ${diagnosis.name}
-과몰입 수치: ${immersionScore}/100
-${copyResult?.shareSummary ?? diagnosis.summary}
-키워드: ${keywords.join(", ")}
-처방 작품: ${displayPrescriptions.map((item) => item.title).join(", ")}
-주의사항: ${getAvoidText(allergies)}
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        copiedLink = true;
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1800);
+      } catch {
+        /* ignore */
+      }
 
-나도 진단 받기 → ${typeof window !== "undefined" ? window.location.origin : ""}/play/recommend`;
+      const canOpenNativeShare =
+        typeof navigator.share === "function" &&
+        (window.matchMedia("(pointer: coarse)").matches ||
+          /Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+
+      if (canOpenNativeShare) {
+        await navigator.share({ url: shareUrl });
+        return;
+      }
+
+      if (!copiedLink) {
+        setCopied(false);
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      console.error("prescription share failed:", err);
+    }
+  };
 
   const handleDownload = async () => {
     const el = resultRef.current;
@@ -697,40 +719,6 @@ ${copyResult?.shareSummary ?? diagnosis.summary}
       console.error("prescription download failed:", err);
     } finally {
       setBusy(false);
-    }
-  };
-
-  const handleShare = async () => {
-    try {
-      const shareUrl = `${window.location.origin}/play/recommend?clinic=${encodeClinicPayload(currentPayload)}`;
-      const shareTitle = "과몰입 클리닉 진단 결과";
-      let copiedLink = false;
-
-      try {
-        await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
-        copiedLink = true;
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1800);
-      } catch {
-        /* ignore */
-      }
-
-      const canOpenNativeShare =
-        typeof navigator.share === "function" &&
-        (window.matchMedia("(pointer: coarse)").matches ||
-          /Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
-
-      if (canOpenNativeShare) {
-        await navigator.share({ title: shareTitle, text: shareText, url: shareUrl });
-        return;
-      }
-
-      if (!copiedLink) {
-        setCopied(false);
-      }
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return;
-      console.error("prescription share failed:", err);
     }
   };
 
@@ -1273,7 +1261,7 @@ ${copyResult?.shareSummary ?? diagnosis.summary}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-indigo-500 px-4 py-3 text-sm font-black text-white shadow-[0_6px_18px_rgba(99,102,241,0.35)] hover:bg-indigo-600 disabled:opacity-50"
             >
               <Share2 className="h-4 w-4" />
-              {copied ? "공유 문구 복사됨" : "공유하기"}
+              {copied ? "링크 복사됨" : "공유하기"}
             </button>
           </div>
 
