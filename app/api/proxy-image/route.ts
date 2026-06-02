@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const ALLOWED_HOSTS = ["anilist.co", "s4.anilist.co", "img1.ak.crunchyroll.com"];
+const ALLOWED_HOSTS = [
+  "anilist.co",
+  "s4.anilist.co",
+  "img1.ak.crunchyroll.com",
+  "supabase.co",
+];
 
 function isAllowedImageUrl(raw: string): boolean {
   try {
