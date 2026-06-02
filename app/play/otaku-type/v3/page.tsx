@@ -532,7 +532,7 @@ function OtakuTypeV3Content() {
             )}
           </div>
 
-          {/* ── Character zone: flex-1 — 남은 공간 전부, 이미지 꽉 채움 ── */}
+          {/* ── Character zone: flex-1 ── */}
           <div
             style={{
               flex: "1 1 0",
@@ -543,7 +543,6 @@ function OtakuTypeV3Content() {
               alignItems: "stretch",
             }}
           >
-            {/* 너비 제한 + 세로 꽉 채움 */}
             <div
               style={{
                 width: "clamp(220px, 72vw, 460px)",
@@ -562,24 +561,78 @@ function OtakuTypeV3Content() {
                 priority
                 style={{ objectFit: "cover", objectPosition: "top center" }}
               />
-              {/* 이름 오버레이 */}
-              <div
-                style={{
-                  position: "absolute", bottom: 0, left: 0, right: 0, height: 36,
-                  background: "linear-gradient(0deg, rgba(10,6,24,0.88) 0%, transparent 100%)",
-                  display: "flex", alignItems: "flex-end", justifyContent: "center",
-                  paddingBottom: 4, pointerEvents: "none",
-                }}
-              >
-                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.18em", color: "#c084fc" }}>마오</span>
-              </div>
+
+              {/* ── 선택지 오버레이 (이미지 위에 말풍선 버튼) ── */}
+              {gamePhase === "quiz" && quizStep === "choosing" && typingDone && (
+                <div
+                  className="v3-rise"
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "flex-end",
+                    padding: "0 12px 14px",
+                    gap: 6,
+                    background: "linear-gradient(0deg, rgba(8,4,22,0.82) 0%, rgba(8,4,22,0.35) 55%, transparent 100%)",
+                  }}
+                >
+                  {QUESTIONS[curQ]?.options.map((opt, i) => (
+                    <button
+                      key={i}
+                      onClick={() => handleChoose(i)}
+                      style={{
+                        width: "100%",
+                        padding: "8px 14px",
+                        borderRadius: 10,
+                        border: "1px solid rgba(192,132,252,0.4)",
+                        background: "rgba(19,8,43,0.82)",
+                        color: "#ede9ff",
+                        fontSize: 12.5,
+                        fontWeight: 500,
+                        textAlign: "left",
+                        cursor: "pointer",
+                        lineHeight: 1.45,
+                        backdropFilter: "blur(6px)",
+                        WebkitBackdropFilter: "blur(6px)" as never,
+                        transition: "border-color 0.15s, background 0.15s",
+                      }}
+                      onMouseEnter={e => {
+                        (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(192,132,252,0.75)";
+                        (e.currentTarget as HTMLButtonElement).style.background = "rgba(40,18,80,0.9)";
+                      }}
+                      onMouseLeave={e => {
+                        (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(192,132,252,0.4)";
+                        (e.currentTarget as HTMLButtonElement).style.background = "rgba(19,8,43,0.82)";
+                      }}
+                    >
+                      <span style={{ color: "#c084fc", marginRight: 6, fontSize: 10 }}>▶</span>
+                      {opt.text}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* 이름 오버레이 (선택지 표시 중엔 숨김) */}
+              {!(gamePhase === "quiz" && quizStep === "choosing" && typingDone) && (
+                <div
+                  style={{
+                    position: "absolute", bottom: 0, left: 0, right: 0, height: 36,
+                    background: "linear-gradient(0deg, rgba(10,6,24,0.88) 0%, transparent 100%)",
+                    display: "flex", alignItems: "flex-end", justifyContent: "center",
+                    paddingBottom: 4, pointerEvents: "none",
+                  }}
+                >
+                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.18em", color: "#c084fc" }}>마오</span>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* ── Textbox zone: 고정 높이 ── */}
+          {/* ── Textbox zone: 이름+대화+버튼만, 선택지는 이미지 위에 ── */}
           <div
             className="v3-textbox"
-            style={{ flexShrink: 0, height: 278, overflow: "hidden", padding: "10px 14px 10px" }}
+            style={{ flexShrink: 0, height: 148, overflow: "hidden", padding: "10px 14px 10px" }}
           >
             {/* 이름 태그 */}
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -603,13 +656,13 @@ function OtakuTypeV3Content() {
             >
               <p
                 className={!typingDone ? "v3-caret" : ""}
-                style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.6, color: "#f3e8ff", minHeight: 38 }}
+                style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.6, color: "#f3e8ff" }}
               >
                 {shown}
               </p>
             </div>
 
-            {/* 선택지 / 버튼 */}
+            {/* 버튼 (인트로 / 반응 후 / 결과) — 선택지는 여기 없음 */}
             {typingDone && (
               <div className="v3-rise" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
 
@@ -618,17 +671,6 @@ function OtakuTypeV3Content() {
                   <button className="v3-start-btn" onClick={startQuiz}>
                     <span>✦</span>테스트 시작하기
                   </button>
-                )}
-
-                {/* 선택지 */}
-                {gamePhase === "quiz" && quizStep === "choosing" && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    {QUESTIONS[curQ]?.options.map((opt, i) => (
-                      <button key={i} className="v3-choice" onClick={() => handleChoose(i)}>
-                        {opt.text}
-                      </button>
-                    ))}
-                  </div>
                 )}
 
                 {/* 반응 후 */}
