@@ -15,6 +15,9 @@ import type {
   ExamStatus,
 } from "@/types/character-exam";
 
+interface WorkOption { id: string; title: string; cover_image_url: string | null; }
+interface CharacterOption { id: string; name: string; work_title: string; profile_image_url: string | null; }
+
 export default function EditExamProductPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -32,18 +35,19 @@ export default function EditExamProductPage() {
   const [status, setStatus] = useState<ExamStatus>("draft");
   const [useRecommendation, setUseRecommendation] = useState(false);
 
+  const [workSearch, setWorkSearch] = useState("");
+  const [workResults, setWorkResults] = useState<WorkOption[]>([]);
+  const [pinnedWork, setPinnedWork] = useState<WorkOption | null>(null);
+
+  const [charSearch, setCharSearch] = useState("");
+  const [charResults, setCharResults] = useState<CharacterOption[]>([]);
+  const [pinnedCharacter, setPinnedCharacter] = useState<CharacterOption | null>(null);
+
   useEffect(() => {
     Promise.all([
-      supabase
-        .from("character_exam_products")
-        .select("*")
-        .eq("id", id)
-        .single(),
-      supabase
-        .from("character_exam_result_templates")
-        .select("id, name")
-        .order("created_at", { ascending: true }),
-    ]).then(([productRes, templateRes]) => {
+      supabase.from("character_exam_products").select("*").eq("id", id).single(),
+      supabase.from("character_exam_result_templates").select("id, name").order("created_at", { ascending: true }),
+    ]).then(async ([productRes, templateRes]) => {
       if (productRes.error || !productRes.data) {
         alert("시험 상품을 찾을 수 없습니다.");
         router.push("/admin/character-exams");
@@ -63,9 +67,70 @@ export default function EditExamProductPage() {
       if (templateRes.data) {
         setResultTemplates(templateRes.data as CharacterExamResultTemplate[]);
       }
+
+      // 저장된 pinned_work_id 복원
+      if (p.pinned_work_id) {
+        const { data: wData } = await supabase
+          .from("official_works")
+          .select("id, title, cover_image_url")
+          .eq("id", p.pinned_work_id)
+          .single();
+        if (wData) setPinnedWork(wData as WorkOption);
+      }
+
+      // 저장된 pinned_character_id 복원
+      if (p.pinned_character_id) {
+        const { data: cData } = await supabase
+          .from("official_oshi_characters")
+          .select("id, name, profile_image_url, official_works(title)")
+          .eq("id", p.pinned_character_id)
+          .single();
+        if (cData) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const row = cData as any as { id: string; name: string; profile_image_url: string | null; official_works: { title: string } | null };
+          setPinnedCharacter({
+            id: row.id,
+            name: row.name,
+            work_title: row.official_works?.title ?? "알 수 없음",
+            profile_image_url: row.profile_image_url,
+          });
+        }
+      }
+
       setLoading(false);
     });
   }, [id, router]);
+
+  const searchWorks = async () => {
+    if (!workSearch.trim()) return;
+    const { data } = await supabase
+      .from("official_works")
+      .select("id, title, cover_image_url")
+      .ilike("title", `%${workSearch.trim()}%`)
+      .eq("status", "PUBLISHED")
+      .order("sort_order", { ascending: true })
+      .limit(8);
+    setWorkResults((data ?? []) as WorkOption[]);
+  };
+
+  const searchCharacters = async () => {
+    if (!charSearch.trim()) return;
+    const { data } = await supabase
+      .from("official_oshi_characters")
+      .select("id, name, profile_image_url, official_works(title)")
+      .ilike("name", `%${charSearch.trim()}%`)
+      .eq("status", "PUBLISHED")
+      .limit(8);
+    setCharResults(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ((data ?? []) as any[]).map((row) => ({
+        id: row.id as string,
+        name: row.name as string,
+        work_title: (row.official_works?.title as string | undefined) ?? "알 수 없음",
+        profile_image_url: row.profile_image_url as string | null,
+      })),
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,6 +151,8 @@ export default function EditExamProductPage() {
         result_template_id: resultTemplateId || null,
         status,
         use_recommendation: useRecommendation,
+        pinned_work_id: examType === "work_unit" ? (pinnedWork?.id ?? null) : null,
+        pinned_character_id: examType === "character_single" ? (pinnedCharacter?.id ?? null) : null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
@@ -100,10 +167,7 @@ export default function EditExamProductPage() {
 
   const handleDelete = async () => {
     if (!confirm("이 시험 상품을 삭제할까요? 되돌릴 수 없습니다.")) return;
-    const { error } = await supabase
-      .from("character_exam_products")
-      .delete()
-      .eq("id", id);
+    const { error } = await supabase.from("character_exam_products").delete().eq("id", id);
     if (error) {
       alert(`삭제 실패: ${error.message}`);
       return;
@@ -156,13 +220,17 @@ export default function EditExamProductPage() {
                 <label className="mb-1 block text-sm font-medium">시험 유형</label>
                 <select
                   value={examType}
-                  onChange={(e) => setExamType(e.target.value as ExamType)}
+                  onChange={(e) => {
+                    setExamType(e.target.value as ExamType);
+                    setPinnedWork(null);
+                    setPinnedCharacter(null);
+                    setWorkResults([]);
+                    setCharResults([]);
+                  }}
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none"
                 >
                   {Object.entries(EXAM_TYPE_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>
-                      {v}
-                    </option>
+                    <option key={k} value={k}>{v}</option>
                   ))}
                 </select>
               </div>
@@ -196,9 +264,7 @@ export default function EditExamProductPage() {
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none"
                 >
                   {Object.entries(SPOILER_LEVEL_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>
-                      {v}
-                    </option>
+                    <option key={k} value={k}>{v}</option>
                   ))}
                 </select>
               </div>
@@ -210,9 +276,7 @@ export default function EditExamProductPage() {
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none"
                 >
                   {Object.entries(EXAM_STATUS_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>
-                      {v}
-                    </option>
+                    <option key={k} value={k}>{v}</option>
                   ))}
                 </select>
               </div>
@@ -225,9 +289,7 @@ export default function EditExamProductPage() {
                 >
                   <option value="">기본값 사용</option>
                   {resultTemplates.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
+                    <option key={t.id} value={t.id}>{t.name}</option>
                   ))}
                 </select>
               </div>
@@ -243,6 +305,134 @@ export default function EditExamProductPage() {
             </label>
           </div>
         </section>
+
+        {/* 작품 고정 (work_unit) */}
+        {examType === "work_unit" && (
+          <section className="rounded border border-dashed border-gray-500 bg-white/70 p-6">
+            <h3 className="mb-1 font-semibold">고정 작품 <span className="text-xs font-normal text-gray-400">(미지정 시 유저가 자유 선택)</span></h3>
+            <p className="mb-4 text-xs text-gray-500">이 시험을 특정 애니메이션으로 한정하려면 선택하세요.</p>
+
+            {pinnedWork ? (
+              <div className="flex items-center justify-between rounded border border-gray-200 bg-gray-50 px-4 py-2.5">
+                <div className="flex items-center gap-2">
+                  {pinnedWork.cover_image_url && (
+                    <img src={pinnedWork.cover_image_url} alt="" className="h-7 w-5 rounded object-cover" />
+                  )}
+                  <span className="text-sm font-medium">{pinnedWork.title}</span>
+                </div>
+                <button type="button" onClick={() => setPinnedWork(null)} className="text-xs text-red-400 hover:text-red-600">
+                  해제
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={workSearch}
+                    onChange={(e) => setWorkSearch(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && void searchWorks()}
+                    className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none"
+                    placeholder="작품명 검색"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void searchWorks()}
+                    className="rounded border border-gray-300 bg-white px-4 py-2 text-sm hover:bg-gray-50"
+                  >
+                    검색
+                  </button>
+                </div>
+                {workResults.length > 0 && (
+                  <div className="mt-2 rounded border border-gray-200 bg-white shadow-sm">
+                    {workResults.map((w) => (
+                      <button
+                        key={w.id}
+                        type="button"
+                        onClick={() => { setPinnedWork(w); setWorkResults([]); setWorkSearch(""); }}
+                        className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-2.5 text-left text-sm last:border-0 hover:bg-gray-50"
+                      >
+                        {w.cover_image_url && (
+                          <img src={w.cover_image_url} alt="" className="h-8 w-6 rounded object-cover shrink-0" />
+                        )}
+                        <span>{w.title}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+        )}
+
+        {/* 캐릭터 고정 (character_single) */}
+        {examType === "character_single" && (
+          <section className="rounded border border-dashed border-gray-500 bg-white/70 p-6">
+            <h3 className="mb-1 font-semibold">고정 캐릭터 <span className="text-xs font-normal text-gray-400">(미지정 시 유저가 자유 선택)</span></h3>
+            <p className="mb-4 text-xs text-gray-500">특정 캐릭터로만 시험을 치르게 하려면 선택하세요.</p>
+
+            {pinnedCharacter ? (
+              <div className="flex items-center justify-between rounded border border-gray-200 bg-gray-50 px-4 py-2.5">
+                <div className="flex items-center gap-2">
+                  {pinnedCharacter.profile_image_url ? (
+                    <img src={pinnedCharacter.profile_image_url} alt="" className="h-8 w-8 rounded-full object-cover" />
+                  ) : (
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-200 text-xs">{pinnedCharacter.name[0]}</div>
+                  )}
+                  <div>
+                    <div className="text-sm font-medium">{pinnedCharacter.name}</div>
+                    <div className="text-xs text-gray-400">{pinnedCharacter.work_title}</div>
+                  </div>
+                </div>
+                <button type="button" onClick={() => setPinnedCharacter(null)} className="text-xs text-red-400 hover:text-red-600">
+                  해제
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={charSearch}
+                    onChange={(e) => setCharSearch(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && void searchCharacters()}
+                    className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none"
+                    placeholder="캐릭터 이름 검색"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void searchCharacters()}
+                    className="rounded border border-gray-300 bg-white px-4 py-2 text-sm hover:bg-gray-50"
+                  >
+                    검색
+                  </button>
+                </div>
+                {charResults.length > 0 && (
+                  <div className="mt-2 rounded border border-gray-200 bg-white shadow-sm">
+                    {charResults.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => { setPinnedCharacter(c); setCharResults([]); setCharSearch(""); }}
+                        className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-2.5 text-left text-sm last:border-0 hover:bg-gray-50"
+                      >
+                        {c.profile_image_url ? (
+                          <img src={c.profile_image_url} alt="" className="h-8 w-8 rounded-full object-cover shrink-0" />
+                        ) : (
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-200 text-xs">{c.name[0]}</div>
+                        )}
+                        <div>
+                          <div className="font-medium">{c.name}</div>
+                          <div className="text-xs text-gray-400">{c.work_title}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+        )}
 
         <div className="flex justify-end gap-2">
           <button

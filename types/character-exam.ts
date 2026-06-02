@@ -28,6 +28,8 @@ export interface CharacterExamProduct {
   result_template_id: string | null;
   status: ExamStatus;
   use_recommendation: boolean;
+  pinned_work_id: string | null;
+  pinned_character_id: string | null;
   created_by: string | null;
   updated_by: string | null;
   published_at: string | null;
