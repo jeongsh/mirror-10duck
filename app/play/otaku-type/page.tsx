@@ -632,7 +632,7 @@ function OtakuTypePageContent() {
       <main className="mx-auto flex max-w-[560px] flex-col gap-6 py-8 px-4">
         <div className="text-center">
           <h1 className="text-[22px] font-medium mb-1.5">🌸 오타쿠 테스트</h1>
-          <p className="text-sm text-gray-500">나의 덕후 유형을 알아보는 두 가지 테스트</p>
+          <p className="text-sm text-gray-500">나의 덕후 유형을 알아보는 세 가지 테스트</p>
         </div>
         <div className="flex flex-col gap-3">
           {/* v1 카드 */}
@@ -666,6 +666,25 @@ function OtakuTypePageContent() {
               className="block w-full py-2.5 rounded-lg text-sm font-medium text-center text-white bg-[#534AB7] hover:bg-[#3E3899] active:bg-[#2E2A80] shadow-sm hover:shadow-md transition-all duration-150"
             >
               어떤 오타쿠? 시작하기 →
+            </Link>
+          </div>
+
+          {/* v3 카드 */}
+          <div className="rounded-xl p-5 flex flex-col gap-3 border" style={{ background: "#13082b", borderColor: "rgba(192,132,252,0.3)" }}>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "rgba(192,132,252,0.15)", color: "#c084fc" }}>8문항 · VN</span>
+              <span className="text-sm font-medium" style={{ color: "#e9d5ff" }}>얼마나 오타쿠예요?</span>
+              <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: "rgba(168,85,247,0.2)", color: "#a855f7" }}>NEW</span>
+            </div>
+            <p className="text-xs leading-relaxed" style={{ color: "rgba(233,213,255,0.6)" }}>
+              비주얼 노벨 스타일로 진행되는 오타쿠 수준 측정 테스트예요. <strong style={{ color: "#c084fc" }}>마오</strong>가 직접 심사해 <strong style={{ color: "#c084fc" }}>5단계</strong> 중 당신의 오타쿠 레벨을 진단해줘요.
+            </p>
+            <Link
+              href="/play/otaku-type/v3"
+              className="block w-full py-2.5 rounded-lg text-sm font-medium text-center text-white transition-all duration-150"
+              style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
+            >
+              ✦ 비주얼 노벨 테스트 시작 →
             </Link>
           </div>
         </div>

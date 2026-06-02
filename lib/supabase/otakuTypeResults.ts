@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase/client";
 
-export type OtakuTypeTestVersion = "v1" | "v2";
+export type OtakuTypeTestVersion = "v1" | "v2" | "v3";
 
 export type OtakuTypeResultRow = {
   user_id: string;
