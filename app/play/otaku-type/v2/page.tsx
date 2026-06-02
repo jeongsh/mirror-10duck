@@ -676,52 +676,142 @@ function OtakuTypeV2PageContent() {
   // ── 퀴즈 ──
   const safeCur = Math.min(Math.max(cur, 0), QUESTIONS.length - 1);
   const q = QUESTIONS[safeCur];
-  const progress = Math.round((safeCur / QUESTIONS.length) * 100);
+  const progress = Math.round(((safeCur + 1) / QUESTIONS.length) * 100);
+  const epLabel = String(safeCur + 1).padStart(2, "0");
+  const totalEpLabel = String(QUESTIONS.length).padStart(2, "0");
+  const cheer = (() => {
+    if (safeCur === 0) return "🎬 본 방송 시작!";
+    if (safeCur <= 2) return "📺 1쿨 시청 중...";
+    if (safeCur <= 4) return "💫 본격 전개 진입!";
+    if (safeCur <= 6) return "🎯 절반 돌파! 잘 하고 있어요";
+    if (safeCur <= 7) return "🔥 거의 다 왔어요!";
+    if (safeCur === QUESTIONS.length - 1) return "✨ 최종화! 결과가 곧 나와요";
+    return "⚡ 클라이맥스 진입!";
+  })();
 
   return (
-    <main className="mx-auto flex max-w-[560px] flex-col gap-5 py-8 px-4">
+    <main className="mx-auto flex max-w-[480px] flex-col gap-4 py-6 px-3">
+      {/* 헤더 */}
       <div className="text-center">
-        <h1 className="text-[22px] font-medium mb-1.5">어떤 오타쿠?</h1>
-        <p className="text-sm text-gray-500">10문항으로 알아보는 나의 덕후 장르</p>
+        <h1
+          className="text-[22px] font-extrabold mb-1 tracking-tight"
+          style={{ color: CARD_PURPLE_DARK }}
+        >
+          ✦ 어떤 오타쿠? ✦
+        </h1>
+        <p className="text-[11px] font-mono tracking-wider" style={{ color: CARD_PURPLE_MID }}>
+          NOW PLAYING — EP.{epLabel} / 전 {totalEpLabel}화
+        </p>
       </div>
 
-      <div>
-        <div className="h-1.5 rounded overflow-hidden" style={{ background: "#EDE9FE" }}>
-          <div className="h-full rounded transition-all duration-300" style={{ width: `${progress}%`, background: "#534AB7" }} />
-        </div>
-        <div className="flex justify-between items-center mt-1.5">
-          {safeCur >= 5 ? (
-            <span className="text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ background: "#EDE9FE", color: "#4338CA" }}>
-              {safeCur >= QUESTIONS.length - 1
-                ? "✨ 마지막 질문이에요! 결과가 곧 나와요"
-                : safeCur >= 7
-                ? "💪 거의 다 왔어요! 조금만 더"
-                : "🎯 절반 지났어요! 잘 하고 있어요"}
-            </span>
-          ) : <span />}
-          <span className="text-xs text-gray-400">{safeCur + 1} / {QUESTIONS.length}</span>
-        </div>
-      </div>
-
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
-        <div className="relative w-full aspect-[3/2] rounded-lg mb-5 overflow-hidden bg-gray-50">
-          <Image
-            src={q.image}
-            alt={`Q${q.num} 일러스트`}
-            fill
-            sizes="(max-width: 560px) 100vw, 560px"
-            className="object-cover"
-            priority={q.num <= 2}
+      {/* 진행 바 + 단계 응원 */}
+      <div className="flex flex-col gap-2">
+        <div
+          className="h-2.5 rounded-full overflow-hidden"
+          style={{ background: CARD_LAVENDER, border: `1px solid ${CARD_PURPLE_SOFT}` }}
+        >
+          <div
+            className="h-full transition-all duration-500 ease-out"
+            style={{
+              width: `${progress}%`,
+              background: `linear-gradient(90deg, ${CARD_PURPLE_MID} 0%, ${CARD_PIXEL_PINK} 100%)`,
+            }}
           />
         </div>
+        <div className="flex justify-between items-center px-0.5">
+          <span
+            className="text-[10.5px] font-bold px-2 py-0.5 rounded-full"
+            style={{ background: CARD_LAVENDER_SOFT, color: CARD_PURPLE_DARK, border: `1px solid ${CARD_PURPLE_SOFT}` }}
+          >
+            {cheer}
+          </span>
+          <span className="text-[10.5px] font-mono font-bold" style={{ color: CARD_PURPLE_MID }}>
+            {epLabel} / {totalEpLabel}
+          </span>
+        </div>
+      </div>
 
-        <div>
-          <div className="text-xs font-medium mb-2" style={{ color: "#534AB7", letterSpacing: "0.05em" }}>
-            Q{q.num}
+      {/* 카드 (Y2K 윈도우 풍 — 결과 카드와 통일) */}
+      <div
+        className="rounded-[24px] overflow-hidden shadow-[0_8px_24px_rgba(126,87,194,0.15)]"
+        style={{
+          border: `3px solid ${CARD_PURPLE_SOFT}`,
+          background: CARD_LAVENDER_SOFT,
+        }}
+      >
+        {/* 타이틀 바 */}
+        <div
+          className="flex items-center justify-between px-3.5 py-2"
+          style={{
+            background: CARD_LAVENDER,
+            borderBottom: `2px solid ${CARD_PURPLE_SOFT}`,
+          }}
+        >
+          <div className="text-[14px]" style={{ color: CARD_PIXEL_PINK }} aria-hidden>
+            ♥
           </div>
-          <div className="text-base font-medium leading-relaxed mb-5 text-gray-800">{q.text}</div>
+          <div
+            className="text-[11px] font-semibold tracking-[0.15em] flex items-center gap-1.5"
+            style={{ color: CARD_PURPLE_DARK }}
+          >
+            <span>EP.{epLabel}</span>
+            <span className="opacity-60">·</span>
+            <span>오타쿠 진단</span>
+          </div>
+          <div className="flex gap-1 text-[10px]" style={{ color: CARD_PURPLE_DARK }} aria-hidden>
+            <span>□</span>
+            <span>—</span>
+            <span>×</span>
+          </div>
+        </div>
 
-          <div className="flex flex-col gap-2.5">
+        {/* 본문 */}
+        <div className="p-4 flex flex-col gap-3.5">
+          {/* 이미지 + 배지 오버레이 */}
+          <div
+            className="relative w-full aspect-[3/2] rounded-lg overflow-hidden bg-white"
+            style={{ border: `2px dashed ${CARD_PURPLE_SOFT}` }}
+          >
+            <Image
+              src={q.image}
+              alt={`EP.${epLabel} 일러스트`}
+              fill
+              sizes="(max-width: 480px) 100vw, 480px"
+              className="object-cover"
+              priority={q.num <= 2}
+            />
+          </div>
+
+          {/* 질문 박스 (말풍선 풍) */}
+          <div
+            className="relative bg-white rounded-lg p-3.5"
+            style={{ border: `2px solid ${CARD_PURPLE_SOFT}` }}
+          >
+            <div
+              className="text-[10px] font-bold tracking-wider mb-1.5"
+              style={{ color: CARD_PURPLE_MID }}
+            >
+              QUESTION · {safeCur + 1}화
+            </div>
+            <div
+              className="text-[15px] font-bold leading-relaxed"
+              style={{ color: CARD_PURPLE_DARK }}
+            >
+              {q.text}
+            </div>
+            {/* 말풍선 꼬리 */}
+            <div
+              className="absolute -bottom-[7px] left-7 w-3 h-3 transform rotate-45 bg-white"
+              style={{
+                borderRight: `2px solid ${CARD_PURPLE_SOFT}`,
+                borderBottom: `2px solid ${CARD_PURPLE_SOFT}`,
+              }}
+              aria-hidden
+            />
+          </div>
+
+          {/* 선택지 */}
+          <div className="flex flex-col gap-2 mt-1">
             {q.options.map((opt, i) => {
               const isSelected = answers[safeCur] === i;
               const isAnimating = selectedAnim === i;
@@ -729,29 +819,57 @@ function OtakuTypeV2PageContent() {
                 <button
                   key={i}
                   onClick={() => select(i)}
-                  className="text-left px-4 py-3 rounded-lg border text-sm leading-relaxed"
+                  className="text-left px-3 py-2.5 rounded-lg flex items-center gap-2.5"
                   style={{
-                    ...(isSelected
-                      ? { borderColor: "#534AB7", background: "#EDE9FE", color: "#3730A3" }
-                      : { borderColor: "rgba(0,0,0,0.12)", background: "#fff", color: "#2c2c2a" }),
-                    transform: isAnimating ? "scale(1.025)" : "scale(1)",
-                    transition: "transform 0.15s ease, background 0.12s ease, border-color 0.12s ease, color 0.12s ease",
+                    border: `2px solid ${isSelected ? CARD_PURPLE_DARK : CARD_PURPLE_SOFT}`,
+                    background: isSelected ? CARD_LAVENDER : "#fff",
+                    color: CARD_PURPLE_DARK,
+                    transform: isAnimating ? "scale(1.03)" : "scale(1)",
+                    transition: "all 0.15s ease",
+                    boxShadow: isSelected
+                      ? `0 4px 12px ${CARD_PURPLE_SOFT}66`
+                      : "0 1px 0 rgba(0,0,0,0.02)",
                   }}
                 >
-                  <span className="font-medium mr-2" style={{ color: "#534AB7" }}>{opt.label}</span>
-                  {opt.text}
+                  <span
+                    className="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-[12px] font-extrabold text-white shadow-sm"
+                    style={{
+                      background: isSelected ? CARD_PIXEL_PINK : CARD_PURPLE_MID,
+                      transition: "background 0.15s ease",
+                    }}
+                  >
+                    {opt.label}
+                  </span>
+                  <span className="flex-1 text-[13.5px] leading-snug font-medium">
+                    {opt.text}
+                  </span>
+                  {isSelected && (
+                    <span
+                      className="flex-shrink-0 text-[14px] font-extrabold"
+                      style={{ color: CARD_PIXEL_PINK }}
+                      aria-hidden
+                    >
+                      ✓
+                    </span>
+                  )}
                 </button>
               );
             })}
           </div>
 
-          <div className="flex justify-between items-center mt-5">
+          {/* 네비게이션 */}
+          <div className="flex justify-between items-center mt-1 pt-1">
             <button
               onClick={() => setCur((c) => Math.max(0, c - 1))}
               disabled={safeCur === 0}
-              className="px-5 py-2.5 border rounded-lg text-sm bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              className="px-4 py-2.5 rounded-lg text-[13px] font-semibold transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              style={{
+                background: "#fff",
+                color: CARD_PURPLE_MID,
+                border: `2px solid ${CARD_PURPLE_SOFT}`,
+              }}
             >
-              ← 이전
+              ← 이전 화
             </button>
             <button
               onClick={() => {
@@ -762,13 +880,28 @@ function OtakuTypeV2PageContent() {
                 }
               }}
               disabled={answers[safeCur] === null}
-              className="px-5 py-2.5 border rounded-lg text-sm font-medium text-white shadow-sm hover:shadow-md transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-              style={{ background: "#534AB7", borderColor: "#534AB7" }}
+              className="px-5 py-2.5 rounded-lg text-[13px] font-bold text-white shadow-sm hover:shadow-md transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              style={{
+                background: safeCur === QUESTIONS.length - 1
+                  ? `linear-gradient(135deg, ${CARD_PURPLE_DARK} 0%, ${CARD_PIXEL_PINK} 100%)`
+                  : CARD_PURPLE_DARK,
+                border: "none",
+              }}
             >
-              {safeCur === QUESTIONS.length - 1 ? "결과 보기 →" : "다음 →"}
+              {safeCur === QUESTIONS.length - 1 ? "엔딩 보기 ✨" : "다음 화 →"}
             </button>
           </div>
         </div>
+      </div>
+
+      {/* 푸터 안내 */}
+      <div
+        className="text-center text-[10.5px] flex items-center justify-center gap-1.5"
+        style={{ color: CARD_PURPLE_MID }}
+      >
+        <span aria-hidden>✦</span>
+        <span>솔직하게 골라야 진짜 내 덕후 유형이 나와요</span>
+        <span aria-hidden>✦</span>
       </div>
     </main>
   );
