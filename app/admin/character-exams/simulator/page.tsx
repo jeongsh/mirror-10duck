@@ -34,20 +34,19 @@ export default function SimulatorPage() {
       .eq("status", "PUBLISHED")
       .limit(10);
 
-    const results: CharacterSearchResult[] = (data ?? []).map((row: {
-      id: string;
-      name: string;
-      tags: string[];
-      work_id: string;
-      official_works: { title: string; genres: string[] } | null;
-    }) => ({
-      id: row.id,
-      name: row.name,
-      tags: row.tags ?? [],
-      work_id: row.work_id,
-      work_title: row.official_works?.title ?? "알 수 없음",
-      work_genres: row.official_works?.genres ?? [],
-    }));
+    const results: CharacterSearchResult[] = (data ?? []).map((row) => {
+      const work = Array.isArray(row.official_works)
+        ? row.official_works[0]
+        : row.official_works;
+      return {
+        id: row.id,
+        name: row.name,
+        tags: row.tags ?? [],
+        work_id: row.work_id,
+        work_title: work?.title ?? "알 수 없음",
+        work_genres: work?.genres ?? [],
+      };
+    });
     setSearchResults(results);
     setSearching(false);
   };
