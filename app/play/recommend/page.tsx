@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -25,64 +25,38 @@ import {
   Sparkles,
   Stethoscope,
 } from "lucide-react";
+import PrescriptionResultCard from "@/components/play/clinic/PrescriptionResultCard";
+import ClinicWorkPicker from "@/components/play/clinic/ClinicWorkPicker";
+import type {
+  AnimeCandidate,
+  Axis,
+  ClinicCopyResult,
+  ClinicSharePayload,
+  DepartmentId,
+  DepartmentInfo,
+  Prescription,
+  Question,
+  RetryAction,
+  Step,
+} from "@/lib/clinic/types";
+import {
+  LOADING_LINES,
+  applyLikedDislikedToScores,
+  buildPrescriptions,
+  decodeClinicPayload,
+  encodeClinicPayload,
+  getAvoidText,
+  getDiagnosis,
+  getImmersionScore,
+  initialScores,
+  addAxes,
+} from "@/lib/clinic/scoring";
+import { fetchClinicCopy } from "@/lib/clinic/fetchCopy";
+import { buildTemplateCopy, enrichCopyWithAi, mergeCopyIntoPrescriptions } from "@/lib/clinic/templateCopy";
+import { FALLBACK_CANDIDATES } from "@/lib/clinic/workMapping";
+import { buildCoverMap, getClinicCandidates } from "@/lib/supabase/clinicCandidates";
 import { getWorkCoversByTitles } from "@/lib/supabase/animeRecommendations";
-import { mapUrlsToDataUrls, resolveImageSrc } from "@/lib/imageDataUrl";
-
-type DepartmentId = "heal" | "after" | "battle" | "oshi" | "safe";
-type Step = "intro" | "department" | "questions" | "loading" | "result";
-type RetryAction = "lighter" | "stronger" | "oshi" | "safe";
-
-type Axis =
-  | "heal"
-  | "after"
-  | "battle"
-  | "character"
-  | "relationship"
-  | "world"
-  | "mystery"
-  | "light";
-
-type Question = {
-  id: string;
-  eyebrow: string;
-  text: string;
-  options: Array<{
-    id: string;
-    label: string;
-    description: string;
-    axes: Partial<Record<Axis, number>>;
-    keywords: string[];
-  }>;
-};
-
-type AnimeCandidate = {
-  title: string;
-  tags: string[];
-  length: "short" | "medium" | "long";
-  complete: boolean;
-  intro: "fast" | "slow" | "medium";
-  riskTags: string[];
-  reason: string;
-};
-
-type Prescription = {
-  title: string;
-  category: "즉효약" | "장기복용약" | "응급처방" | "고위험 고효능";
-  effect: string;
-  dosage: string;
-  sideEffect: string;
-  matchedTags: string[];
-  warning?: string;
-};
-
-type ClinicSharePayload = {
-  departmentId: DepartmentId;
-  answers: Record<string, string>;
-  allergies: string[];
-  liked: string;
-  disliked: string;
-  retry?: RetryAction;
-};
+import { mapUrlsToDataUrls } from "@/lib/imageDataUrl";
 
 const DEPARTMENTS: Array<{
   id: DepartmentId;
@@ -436,681 +410,19 @@ const ALLERGY_OPTIONS = [
   "지나친 고구마 전개",
 ];
 
-const CANDIDATES: AnimeCandidate[] = [
-  {
-    title: "스파이 패밀리",
-    tags: ["일상", "코미디", "유사가족", "액션"],
-    length: "medium",
-    complete: false,
-    intro: "fast",
-    riskTags: ["미완결"],
-    reason: "가족 코미디와 가벼운 액션이 같이 들어간 안전한 응급처방입니다.",
-  },
-  {
-    title: "봇치 더 록!",
-    tags: ["일상", "코미디", "성장", "학원", "음악"],
-    length: "short",
-    complete: true,
-    intro: "fast",
-    riskTags: [],
-    reason: "개그와 성장선이 같이 있어 회복과 응원을 동시에 줍니다.",
-  },
-  {
-    title: "하이큐!!",
-    tags: ["스포츠", "성장", "라이벌", "유사가족"],
-    length: "long",
-    complete: true,
-    intro: "medium",
-    riskTags: ["장편"],
-    reason: "라이벌 인정과 팀 성장 카타르시스가 누적형으로 강합니다.",
-  },
-  {
-    title: "모브사이코 100",
-    tags: ["이능력", "액션", "성장", "코미디", "사제관계"],
-    length: "medium",
-    complete: true,
-    intro: "fast",
-    riskTags: [],
-    reason: "초능력 연출과 캐릭터 성장이 함께 작동하는 균형형 처방입니다.",
-  },
-  {
-    title: "문호 스트레이독스",
-    tags: ["이능력", "액션", "캐릭터성", "구원서사", "미스터리"],
-    length: "long",
-    complete: false,
-    intro: "fast",
-    riskTags: ["미완결", "장편"],
-    reason: "개성 강한 캐릭터와 능력자 배틀로 최애 발생 가능성이 높습니다.",
-  },
-  {
-    title: "86 -에이티식스-",
-    tags: ["디스토피아", "정치극", "구원서사", "SF", "후유증"],
-    length: "medium",
-    complete: true,
-    intro: "medium",
-    riskTags: ["잔인함", "무거운 감정선"],
-    reason: "세계관 압박과 관계성 후유증이 강하게 남는 처방입니다.",
-  },
-  {
-    title: "강철의 연금술사 BROTHERHOOD",
-    tags: ["판타지", "액션", "성장", "정치극", "유사가족"],
-    length: "long",
-    complete: true,
-    intro: "fast",
-    riskTags: ["장편"],
-    reason: "세계관, 액션, 가족 서사, 완결성이 고르게 강합니다.",
-  },
-  {
-    title: "슈타인즈 게이트",
-    tags: ["SF", "미스터리", "후유증", "느린 전개"],
-    length: "medium",
-    complete: true,
-    intro: "slow",
-    riskTags: ["너무 느린 초반"],
-    reason: "초반은 느리지만 후반 약효가 강한 지연성 처방입니다.",
-  },
-  {
-    title: "카구야 님은 고백받고 싶어",
-    tags: ["로맨스", "코미디", "학원", "캐릭터성"],
-    length: "medium",
-    complete: false,
-    intro: "fast",
-    riskTags: ["미완결"],
-    reason: "로맨스 삽질과 개그 템포가 즉각적으로 작동합니다.",
-  },
-  {
-    title: "바이올렛 에버가든",
-    tags: ["후유증", "성장", "감정선", "일상"],
-    length: "short",
-    complete: true,
-    intro: "medium",
-    riskTags: ["무거운 감정선"],
-    reason: "절제된 감정선과 회복 서사로 조용한 후유증을 남깁니다.",
-  },
-  {
-    title: "진격의 거인",
-    tags: ["액션", "디스토피아", "정치극", "미스터리", "잔인함"],
-    length: "long",
-    complete: true,
-    intro: "fast",
-    riskTags: ["너무 잔인한 장면", "장편"],
-    reason: "세계관, 정치극, 고위험 고효능 성분이 매우 강합니다.",
-  },
-  {
-    title: "일상",
-    tags: ["일상", "코미디", "학원"],
-    length: "medium",
-    complete: true,
-    intro: "fast",
-    riskTags: [],
-    reason: "큰 사건 없이도 뇌를 퇴근시키는 순도 높은 개그 처방입니다.",
-  },
-];
-
-const TAG_AXIS: Record<string, Partial<Record<Axis, number>>> = {
-  일상: { heal: 10, light: 8 },
-  코미디: { light: 12, heal: 6 },
-  학원: { heal: 4, light: 4, relationship: 3 },
-  로맨스: { character: 5, relationship: 5, light: 3 },
-  성장: { battle: 4, after: 4, character: 4 },
-  라이벌: { relationship: 10, battle: 8 },
-  사제관계: { relationship: 8, character: 5 },
-  유사가족: { relationship: 10, heal: 6 },
-  구원서사: { relationship: 12, after: 10, character: 5 },
-  이능력: { battle: 10, world: 4 },
-  액션: { battle: 12 },
-  판타지: { world: 10, battle: 4 },
-  정치극: { world: 12, mystery: 6 },
-  디스토피아: { world: 10, after: 8 },
-  SF: { world: 10, mystery: 8 },
-  추리: { mystery: 12 },
-  미스터리: { mystery: 12, world: 4 },
-  후유증: { after: 14 },
-  감정선: { after: 12, character: 4 },
-  캐릭터성: { character: 12 },
-  스포츠: { battle: 8, relationship: 8 },
-  음악: { heal: 4, relationship: 4 },
-};
-
-const TAG_COPY: Record<string, string> = {
-  액션: "전투 도파민",
-  이능력: "능력자 배틀",
-  성장: "각성 누적형",
-  일상: "저자극 회복식",
-  코미디: "뇌 퇴근제",
-  학원: "관계성 밀집구역",
-  구원서사: "관계성 진통제",
-  유사가족: "소속감 보충제",
-  라이벌: "인정 욕구 자극제",
-  정치극: "권력 구조 해부",
-  디스토피아: "멘탈 압박식",
-  SF: "논리형 과몰입",
-  미스터리: "떡밥 대사제",
-  후유증: "천장 응시 성분",
-  감정선: "조용한 멘탈 절개",
-  캐릭터성: "최애 발생 성분",
-  스포츠: "팀 성장 도파민",
-  로맨스: "설렘 보충제",
-};
-
-const EFFECT_COPY = [
-  "취향 반응이 빠르게 올라오는 성분이 확인됩니다.",
-  "지금 상태에서 무난한 추천보다 약효가 선명할 가능성이 높습니다.",
-  "선택한 문진 항목과 작품 태그가 여러 지점에서 겹칩니다.",
-  "과몰입 수치가 과하게 튀지 않으면서도 충분히 자극을 줍니다.",
-];
-
-const DOSAGE_COPY = [
-  "마음에 드는 캐릭터가 생겨도 즉시 검색하지 마세요. 스포일러는 약효를 망칩니다.",
-  "1화만 보고 자가 판단하지 말고 최소 3화까지 경과를 관찰하세요.",
-  "이어폰을 착용하고 복용하면 특정 장면의 약효가 올라갑니다.",
-  "컨디션이 약한 날에는 연속 복용보다 하루 1~2화 복용을 권장합니다.",
-];
-
-const SIDE_COPY = [
-  "작품보다 캐릭터 프로필을 더 오래 보고 있을 수 있습니다.",
-  "엔딩곡이 며칠 동안 머릿속에서 자동 재생될 수 있습니다.",
-  "관계성 해석글을 찾아보다 시간이 사라질 수 있습니다.",
-  "가벼운 마음으로 시작했다가 원작이나 외전까지 확인할 수 있습니다.",
-];
-
-const LOADING_LINES = [
-  "문진표를 분석 중입니다. 숨겨진 취향이 생각보다 많이 나왔습니다.",
-  "최애 발생 가능성을 검사 중입니다. 위험 수치가 조금 높습니다.",
-  "지뢰 요소를 제거하는 중입니다. 고구마와 열린 결말을 조심스럽게 분리하고 있습니다.",
-  "처방전을 작성 중입니다. 너무 안전한 추천은 약효가 약해 제외했습니다.",
-  "작품 후보를 선별 중입니다. 유명하다는 이유만으로 처방하지 않습니다.",
-  "취향을 해석하는 중입니다. 본인은 부정하실 수 있지만 데이터는 솔직합니다.",
-];
-
-function isDepartmentId(value: string | undefined): value is DepartmentId {
-  return Boolean(value && DEPARTMENTS.some((department) => department.id === value));
-}
-
-function isRetryAction(value: string | undefined): value is RetryAction {
-  return value === "lighter" || value === "stronger" || value === "oshi" || value === "safe";
-}
-
-function encodeClinicPayload(payload: ClinicSharePayload) {
-  const json = JSON.stringify(payload);
-  return btoa(encodeURIComponent(json))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
-}
-
-function decodeClinicPayload(value: string): ClinicSharePayload | null {
-  try {
-    const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
-    const parsed = JSON.parse(decodeURIComponent(atob(padded))) as Partial<ClinicSharePayload>;
-
-    if (!isDepartmentId(parsed.departmentId)) return null;
-
-    return {
-      departmentId: parsed.departmentId,
-      answers: parsed.answers && typeof parsed.answers === "object" ? parsed.answers : {},
-      allergies: Array.isArray(parsed.allergies)
-        ? parsed.allergies.filter((item): item is string => typeof item === "string")
-        : [],
-      liked: typeof parsed.liked === "string" ? parsed.liked : "",
-      disliked: typeof parsed.disliked === "string" ? parsed.disliked : "",
-      retry: isRetryAction(parsed.retry) ? parsed.retry : undefined,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function addAxes(target: Record<Axis, number>, axes: Partial<Record<Axis, number>>, multiplier = 1) {
-  Object.entries(axes).forEach(([axis, value]) => {
-    target[axis as Axis] += (value ?? 0) * multiplier;
-  });
-}
-
-function getTopAxes(scores: Record<Axis, number>) {
-  return (Object.entries(scores) as Array<[Axis, number]>).sort((a, b) => b[1] - a[1]).slice(0, 3);
-}
-
-function getDiagnosis(scores: Record<Axis, number>, allergies: string[]) {
-  const [top] = getTopAxes(scores);
-  const axis = top?.[0] ?? "heal";
-
-  if (allergies.length >= 4) {
-    return {
-      name: "입덕 초기 안전처방형",
-      summary: "좋아하는 것보다 싫은 것을 피해야 만족도가 올라갑니다.",
-      opinion: "알레르기 검사에서 여러 지뢰 성분이 확인되었습니다. 현재는 강한 약효보다 추천 실패를 줄이는 처방이 먼저입니다.",
-    };
-  }
-
-  const map: Record<Axis, { name: string; summary: string; opinion: string }> = {
-    heal: {
-      name: "현실도피성 개그 결핍",
-      summary: "뇌를 잠시 퇴근시킬 처방이 필요합니다.",
-      opinion: "복잡한 세계관이나 무거운 서사보다 즉각적인 웃음과 캐릭터 케미가 필요한 상태입니다.",
-    },
-    light: {
-      name: "저자극 회복 필요형",
-      summary: "큰 사건 없이 웃는 애들이 필요한 상태입니다.",
-      opinion: "현재는 감정선을 깊게 찌르는 작품보다 부담 없이 회복되는 작품이 더 적합합니다.",
-    },
-    after: {
-      name: "후유증 결핍 증후군",
-      summary: "가볍게 보려다 며칠 생각나는 작품이 필요한 상태입니다.",
-      opinion: "무난한 작품만 복용해 감정선 반응이 둔해진 상태입니다. 지금은 보고 나서 잠깐 멍해지는 작품이 필요합니다.",
-    },
-    battle: {
-      name: "배틀뽕 금단증상",
-      summary: "가슴이 웅장해지는 장면 섭취량이 부족합니다.",
-      opinion: "OST, 각성, 작화 폭발, 동료의 외침에 대한 반응성이 높게 나타납니다.",
-    },
-    character: {
-      name: "최애 의존성 과몰입",
-      summary: "추천작보다 위험 인물을 먼저 찾는 상태입니다.",
-      opinion: "작품 전체를 보기 전에 캐릭터 한 명에게 먼저 감기는 경향이 있습니다. 이번 처방에도 위험 인물이 포함되어 있을 수 있습니다.",
-    },
-    relationship: {
-      name: "관계성 중독 의심",
-      summary: "서로를 구원하는 관계에 반복적으로 무너집니다.",
-      opinion: "개별 장르보다 인물 사이의 변화, 인정, 구원에 더 빠르게 반응하는 상태입니다.",
-    },
-    world: {
-      name: "세계관 분석 과다증",
-      summary: "작품을 보는 게 아니라 설정집을 뜯어먹는 중입니다.",
-      opinion: "캐릭터보다 조직도, 설정, 권력 구조가 먼저 눈에 들어오는 상태입니다.",
-    },
-    mystery: {
-      name: "떡밥 추적 과각성",
-      summary: "엔딩 후에도 혼자 해석을 계속합니다.",
-      opinion: "대사 하나를 그냥 넘기지 못하고, 작품이 끝난 뒤에도 뇌가 자체적으로 2차 진료를 시작합니다.",
-    },
-  };
-
-  return map[axis];
-}
-
-function allergyPenalty(candidate: AnimeCandidate, allergies: string[], strict: boolean) {
-  let penalty = 0;
-  const warnings: string[] = [];
-
-  allergies.forEach((allergy) => {
-    const hit =
-      candidate.riskTags.includes(allergy) ||
-      (allergy === "미완결" && !candidate.complete) ||
-      (allergy === "너무 느린 초반" && candidate.intro === "slow") ||
-      (allergy === "열린 결말" && candidate.tags.includes("미스터리")) ||
-      (allergy === "설명만 많은 세계관" && candidate.tags.some((tag) => ["SF", "정치극", "판타지"].includes(tag))) ||
-      (allergy === "너무 잔인한 장면" && candidate.tags.some((tag) => ["잔인함", "디스토피아"].includes(tag)));
-
-    if (hit) {
-      penalty += strict ? 80 : 34;
-      warnings.push(allergy);
-    }
-  });
-
-  return { penalty, warnings };
-}
-
-function buildPrescriptions(
-  scores: Record<Axis, number>,
-  allergies: string[],
-  answers: Record<string, string>,
-  retry?: RetryAction,
-) {
-  const strict = retry === "safe";
-  const adjustedScores = { ...scores };
-
-  if (retry === "lighter") {
-    adjustedScores.heal += 24;
-    adjustedScores.light += 20;
-    adjustedScores.after -= 12;
-  }
-  if (retry === "stronger") {
-    adjustedScores.after += 18;
-    adjustedScores.battle += 12;
-    adjustedScores.world += 8;
-  }
-  if (retry === "oshi") {
-    adjustedScores.character += 24;
-    adjustedScores.relationship += 16;
-  }
-
-  const lengthAnswer = answers.length;
-
-  const ranked = CANDIDATES.map((candidate) => {
-    let score = 0;
-    const matchedTags: string[] = [];
-
-    candidate.tags.forEach((tag) => {
-      const tagAxes = TAG_AXIS[tag] ?? {};
-      const before = score;
-      Object.entries(tagAxes).forEach(([axis, weight]) => {
-        score += (adjustedScores[axis as Axis] ?? 0) * (weight ?? 0);
-      });
-      if (score > before) matchedTags.push(tag);
-    });
-
-    if (lengthAnswer === "short" && candidate.length === "short") score += 320;
-    if (lengthAnswer === "short" && candidate.length === "long") score -= 260;
-    if (lengthAnswer === "medium" && candidate.length !== "long") score += 160;
-    if (lengthAnswer === "long" && candidate.length === "long") score += 220;
-    if (lengthAnswer === "complete" && candidate.complete) score += 260;
-    if (lengthAnswer === "complete" && !candidate.complete) score -= 500;
-    if (answers.pace === "drop" && candidate.intro === "fast") score += 180;
-    if (answers.pace === "drop" && candidate.intro === "slow") score -= 260;
-    if (answers.pace === "wait" && candidate.intro === "slow") score += 170;
-
-    const allergy = allergyPenalty(candidate, allergies, strict);
-    score -= allergy.penalty;
-
-    return { candidate, score, warnings: allergy.warnings, matchedTags: [...new Set(matchedTags)] };
-  }).sort((a, b) => b.score - a.score);
-
-  return ranked.slice(0, 3).map((item, index): Prescription => {
-    const hasWarning = item.warnings.length > 0;
-    const category: Prescription["category"] =
-      hasWarning && item.score > 900
-        ? "고위험 고효능"
-        : index === 0
-          ? item.candidate.intro === "slow"
-            ? "장기복용약"
-            : "즉효약"
-          : item.candidate.tags.some((tag) => ["일상", "코미디"].includes(tag))
-            ? "응급처방"
-            : item.candidate.length === "long" || item.candidate.intro === "slow"
-              ? "장기복용약"
-              : "즉효약";
-
-    const copyTags = item.matchedTags.slice(0, 3).map((tag) => TAG_COPY[tag] ?? tag);
-
-    return {
-      title: item.candidate.title,
-      category,
-      matchedTags: copyTags,
-      effect: `${item.candidate.reason} ${EFFECT_COPY[index % EFFECT_COPY.length]}`,
-      dosage: DOSAGE_COPY[(index + item.matchedTags.length) % DOSAGE_COPY.length],
-      sideEffect: SIDE_COPY[(index + allergies.length) % SIDE_COPY.length],
-      warning: hasWarning
-        ? `${item.warnings.join(", ")} 성분이 감지되어 주의약으로 분류했습니다. 약효는 있지만 현재 상태에서는 용량 조절이 필요합니다.`
-        : undefined,
-    };
-  });
-}
-
-function getAvoidText(allergies: string[]) {
-  if (allergies.length === 0) {
-    return "특별한 금지약은 확인되지 않았습니다. 다만 검색창에 캐릭터 이름을 입력하는 행동은 모든 처방에서 주의가 필요합니다.";
-  }
-
-  const primary = allergies.slice(0, 3).join(", ");
-  return `${primary} 성분은 이번 처방에서 강하게 감량했습니다. 유명작이라도 지뢰 성분이 강하면 우선 제외합니다.`;
-}
-
-function getImmersionScore(scores: Record<Axis, number>, allergies: string[]) {
-  const total = Object.values(scores).reduce((sum, value) => sum + Math.max(0, value), 0);
-  return Math.min(98, Math.max(42, Math.round(total / 6) + allergies.length * 3));
-}
-
-function initialScores(): Record<Axis, number> {
-  return {
-    heal: 0,
-    after: 0,
-    battle: 0,
-    character: 0,
-    relationship: 0,
-    world: 0,
-    mystery: 0,
-    light: 0,
-  };
-}
-
-function PrescriptionCover({
-  title,
-  coverUrl,
-  imageDataUrls,
-  className = "",
-}: {
-  title: string;
-  coverUrl?: string;
-  imageDataUrls: Record<string, string>;
-  className?: string;
-}) {
-  const src = resolveImageSrc(coverUrl, imageDataUrls);
-
-  return (
-    <div className={`overflow-hidden bg-gray-100 ${className}`}>
-      {src ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt={title} draggable={false} className="h-full w-full object-cover" />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center">
-          <Film className="h-7 w-7 text-gray-400" />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ClinicStamp() {
-  return (
-    <div className="relative flex h-[68px] w-[68px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-dashed border-indigo-300 text-indigo-400">
-      <div className="flex flex-col items-center justify-center text-center leading-none">
-        <span className="text-[7px] font-black tracking-tight">과몰입 클리닉</span>
-        <PawPrint className="my-1 h-5 w-5" />
-        <span className="text-[7px] font-black tracking-tight">처방 완료</span>
-      </div>
-    </div>
-  );
-}
-
-function PrescriptionResultCard({
-  cardRef,
-  diagnosis,
-  prescriptions,
-  immersionScore,
-  allergies,
-  coverByTitle,
-  imageDataUrls,
-}: {
-  cardRef: React.RefObject<HTMLDivElement | null>;
-  diagnosis: { name: string; summary: string; opinion: string };
-  prescriptions: Prescription[];
-  immersionScore: number;
-  allergies: string[];
-  coverByTitle: Record<string, string>;
-  imageDataUrls: Record<string, string>;
-}) {
-  const now = new Date();
-  const yy = String(now.getFullYear()).slice(2);
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const dd = String(now.getDate()).padStart(2, "0");
-  const prescriptionDate = `${now.getFullYear()}.${mm}.${dd}`;
-  const prescriptionNo = `A-${yy}${mm}${dd}`;
-
-  return (
-    <div
-      ref={cardRef}
-      className="w-full max-w-[580px] overflow-hidden rounded-[28px] border border-indigo-100 shadow-[0_18px_50px_rgba(99,102,241,0.18)]"
-      style={{
-        background:
-          "radial-gradient(120% 60% at 80% -10%, #e6ebff 0%, transparent 55%), linear-gradient(180deg, #eef1fe 0%, #f6f4ff 38%, #ffffff 100%)",
-      }}
-    >
-      {/* 히어로 */}
-      <div className="relative px-5 pt-6 pb-3">
-        <div className="absolute right-4 top-5 h-24 w-24 rounded-full bg-indigo-200/40 blur-2xl" aria-hidden />
-        <div className="relative flex items-start gap-3">
-          <div className="min-w-0 flex-1">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-100 bg-white px-3 py-1 text-[11px] font-black text-indigo-500 shadow-sm">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              진단 완료!
-            </span>
-            <p className="mt-3 text-[13px] font-black text-gray-500">당신의 진단 결과</p>
-            <h2 className="mt-1 text-2xl font-black leading-8 text-indigo-600">
-              “{diagnosis.name}”
-            </h2>
-            <p className="mt-3 text-[13px] font-bold leading-6 text-gray-600">
-              {diagnosis.summary}
-              <br />
-              당신만을 위한 애니 처방전을 준비했어요.
-            </p>
-          </div>
-
-          {/* 일러스트 영역 (나루 원장) */}
-          <div className="relative hidden h-[150px] w-[120px] shrink-0 sm:block">
-            <div className="absolute right-0 top-1 flex h-[110px] w-[110px] items-center justify-center rounded-full border border-white bg-white/70 shadow-sm">
-              <div className="flex h-[84px] w-[84px] flex-col items-center justify-center rounded-full bg-indigo-100 text-indigo-500">
-                <Stethoscope className="h-8 w-8" />
-                <span className="mt-1 text-[10px] font-black">나루 원장</span>
-              </div>
-            </div>
-            <div className="absolute bottom-0 left-0 w-[88px] rotate-[-6deg] rounded-xl border border-indigo-100 bg-white p-2 shadow-sm">
-              <p className="text-[11px] font-black text-indigo-500">Rx</p>
-              <p className="mt-0.5 text-[9px] font-bold leading-3 text-gray-500">
-                딱 맞는
-                <br />
-                이야기를
-                <br />
-                처방해요.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 처방전 본체 */}
-      <div className="mx-4 mb-4 rounded-3xl border border-indigo-100 bg-white px-4 py-5 shadow-sm">
-        <div className="flex items-center justify-center gap-2">
-          <Leaf className="h-4 w-4 -scale-x-100 text-indigo-300" />
-          <h3 className="text-xl font-black tracking-[0.12em] text-indigo-600">애니 처방전</h3>
-          <Leaf className="h-4 w-4 text-indigo-300" />
-        </div>
-
-        {/* 환자 정보 */}
-        <div className="mt-4 flex items-start gap-3 rounded-2xl bg-indigo-50/60 p-3">
-          <div className="grid flex-1 grid-cols-2 gap-x-3 gap-y-2 text-[11px] font-bold text-gray-600">
-            <p>
-              <span className="mr-1.5 rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-black text-indigo-500">
-                환자명
-              </span>
-              과몰입 님
-            </p>
-            <p>
-              <span className="mr-1.5 rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-black text-indigo-500">
-                진단명
-              </span>
-              {diagnosis.name}
-            </p>
-            <p>
-              <span className="mr-1.5 rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-black text-indigo-500">
-                처방 일자
-              </span>
-              {prescriptionDate}
-            </p>
-            <p>
-              <span className="mr-1.5 rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-black text-indigo-500">
-                처방 번호
-              </span>
-              {prescriptionNo}
-            </p>
-          </div>
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-dashed border-indigo-200 text-indigo-300">
-            <PawPrint className="h-6 w-6" />
-          </div>
-        </div>
-
-        {/* 처방 목록 */}
-        <div className="mt-3 flex flex-col gap-2.5">
-          {prescriptions.map((item) => (
-            <div
-              key={item.title}
-              className="grid grid-cols-[52px_1fr_96px] gap-2.5 rounded-2xl border border-indigo-50 bg-white p-2.5 shadow-[0_2px_8px_rgba(99,102,241,0.06)]"
-            >
-              <PrescriptionCover
-                title={item.title}
-                coverUrl={coverByTitle[item.title]}
-                imageDataUrls={imageDataUrls}
-                className="h-[68px] w-[52px] rounded-lg border border-indigo-100"
-              />
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-1">
-                  <h4 className="text-[15px] font-black text-gray-900">{item.title}</h4>
-                </div>
-                {item.matchedTags.length > 0 && (
-                  <p className="mt-0.5 text-[10px] font-bold text-indigo-400">
-                    {item.matchedTags.slice(0, 2).join(" · ")}
-                  </p>
-                )}
-                <p className="mt-1 line-clamp-2 text-[11px] font-bold leading-4 text-gray-500">
-                  {item.effect}
-                </p>
-              </div>
-              <div className="border-l border-indigo-50 pl-2.5">
-                <p className="text-[10px] font-black text-indigo-500">복용법</p>
-                <div className="mt-1 flex items-start gap-1">
-                  <Pill className="mt-0.5 h-3.5 w-3.5 shrink-0 text-indigo-400" />
-                  <p className="text-[10px] font-bold leading-4 text-gray-600">{item.dosage}</p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* 주의사항 + 도장/서명 */}
-        <div className="mt-4 flex items-end justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="flex items-center gap-1.5 text-[12px] font-black text-indigo-500">
-              <HeartPulse className="h-3.5 w-3.5" />
-              주의사항
-            </p>
-            <p className="mt-1.5 text-[11px] font-bold leading-5 text-gray-500">
-              {getAvoidText(allergies)}
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-col items-center gap-1">
-            <ClinicStamp />
-            <span className="text-[13px] italic text-indigo-400" style={{ fontFamily: "cursive" }}>
-              나루
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* 요약 스탯 */}
-      <div className="mx-4 mb-3 grid grid-cols-4 gap-2 rounded-2xl border border-indigo-100 bg-white px-2 py-3 shadow-sm">
-        {[
-          { Icon: Clock, label: "총 추천 시간", value: "약 34시간" },
-          { Icon: HeartPulse, label: "몰입도 상승", value: `+${immersionScore}%` },
-          { Icon: Pill, label: "처방 애니", value: `${prescriptions.length}종` },
-          { Icon: ClipboardList, label: "맞춤 처방 완료", value: "GOOD!" },
-        ].map(({ Icon, label, value }) => (
-          <div key={label} className="flex min-w-0 flex-col items-center gap-1 text-center">
-            <Icon className="h-4 w-4 text-indigo-400" />
-            <p className="text-[9px] font-black leading-3 text-gray-400">{label}</p>
-            <p className="text-[11px] font-black text-indigo-500">{value}</p>
-          </div>
-        ))}
-      </div>
-
-      <p className="px-5 pb-5 text-center text-[11px] font-bold text-gray-400">
-        나만의 애니 처방전, 소중한 사람에게도 공유해보세요 ✨
-      </p>
-    </div>
-  );
-}
-
 export default function AnimeRecommendPage() {
   const [step, setStep] = useState<Step>("intro");
   const [departmentId, setDepartmentId] = useState<DepartmentId>("heal");
   const [questionIndex, setQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [allergies, setAllergies] = useState<string[]>([]);
-  const [liked, setLiked] = useState("");
-  const [disliked, setDisliked] = useState("");
+  const [liked, setLiked] = useState<string[]>([]);
+  const [disliked, setDisliked] = useState<string[]>([]);
   const [retry, setRetry] = useState<RetryAction | undefined>();
   const [copied, setCopied] = useState(false);
   const [loadingLineIndex, setLoadingLineIndex] = useState(0);
+  const [candidates, setCandidates] = useState<AnimeCandidate[]>(FALLBACK_CANDIDATES);
+  const [copyResult, setCopyResult] = useState<ClinicCopyResult | null>(null);
   const [coverByTitle, setCoverByTitle] = useState<Record<string, string>>({});
   const [imageDataUrls, setImageDataUrls] = useState<Record<string, string>>({});
   const [imagesReady, setImagesReady] = useState(false);
@@ -1133,23 +445,18 @@ export default function AnimeRecommendPage() {
       if (option) addAxes(next, option.axes);
     });
 
-    const likedText = liked.toLowerCase();
-    const dislikedText = disliked.toLowerCase();
-    CANDIDATES.forEach((candidate) => {
-      const title = candidate.title.toLowerCase();
-      if (likedText.includes(title)) {
-        candidate.tags.forEach((tag) => addAxes(next, TAG_AXIS[tag] ?? {}, 0.35));
-      }
-      if (dislikedText.includes(title)) {
-        candidate.tags.forEach((tag) => addAxes(next, TAG_AXIS[tag] ?? {}, -0.18));
-      }
-    });
-
-    return next;
-  }, [answers, department.axes, disliked, liked]);
+    return applyLikedDislikedToScores(next, candidates, liked, disliked);
+  }, [answers, candidates, department.axes, disliked, liked]);
 
   const diagnosis = useMemo(() => getDiagnosis(scores, allergies), [allergies, scores]);
-  const prescriptions = useMemo(() => buildPrescriptions(scores, allergies, answers, retry), [allergies, answers, retry, scores]);
+  const prescriptions = useMemo(
+    () => buildPrescriptions(candidates, scores, allergies, answers, retry),
+    [allergies, answers, candidates, retry, scores],
+  );
+  const displayPrescriptions = useMemo(
+    () => mergeCopyIntoPrescriptions(prescriptions, copyResult),
+    [copyResult, prescriptions],
+  );
   const immersionScore = useMemo(() => getImmersionScore(scores, allergies), [allergies, scores]);
   const keywords = useMemo(() => {
     const selectedKeywords = QUESTIONS.flatMap((question) => {
@@ -1173,8 +480,18 @@ export default function AnimeRecommendPage() {
   );
 
   useEffect(() => {
-    void getWorkCoversByTitles(CANDIDATES.map((candidate) => candidate.title)).then(setCoverByTitle);
+    void getClinicCandidates().then(setCandidates);
   }, []);
+
+  useEffect(() => {
+    const baseMap = buildCoverMap(candidates);
+    const missing = prescriptions.map((item) => item.title).filter((title) => !baseMap[title]);
+    if (!missing.length) {
+      setCoverByTitle(baseMap);
+      return;
+    }
+    void getWorkCoversByTitles(missing).then((extra) => setCoverByTitle({ ...baseMap, ...extra }));
+  }, [candidates, prescriptions]);
 
   useEffect(() => {
     const urls = prescriptions
@@ -1222,15 +539,43 @@ export default function AnimeRecommendPage() {
     const interval = window.setInterval(() => {
       setLoadingLineIndex((prev) => (prev + 1) % LOADING_LINES.length);
     }, 650);
-    const timeout = window.setTimeout(() => {
+
+    let cancelled = false;
+    const template = buildTemplateCopy(diagnosis, prescriptions, allergies, immersionScore);
+
+    // 최소 로딩 시간과 AI 응답(최대 대기 6초)을 함께 기다린 뒤 결과로 전환한다.
+    const minDelay = new Promise<void>((resolve) => window.setTimeout(resolve, 1200));
+    const copyPromise = fetchClinicCopy({
+      departmentName: department.name,
+      diagnosis,
+      prescriptions,
+      allergies,
+      keywords,
+      immersionScore,
+    }).catch(() => null);
+    const cappedCopy = Promise.race([
+      copyPromise,
+      new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 6000)),
+    ]);
+
+    void Promise.all([minDelay, cappedCopy]).then(([, ai]) => {
+      if (cancelled) return;
+      setCopyResult(enrichCopyWithAi(template, ai));
       setStep("result");
-    }, 2100);
+    });
 
     return () => {
+      cancelled = true;
       window.clearInterval(interval);
-      window.clearTimeout(timeout);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
+
+  // 공유 링크로 결과에 바로 진입하면 로딩 단계를 거치지 않으므로 템플릿 카피를 채워준다.
+  useEffect(() => {
+    if (step !== "result" || copyResult) return;
+    setCopyResult(buildTemplateCopy(diagnosis, prescriptions, allergies, immersionScore));
+  }, [step, copyResult, diagnosis, prescriptions, allergies, immersionScore]);
 
   useEffect(() => {
     if (step !== "result") return;
@@ -1241,9 +586,10 @@ export default function AnimeRecommendPage() {
         JSON.stringify({
           savedAt: new Date().toISOString(),
           diagnosis,
-          prescriptions,
+          prescriptions: displayPrescriptions,
           keywords,
           immersionScore,
+          copyResult,
           payload: currentPayload,
         }),
       );
@@ -1257,7 +603,7 @@ export default function AnimeRecommendPage() {
     } catch {
       // URL sharing is an enhancement; the rendered result remains valid without it.
     }
-  }, [currentPayload, diagnosis, immersionScore, keywords, prescriptions, step]);
+  }, [copyResult, currentPayload, diagnosis, displayPrescriptions, immersionScore, keywords, step]);
 
   const reset = () => {
     setStep("intro");
@@ -1265,9 +611,10 @@ export default function AnimeRecommendPage() {
     setQuestionIndex(0);
     setAnswers({});
     setAllergies([]);
-    setLiked("");
-    setDisliked("");
+    setLiked([]);
+    setDisliked([]);
     setRetry(undefined);
+    setCopyResult(null);
     setCopied(false);
     window.history.replaceState(null, "", "/play/recommend");
   };
@@ -1284,16 +631,23 @@ export default function AnimeRecommendPage() {
     setStep("loading");
   };
 
-  const shareText = `[과몰입 클리닉 진단 결과]\n\n진단명: ${diagnosis.name}\n요약: ${diagnosis.summary}\n처방 작품: ${prescriptions
-    .map((item) => item.title)
-    .join(", ")}\n주의사항: ${getAvoidText(allergies)}\n\n내 과몰입 진단 받기`;
+  const shareText = `[과몰입 클리닉 진단 결과]
+
+진단명: ${diagnosis.name}
+과몰입 수치: ${immersionScore}/100
+${copyResult?.shareSummary ?? diagnosis.summary}
+키워드: ${keywords.join(", ")}
+처방 작품: ${displayPrescriptions.map((item) => item.title).join(", ")}
+주의사항: ${getAvoidText(allergies)}
+
+나도 진단 받기 → ${typeof window !== "undefined" ? window.location.origin : ""}/play/recommend`;
 
   const handleDownload = async () => {
     const el = resultRef.current;
     if (!el) return;
     setBusy(true);
     try {
-      const urls = prescriptions
+      const urls = displayPrescriptions
         .map((item) => coverByTitle[item.title])
         .filter((url): url is string => Boolean(url));
 
@@ -1504,6 +858,9 @@ export default function AnimeRecommendPage() {
               <p className="mt-1 text-sm font-black text-gray-500">애니 처방전 발급소</p>
               <p className="mt-4 max-w-md text-[15px] font-bold leading-7 text-gray-700">
                 나루 원장과 짧게 상담하면 지금의 몰입 상태를 진단하고, 바로 볼 수 있는 애니 처방전을 발급해드려요.
+              </p>
+              <p className="mt-3 max-w-md text-xs font-bold leading-5 text-gray-500">
+                본 서비스는 엔터테인먼트 목적의 취향 진단입니다. 실제 의학적·정신건강 상담을 대체하지 않습니다.
               </p>
 
               <div className="mt-5 grid gap-2 sm:max-w-md">
@@ -1787,29 +1144,21 @@ export default function AnimeRecommendPage() {
                 <section className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
                   <h3 className="text-sm font-black text-gray-950">최근 감상 기록</h3>
                   <p className="mt-1 text-xs leading-5 text-gray-600">
-                    작품명은 쉼표로 구분해 직접 입력할 수 있습니다. 등록 후보명과 일치하면 태그 신호로 반영합니다.
+                    작품을 검색해 추가하면 취향 태그에 반영됩니다. 모르는 경우 건너뛰어도 됩니다.
                   </p>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    <label className="block">
-                      <span className="text-xs font-black text-gray-700">최근 재밌게 본 작품</span>
-                      <textarea
-                        value={liked}
-                        onChange={(event) => setLiked(event.target.value)}
-                        rows={2}
-                        placeholder="예: 모브사이코 100, 하이큐!!"
-                        className="mt-1 w-full resize-none rounded-lg border border-gray-200 bg-white p-2.5 text-sm outline-none focus:border-gray-900"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="text-xs font-black text-gray-700">최근 별로였던 작품</span>
-                      <textarea
-                        value={disliked}
-                        onChange={(event) => setDisliked(event.target.value)}
-                        rows={2}
-                        placeholder="예: 슈타인즈 게이트"
-                        className="mt-1 w-full resize-none rounded-lg border border-gray-200 bg-white p-2.5 text-sm outline-none focus:border-gray-900"
-                      />
-                    </label>
+                    <ClinicWorkPicker
+                      label="최근 재밌게 본 작품"
+                      values={liked}
+                      onChange={setLiked}
+                      placeholder="예: 모브사이코 100"
+                    />
+                    <ClinicWorkPicker
+                      label="최근 별로였던 작품"
+                      values={disliked}
+                      onChange={setDisliked}
+                      placeholder="예: 슈타인즈 게이트"
+                    />
                   </div>
                 </section>
 
@@ -1896,10 +1245,13 @@ export default function AnimeRecommendPage() {
         <section className="flex flex-col items-center gap-4">
           <PrescriptionResultCard
             cardRef={resultRef}
+            department={department}
             diagnosis={diagnosis}
-            prescriptions={prescriptions}
+            prescriptions={displayPrescriptions}
+            keywords={keywords}
             immersionScore={immersionScore}
-            allergies={allergies}
+            avoidText={getAvoidText(allergies)}
+            copyResult={copyResult}
             coverByTitle={coverByTitle}
             imageDataUrls={imageDataUrls}
           />
