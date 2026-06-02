@@ -246,13 +246,6 @@ function OtakuTypeV3Content() {
 
   const { shown, done: typingDone } = useTypewriter(dialogue);
 
-  // 현재 표시할 캐릭터 이미지 결정
-  const charImage = (() => {
-    if (gamePhase === "quiz" && quizStep === "reacting") return CHAR_ANSWER;
-    if (gamePhase === "quiz") return CHAR_QUESTION;
-    return CHAR_USUAL;
-  })();
-
   // Load saved result
   useEffect(() => {
     if (!showSaved) return;
@@ -358,6 +351,13 @@ function OtakuTypeV3Content() {
   const totalScore = scores.reduce((s, v) => s + v, 0);
   const resultTier = restoredTier ?? (gamePhase === "result" ? getTier(totalScore) : null);
   const progress = gamePhase === "quiz" ? Math.round((curQ / QUESTIONS.length) * 100) : gamePhase === "result" ? 100 : 0;
+
+  // 현재 표시할 캐릭터 이미지 결정
+  const charImage = (() => {
+    if (gamePhase === "quiz" && quizStep === "reacting") return CHAR_ANSWER;
+    if (gamePhase === "quiz") return CHAR_QUESTION;
+    return CHAR_USUAL;
+  })();
 
   return (
     <>
@@ -629,6 +629,25 @@ function OtakuTypeV3Content() {
             </div>
           </div>
 
+          {/* ── 결과 카드 — 캐릭터 이미지와 텍스트박스 사이에 노출 ── */}
+          {gamePhase === "result" && resultTier && typingDone && (
+            <div
+              className="v3-rise"
+              style={{
+                flexShrink: 0,
+                padding: "12px 0 16px",
+                width: "100%",
+              }}
+            >
+              <ResultCard
+                tier={resultTier}
+                totalScore={totalScore}
+                maxScore={QUESTIONS.length * 3}
+                isRestored={!!restoredTier}
+              />
+            </div>
+          )}
+
           {/* ── Textbox zone: 이름+대화+버튼만, 선택지는 이미지 위에 ── */}
           <div
             className="v3-textbox"
@@ -698,27 +717,6 @@ function OtakuTypeV3Content() {
           </div>
         </div>
 
-        {/* 결과 카드 — 텍스트박스 아래로 스크롤 가능 */}
-        {gamePhase === "result" && resultTier && typingDone && (
-          <div
-            className="v3-rise"
-            style={{
-              overflowY: "auto",
-              WebkitOverflowScrolling: "touch" as React.CSSProperties["WebkitOverflowScrolling"],
-              padding: "0 16px 20px",
-              maxWidth: 600,
-              margin: "0 auto",
-              width: "100%",
-            }}
-          >
-            <ResultCard
-              tier={resultTier}
-              totalScore={totalScore}
-              maxScore={QUESTIONS.length * 3}
-              isRestored={!!restoredTier}
-            />
-          </div>
-        )}
       </div>
     </>
   );
@@ -744,17 +742,21 @@ function ResultCard({
     >
       {/* Top badge */}
       <div
-        className="flex flex-col items-center py-5 sm:py-7 gap-2"
+        className="flex flex-col items-center py-6 sm:py-9 gap-2 px-4"
         style={{ background: `linear-gradient(135deg, ${tier.bg}33 0%, ${tier.bg}11 100%)` }}
       >
-        <div className="text-4xl sm:text-5xl leading-none">{tier.emoji}</div>
-        <span
-          className="rounded-full border px-2.5 sm:px-3.5 py-0.5 sm:py-1 text-[11px] sm:text-xs font-black"
-          style={{ borderColor: tier.color + "55", color: tier.color, background: tier.bg + "22" }}
+        <div
+          className="text-[28px] sm:text-[36px] font-black leading-tight tracking-tight text-center"
+          style={{
+            color: tier.color,
+            textShadow: `0 0 24px ${tier.color}33`,
+          }}
         >
           {tier.badge}
-        </span>
-        <div className="text-[15px] sm:text-[18px] font-semibold text-violet-100 mt-0.5 sm:mt-1 text-center px-3">{tier.title}</div>
+        </div>
+        <div className="text-[13px] sm:text-[15px] font-medium text-violet-100/80 text-center">
+          {tier.title}
+        </div>
       </div>
 
       {/* Score bar */}

@@ -632,7 +632,7 @@ function OtakuTypeV2PageContent() {
           </button>
         </div>
         <Link href="/play/otaku-type" className="text-center text-sm text-gray-400 hover:text-gray-600 transition-colors">
-          ← 타입 테스트 (v1)로 돌아가기
+          ← 메인으로 돌아가기
         </Link>
       </main>
     );
