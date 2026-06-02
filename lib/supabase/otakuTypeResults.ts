@@ -69,3 +69,20 @@ export async function fetchOtakuTypeResult(
   if (error) throw error;
   return (data as OtakuTypeResultRow | null) ?? null;
 }
+
+export async function fetchOtakuTypeDistribution(
+  testVersion: OtakuTypeTestVersion,
+): Promise<Record<string, number>> {
+  const { data, error } = await supabase
+    .from("otaku_type_results")
+    .select("result_code")
+    .eq("test_version", testVersion);
+
+  if (error) throw error;
+
+  const dist: Record<string, number> = {};
+  for (const row of (data ?? []) as { result_code: string }[]) {
+    dist[row.result_code] = (dist[row.result_code] ?? 0) + 1;
+  }
+  return dist;
+}

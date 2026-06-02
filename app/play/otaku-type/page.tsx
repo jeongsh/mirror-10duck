@@ -8,6 +8,7 @@ import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import {
   fetchOtakuTypeResult,
   upsertOtakuTypeResult,
+  fetchOtakuTypeDistribution,
   type OtakuTypeResultRow,
 } from "@/lib/supabase/otakuTypeResults";
 import {
@@ -270,8 +271,8 @@ const QUESTIONS: LevelQuestion[] = [
 const TYPES: Record<ResultCode, ResultInfo> = {
   SDM: { code: "S · D · M", emoji: "🎪", badge: "인싸 컬렉터", badgeColor: "#D4537E", badgeBg: "#FBEAF0",
     title: "축제형 수집가",
-    sub: "가볍게 즐기지만 일단 좋아하면 화끈하게 표현하는 타입. 분위기를 타고 굿즈를 지르고, 사람들과 함께 떠드는 걸 좋아해요. 덕질의 즐거움을 가장 잘 아는 인싸 덕후입니다.",
-    traits: ["취향은 가볍지만 표현은 화끈해요", "사람들과 함께하는 덕질을 즐겨요", "분위기 타면 지름신이 강림합니다"],
+    sub: "덕질이 시작되면 굿즈부터 지릅니다. '일단 이것만' 하고 결제창을 닫았다가 다시 열었다가를 반복하다 결국 다 사버린 경험, 한 번쯤은 있죠? 팬미팅 현장에서 가장 신나는 사람, 생일 카페에서 가장 먼저 웃는 사람 — 바로 당신이에요.",
+    traits: ["'이것만' 하고 결제하면 어느새 전부 담겨 있음", "팬미팅 현장 에너지 충전소 역할 자처", "지르고 나서 반성하지만 다음엔 또 지름"],
     compat: "🤝 잘 맞는 유형: 분석형 전도사 (NDM)",
     recommendedAnime: [
       { title: "러브라이브!", reason: "라이브 떼창과 팬덤의 축제 그 자체" },
@@ -281,9 +282,9 @@ const TYPES: Record<ResultCode, ResultInfo> = {
     ] },
   SDL: { code: "S · D · L", emoji: "🎤", badge: "소셜 라이트", badgeColor: "#185FA5", badgeBg: "#E6F1FB",
     title: "사교형 라이트 덕후",
-    sub: "덕질을 사교의 수단으로 활용하는 타입. 깊이 파고들진 않지만 사람들과 어울리며 즐기고, 소비는 절제하는 편이에요. 덕질이 일상을 풍요롭게 해주는 균형형입니다.",
-    traits: ["덕질로 사람들과 자연스럽게 어울려요", "깊이보다 분위기와 재미를 추구해요", "소비는 합리적으로 절제하는 편"],
-    compat: "🤝 잘 맞는 유형: 사교형 큐레이터 (NDL)",
+    sub: "덕질이 삶의 전부는 아니지만, 공통 취향 하나로 어색한 사람과도 금방 친해집니다. '이거 봤어요?' 한마디면 세상 어디서든 분위기를 만드는 사람. 지갑은 단단히 지키면서 즐거움은 최대치로 끌어올리는 효율형 덕후예요.",
+    traits: ["공통 취향 하나로 어색한 분위기 즉시 해제", "깊이보다 분위기와 화제성이 우선", "지갑은 이성적, 감정은 감성적"],
+    compat: "🤝 잘 맞는 유형: 분석형 전도사 (NDL)",
     recommendedAnime: [
       { title: "스파이 패밀리", reason: "누구나 함께 보기 좋은 화제작" },
       { title: "주술회전", reason: "사람들과 떠들기 좋은 핫한 액션" },
@@ -292,8 +293,8 @@ const TYPES: Record<ResultCode, ResultInfo> = {
     ] },
   SCM: { code: "S · C · M", emoji: "🛍️", badge: "조용한 지름러", badgeColor: "#BA7517", badgeBg: "#FAEEDA",
     title: "은둔형 컬렉터",
-    sub: "겉으로는 티 내지 않지만 굿즈는 차곡차곡 모으는 타입. 혼자만의 공간에서 조용히 덕질하며, 컬렉션이 곧 행복이에요. 의외의 반전 매력을 가진 숨은 덕후입니다.",
-    traits: ["겉으로 티 안 내는 반전 덕후", "혼자만의 공간에서 조용히 즐겨요", "굿즈 컬렉션에 진심입니다"],
+    sub: "겉으로는 '그냥 가끔 보는 편'이라고 말하지만, 방 한쪽에는 피규어가 줄을 섰습니다. '이건 한정판이라서' — 이 말이 입에 붙었다면 이미 당신입니다. 아무에게도 말 안 하고 혼자 쌓아가는 컬렉션, 그게 진짜 행복이죠.",
+    traits: ["겉으로는 라이트, 방 안에서는 찐덕", "한정판이라는 단어에 지갑이 저절로 열림", "컬렉션 인증은 나만 보는 폴더에"],
     compat: "🤝 잘 맞는 유형: 은둔형 분석가 (NCM)",
     recommendedAnime: [
       { title: "그 비스크 돌은 사랑을 한다", reason: "코스튬·굿즈의 무한 컬렉션 욕구" },
@@ -303,8 +304,8 @@ const TYPES: Record<ResultCode, ResultInfo> = {
     ] },
   SCL: { code: "S · C · L", emoji: "🌿", badge: "라이트 덕후", badgeColor: "#639922", badgeBg: "#EAF3DE",
     title: "균형형 라이트 덕후",
-    sub: "좋아하는 건 분명하지만 일상과의 균형이 완벽한 타입. 과몰입하지 않고 조용히 취향을 즐기며, 소비도 절제해요. 가장 건강하고 편안한 덕질 라이프를 사는 사람입니다.",
-    traits: ["일상과 취미의 균형이 훌륭해요", "조용하고 절제된 덕질 스타일", "부담 없이 오래 즐기는 타입"],
+    sub: "덕질도 하고 일상도 챙기고, 지갑도 지키고. 이 세 가지를 동시에 해내는 게 말처럼 쉬운 줄 아세요? 당신은 덕질계에서 가장 지속 가능한 삶을 사는 현자입니다. 10년 후에도 취미로 애니 보고 있을 사람이에요.",
+    traits: ["덕질과 일상의 균형을 실제로 이루는 희귀종", "좋아하는 건 확실하지만 과몰입은 스스로 조절", "오래, 건강하게 덕질하는 현자 스타일"],
     compat: "🤝 잘 맞는 유형: 은둔형 컬렉터 (SCM)",
     recommendedAnime: [
       { title: "유루캠△", reason: "잔잔한 캠핑 힐링" },
@@ -314,8 +315,8 @@ const TYPES: Record<ResultCode, ResultInfo> = {
     ] },
   NDM: { code: "N · D · M", emoji: "🔥", badge: "하드코어 오타쿠", badgeColor: "#534AB7", badgeBg: "#EEEDFE",
     title: "최고급 하드코어 오타쿠",
-    sub: "분석력, 표현력, 소비력 모두 최고치. 덕질이 곧 정체성이고 라이프스타일인 타입이에요. 굿즈룸이 있거나 준비 중이고, 작품 분석은 거의 평론가 수준. 덕후계의 끝판왕입니다.",
-    traits: ["작품 분석이 전문가·평론가급이에요", "열정의 표현에 거침이 없습니다", "소비력과 헌신이 무한대에 수렴해요"],
+    sub: "분석 리포트는 평론가급, 굿즈 지출은 가계부에 '기타'로 처리하는 편. 덕질이 정체성이 된 지 오래됐고, 주변 사람들은 이미 당신을 그 분야 전문가로 여깁니다. 당신이 오타쿠가 아니면 누가 오타쿠입니까.",
+    traits: ["작품 분석이 웬만한 전문 리뷰어 수준", "굿즈 지출은 월 예산에 '필수 항목'으로 편성", "이미 덕질이 정체성이 된 지 오래"],
     compat: "🤝 잘 맞는 유형: 축제형 수집가 (SDM)",
     recommendedAnime: [
       { title: "신세기 에반게리온", reason: "분석할 거리가 무한, 굿즈도 무한" },
@@ -325,8 +326,8 @@ const TYPES: Record<ResultCode, ResultInfo> = {
     ] },
   NDL: { code: "N · D · L", emoji: "📣", badge: "덕질 전도사", badgeColor: "#0F6E56", badgeBg: "#E1F5EE",
     title: "분석형 전도사",
-    sub: "깊이 파고들고 적극적으로 알리지만 소비는 신중한 타입. 작품을 분석하고 사람들을 입문시키는 데 진심이에요. 지갑은 지키면서 덕질 생태계를 넓히는 전도사입니다.",
-    traits: ["작품을 깊이 파고들고 분석해요", "사람들을 입문시키는 데 진심입니다", "소비는 신중하게 핵심만 골라요"],
+    sub: "좋아하는 작품을 두 번 이상 본 다음에야 '봤다'고 인정하는 유형. 지인에게 애니 추천할 때 장르·화수·주의사항까지 자동으로 브리핑되지만, 정작 본인 지갑은 철저하게 지킵니다. 입덕 성공률은 높고, 후회는 없어요.",
+    traits: ["추천할 때 장르·화수·주의사항 세트로 제공", "논리적 허점을 조목조목 짚어내는 분석력", "지갑은 지키면서 덕질 생태계는 넓힘"],
     compat: "🤝 잘 맞는 유형: 사교형 라이트 덕후 (SDL)",
     recommendedAnime: [
       { title: "강철의 연금술사 BROTHERHOOD", reason: "누구에게나 추천 가능한 정통 명작" },
@@ -336,8 +337,8 @@ const TYPES: Record<ResultCode, ResultInfo> = {
     ] },
   NCM: { code: "N · C · M", emoji: "📚", badge: "심층 수집가", badgeColor: "#993C1D", badgeBg: "#FAECE7",
     title: "은둔형 분석가",
-    sub: "혼자 깊이 파고들고 굿즈도 모으는 타입. 떠들썩하게 드러내진 않지만 작품에 대한 이해도와 컬렉션은 상당해요. 조용한 진성 덕후, 알수록 깊이가 느껴지는 사람입니다.",
-    traits: ["혼자 깊이 파고드는 진성 덕후", "말수는 적지만 이해도가 깊어요", "굿즈 컬렉션도 알차게 갖춰져 있어요"],
+    sub: "말은 없지만 정보량은 상위 1%. 작품 이야기가 나오면 멈출 수 없고, 컬렉션 규모는 아무도 모르는 사람. '사실 이거 꽤 알아'라는 카드를 결정적인 순간에만 꺼내는, 알수록 깊이가 느껴지는 진성 덕후예요.",
+    traits: ["말없다가 작품 얘기 나오면 3시간 가동", "소장 규모를 아는 사람이 거의 없음", "커뮤 눈팅 연차는 길지만 댓글은 마음속으로만"],
     compat: "🤝 잘 맞는 유형: 조용한 지름러 (SCM)",
     recommendedAnime: [
       { title: "〈물어〉 시리즈 (모노가타리)", reason: "매니악한 매력과 풍부한 굿즈" },
@@ -347,8 +348,8 @@ const TYPES: Record<ResultCode, ResultInfo> = {
     ] },
   NCL: { code: "N · C · L", emoji: "🔍", badge: "고독한 연구가", badgeColor: "#3C3489", badgeBg: "#EEEDFE",
     title: "고독한 덕질 연구가",
-    sub: "깊이 파고들지만 조용하고 소비도 절제하는 타입. 작품을 학문처럼 탐구하고 혼자만의 만족을 추구해요. 화려하진 않지만 내공이 가장 단단한 덕후입니다.",
-    traits: ["작품을 학문처럼 깊게 탐구해요", "조용하고 절제된 진성 덕후", "화려함보다 내공으로 승부합니다"],
+    sub: "작품 하나를 끝내고 나면 OST, 감독 인터뷰, 원작 비교까지 파고드는 게 당연한 일. 굿즈보다 이해를 사고, 팬덤보다 작품 자체를 우선하는 진짜 덕후입니다. 화려하지 않아도 내공만큼은 누구보다 깊어요.",
+    traits: ["작품 보고 나서 감독 인터뷰까지 찾아보는 루틴", "가장 조용하지만 이해도는 가장 깊음", "굿즈 없어도 애정은 누구보다 진지함"],
     compat: "🤝 잘 맞는 유형: 균형형 라이트 덕후 (SCL)",
     recommendedAnime: [
       { title: "신세기 에반게리온", reason: "평생 분석할 만한 텍스트" },
@@ -364,6 +365,17 @@ const TIERS: Tier[] = [
   { min: 19, max: 27, name: "오타쿠", desc: "덕질이 삶의 일부가 된 진짜 오타쿠 단계예요." },
   { min: 28, max: 99, name: "찐", desc: "덕질이 곧 정체성. 부정할 수 없는 찐 오타쿠입니다." },
 ];
+
+const RESULT_GRADIENTS: Record<ResultCode, string> = {
+  SDM: "linear-gradient(150deg, #F9A8D4 0%, #FEE0EC 55%, #FBEAF0 100%)",
+  SDL: "linear-gradient(150deg, #93C5FD 0%, #C3DFFB 55%, #E6F1FB 100%)",
+  SCM: "linear-gradient(150deg, #FCD34D 0%, #FDE68A 55%, #FAEEDA 100%)",
+  SCL: "linear-gradient(150deg, #86EFAC 0%, #BBF7D0 55%, #EAF3DE 100%)",
+  NDM: "linear-gradient(150deg, #A78BFA 0%, #C4B5FD 55%, #EEEDFE 100%)",
+  NDL: "linear-gradient(150deg, #34D399 0%, #6EE7B7 55%, #E1F5EE 100%)",
+  NCM: "linear-gradient(150deg, #FCA5A5 0%, #FECACA 55%, #FAECE7 100%)",
+  NCL: "linear-gradient(150deg, #818CF8 0%, #A5B4FC 55%, #EEEDFE 100%)",
+};
 
 // ─── 결과 계산 ───────────────────────────────────────────────
 
@@ -520,6 +532,8 @@ function OtakuTypePageContent() {
   const [cur, setCur] = useState(0);
   const [answers, setAnswers] = useState<(number | null)[]>(new Array(QUESTIONS.length).fill(null));
   const [dbAnimeRecs, setDbAnimeRecs] = useState<AnimeRecommendation[] | undefined>(undefined);
+  const [distribution, setDistribution] = useState<Record<string, number> | null>(null);
+  const [selectedAnim, setSelectedAnim] = useState<number | null>(null);
 
   useEffect(() => {
     if (!showSaved) return;
@@ -584,6 +598,7 @@ function OtakuTypePageContent() {
   useEffect(() => {
     if (phase !== "result") {
       setDbAnimeRecs(undefined);
+      setDistribution(null);
       return;
     }
     const { scores } = loadedResult ?? calcResult(answers);
@@ -592,12 +607,20 @@ function OtakuTypePageContent() {
     getAnimeRecommendationsByType("v1", typeCode)
       .then((recs) => { if (!cancelled) setDbAnimeRecs(recs); })
       .catch(() => { if (!cancelled) setDbAnimeRecs([]); });
+    fetchOtakuTypeDistribution("v1")
+      .then((dist) => { if (!cancelled) setDistribution(dist); })
+      .catch(() => { if (!cancelled) setDistribution({}); });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, loadedResult]);
 
+  useEffect(() => {
+    setSelectedAnim(null);
+  }, [cur]);
+
   const select = (idx: number) => {
     const clickedAt = cur;
+    setSelectedAnim(idx);
     setAnswers((prev) => { const next = [...prev]; next[clickedAt] = idx; return next; });
     setTimeout(() => {
       if (clickedAt >= QUESTIONS.length - 1) {
@@ -631,7 +654,7 @@ function OtakuTypePageContent() {
     return (
       <main className="mx-auto flex max-w-[560px] flex-col gap-6 py-8 px-4">
         <div className="text-center">
-          <h1 className="text-[22px] font-medium mb-1.5">🌸 오타쿠 테스트</h1>
+          <h1 className="text-[22px] font-medium mb-1.5">오타쿠 테스트</h1>
           <p className="text-sm text-gray-500">나의 덕후 유형을 알아보는 세 가지 테스트</p>
         </div>
         <div className="flex flex-col gap-3">
@@ -688,17 +711,6 @@ function OtakuTypePageContent() {
             </Link>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          {(Object.values(TYPES) as ResultInfo[]).map((t) => (
-            <div key={t.code} className="flex items-center gap-2 border border-gray-100 rounded-lg px-3 py-2 bg-gray-50">
-              <span className="text-xl">{t.emoji}</span>
-              <div>
-                <div className="text-[10px] font-bold" style={{ color: t.badgeColor }}>{t.badge}</div>
-                <div className="text-[11px] text-gray-700 font-medium leading-tight">{t.title}</div>
-              </div>
-            </div>
-          ))}
-        </div>
       </main>
     );
   }
@@ -737,70 +749,112 @@ function OtakuTypePageContent() {
       );
     };
 
+    const resultCode = `${d.snT}${d.dcT}${d.mlT}` as ResultCode;
+    const heroGradient = RESULT_GRADIENTS[resultCode];
+
+    const totalDist = distribution ? Object.values(distribution).reduce((a, b) => a + b, 0) : 0;
+    const myCount = distribution ? (distribution[resultCode] ?? 0) : 0;
+    const rarePct = distribution && totalDist >= 5 ? Math.round((myCount / totalDist) * 100) : null;
+
     return (
       <main className="mx-auto flex max-w-[560px] flex-col gap-6 py-8 px-4">
         <div className="text-center">
           <h1 className="text-[22px] font-medium mb-1.5">오타쿠 레벨 테스트</h1>
           <p className="text-sm text-gray-500">진단이 완료됐습니다!</p>
         </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-6 text-center">
-          <div className="text-[56px] leading-none mb-3">{t.emoji}</div>
-          <div className="text-[13px] font-medium mb-2" style={{ color: "#E5527E", letterSpacing: "0.15em" }}>{t.code}</div>
-          <span className="inline-block px-3.5 py-1 rounded-lg text-xs font-medium mb-3" style={{ background: t.badgeBg, color: t.badgeColor }}>{t.badge}</span>
-          <div className="text-[22px] font-medium mb-2">{t.title}</div>
-          <div className="text-sm text-gray-500 leading-7 mb-6 text-left">{t.sub}</div>
 
-          <div className="grid grid-cols-3 gap-2.5 mb-6">
-            {[
-              { v: `${d.total}/${d.totalMax}`, l: `덕력 점수 (${d.pct}%)` },
-              { v: d.tier.name.replace(" 등급", ""), l: "등급" },
-              { v: t.code, l: "유형 코드" },
-            ].map((s) => (
-              <div key={s.l} className="rounded-lg p-3 text-center" style={{ background: "#f1efe8" }}>
-                <div className="text-[17px] font-medium" style={{ color: "#E5527E" }}>{s.v}</div>
-                <div className="text-xs text-gray-500 mt-1">{s.l}</div>
-              </div>
-            ))}
-          </div>
+        <div className="border border-gray-200 rounded-xl overflow-hidden">
+          {/* 그라디언트 히어로 섹션 */}
+          <div className="px-6 pt-8 pb-6 text-center" style={{ background: heroGradient }}>
+            <div className="text-[64px] leading-none mb-3">{t.emoji}</div>
+            <div className="text-[13px] font-medium mb-2" style={{ color: t.badgeColor, letterSpacing: "0.15em" }}>{t.code}</div>
+            <span className="inline-block px-3.5 py-1 rounded-lg text-xs font-medium mb-3 bg-white/70" style={{ color: t.badgeColor }}>{t.badge}</span>
+            <div className="text-[22px] font-medium mb-4 text-gray-900">{t.title}</div>
 
-          <div className="flex flex-col gap-3 mb-6 text-left">
-            <AxisBar axisType="S/N" name="몰입 성향" />
-            <AxisBar axisType="D/C" name="표현 성향" />
-            <AxisBar axisType="M/L" name="소비 성향" />
-          </div>
+            <div className="grid grid-cols-3 gap-2.5 mb-4">
+              {[
+                { v: `${d.total}/${d.totalMax}`, l: `덕력 점수 (${d.pct}%)` },
+                { v: d.tier.name, l: "등급" },
+                { v: t.code, l: "유형 코드" },
+              ].map((s) => (
+                <div key={s.l} className="rounded-lg p-3 text-center bg-white/60">
+                  <div className="text-[15px] font-semibold" style={{ color: t.badgeColor }}>{s.v}</div>
+                  <div className="text-[11px] text-gray-500 mt-0.5">{s.l}</div>
+                </div>
+              ))}
+            </div>
 
-          <div className="text-left border-t border-gray-100 pt-3">
-            {t.traits.map((tr) => (
-              <div key={tr} className="flex gap-2.5 py-2 border-b border-gray-100 text-sm text-gray-500 last:border-b-0">
-                <span className="font-bold flex-shrink-0 mt-0.5" style={{ color: "#E5527E" }}>✓</span>
-                <span>{tr}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-3.5 p-3 rounded-lg text-sm text-left" style={{ background: "#FCE7EF", color: "#A82E58" }}>{t.compat}</div>
-          <div className="mt-3 p-3.5 rounded-lg text-left bg-gray-50">
-            <div className="text-sm font-medium text-gray-700 mb-2.5">🎬 추천 애니</div>
-            {dbAnimeRecs === undefined ? (
-              <div className="text-xs text-gray-400 py-1">불러오는 중...</div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {(dbAnimeRecs.length > 0 ? dbAnimeRecs : t.recommendedAnime).map((a) => (
-                  <div key={a.title} className="flex flex-col gap-0.5">
-                    <span className="text-[13px] font-medium text-gray-800">· {a.title}</span>
-                    <span className="text-[11px] text-gray-500 leading-snug pl-2.5">{a.reason}</span>
-                  </div>
-                ))}
+            {rarePct !== null && (
+              <div className="bg-white/60 rounded-lg px-4 py-2.5 text-center">
+                <div className="text-xs font-medium" style={{ color: rarePct < 10 ? t.badgeColor : "#555" }}>
+                  {rarePct < 10 ? "✨ 희귀! " : ""}{`전체 참여자 중 ${rarePct}%${rarePct < 10 ? "만" : "가"} 받은 유형이에요`}
+                </div>
+                <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden mx-auto max-w-[180px] mt-2">
+                  <div
+                    className="h-full rounded-full transition-all duration-700"
+                    style={{ width: `${Math.max(rarePct, 2)}%`, background: t.badgeColor }}
+                  />
+                </div>
               </div>
             )}
           </div>
-          <div className="mt-3 p-3 rounded-lg text-sm text-left bg-gray-50 text-gray-500">
-            <strong>{d.tier.name}</strong> — {d.tier.desc}
+
+          {/* 흰 배경 본문 섹션 */}
+          <div className="bg-white px-6 py-6">
+            <div className="text-sm text-gray-500 leading-7 mb-6">{t.sub}</div>
+
+            <div className="flex flex-col gap-3 mb-6">
+              <AxisBar axisType="S/N" name="몰입 성향" />
+              <AxisBar axisType="D/C" name="표현 성향" />
+              <AxisBar axisType="M/L" name="소비 성향" />
+            </div>
+
+            <div className="text-left border-t border-gray-100 pt-3">
+              {t.traits.map((tr) => (
+                <div key={tr} className="flex gap-2.5 py-2 border-b border-gray-100 text-sm text-gray-500 last:border-b-0">
+                  <span className="font-bold flex-shrink-0 mt-0.5" style={{ color: t.badgeColor }}>✓</span>
+                  <span>{tr}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-3.5 p-3 rounded-lg text-sm text-left" style={{ background: t.badgeBg, color: t.badgeColor }}>{t.compat}</div>
+
+            <div className="mt-3 p-3.5 rounded-lg text-left bg-gray-50">
+              <div className="text-sm font-medium text-gray-700 mb-2.5">🎬 추천 애니</div>
+              {dbAnimeRecs === undefined ? (
+                <div className="text-xs text-gray-400 py-1">불러오는 중...</div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {(dbAnimeRecs.length > 0 ? dbAnimeRecs : t.recommendedAnime).map((a) => (
+                    <div key={a.title} className="flex flex-col gap-0.5">
+                      <span className="text-[13px] font-medium text-gray-800">· {a.title}</span>
+                      <span className="text-[11px] text-gray-500 leading-snug pl-2.5">{a.reason}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3 p-3 rounded-lg text-sm text-left bg-gray-50 text-gray-500">
+              <strong>{d.tier.name}</strong> — {d.tier.desc}
+            </div>
+
+            <button onClick={reset} className="mt-5 w-full px-7 py-2.5 border border-gray-300 rounded-lg bg-white text-sm text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors duration-150">
+              🔄 다시 테스트하기
+            </button>
           </div>
-          <button onClick={reset} className="mt-5 px-7 py-2.5 border border-gray-300 rounded-lg bg-white text-sm text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors duration-150">
-            🔄 다시 테스트하기
-          </button>
         </div>
+
+        {/* 친구 유도 CTA */}
+        <div className="rounded-xl p-5 text-center border border-gray-200" style={{ background: "#FFFAF8" }}>
+          <div className="text-base font-medium text-gray-800 mb-1.5">친구는 어떤 오타쿠일까요? 👀</div>
+          <div className="text-sm text-gray-500 leading-relaxed">
+            친구한테도 테스트 해보라고 알려주세요!
+          </div>
+          <div className="text-xs text-gray-400 mt-1">결과 비교하면 더 재밌어요</div>
+        </div>
+
         <Link href="/play/oshi-card" className="block text-center border border-gray-200 rounded-xl bg-white px-4 py-3 text-sm font-medium text-gray-700 hover:bg-[#FCE7EF] hover:border-[#E5527E] hover:text-[#A82E58] transition-colors duration-150">
           최애 카드 만들기 →
         </Link>
@@ -824,7 +878,18 @@ function OtakuTypePageContent() {
         <div className="h-1.5 bg-gray-100 rounded overflow-hidden">
           <div className="h-full rounded transition-all duration-300" style={{ width: `${progress}%`, background: "#E5527E" }} />
         </div>
-        <div className="text-xs text-gray-400 mt-1.5 text-right">{safeCur + 1} / {QUESTIONS.length}</div>
+        <div className="flex justify-between items-center mt-1.5">
+          {safeCur >= 5 ? (
+            <span className="text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ background: "#FCE7EF", color: "#A82E58" }}>
+              {safeCur >= QUESTIONS.length - 1
+                ? "✨ 마지막 질문이에요! 결과가 곧 나와요"
+                : safeCur >= 8
+                ? "💪 거의 다 왔어요! 조금만 더"
+                : "🎯 절반 지났어요! 잘 하고 있어요"}
+            </span>
+          ) : <span />}
+          <span className="text-xs text-gray-400">{safeCur + 1} / {QUESTIONS.length}</span>
+        </div>
       </div>
 
       <div className="bg-white border border-gray-200 rounded-xl p-6">
@@ -844,19 +909,27 @@ function OtakuTypePageContent() {
         <div className="text-base font-medium leading-relaxed mb-5 text-gray-800">{q.text}</div>
 
         <div className="flex flex-col gap-2.5">
-          {q.options.map((opt, i) => (
-            <button
-              key={i}
-              onClick={() => select(i)}
-              className="text-left px-4 py-3 rounded-lg border text-sm leading-relaxed transition-all"
-              style={answers[safeCur] === i
-                ? { borderColor: "#E5527E", background: "#FCE7EF", color: "#A82E58" }
-                : { borderColor: "rgba(0,0,0,0.12)", background: "#fff", color: "#2c2c2a" }}
-            >
-              <span className="font-medium mr-2" style={{ color: "#E5527E" }}>{opt.label}</span>
-              {opt.text}
-            </button>
-          ))}
+          {q.options.map((opt, i) => {
+            const isSelected = answers[safeCur] === i;
+            const isAnimating = selectedAnim === i;
+            return (
+              <button
+                key={i}
+                onClick={() => select(i)}
+                className="text-left px-4 py-3 rounded-lg border text-sm leading-relaxed"
+                style={{
+                  ...(isSelected
+                    ? { borderColor: "#E5527E", background: "#FCE7EF", color: "#A82E58" }
+                    : { borderColor: "rgba(0,0,0,0.12)", background: "#fff", color: "#2c2c2a" }),
+                  transform: isAnimating ? "scale(1.025)" : "scale(1)",
+                  transition: "transform 0.15s ease, background 0.12s ease, border-color 0.12s ease, color 0.12s ease",
+                }}
+              >
+                <span className="font-medium mr-2" style={{ color: "#E5527E" }}>{opt.label}</span>
+                {opt.text}
+              </button>
+            );
+          })}
         </div>
 
         <div className="flex justify-between items-center mt-5">
