@@ -100,8 +100,8 @@ export const CREATE_NAV_GROUPS: NavGroup[] = [
       },
       {
         href: "/play/recommend",
-        label: "애니 추천",
-        description: "캐릭터와 몇 가지 질문으로 볼 만한 애니를 고른다.",
+        label: "과몰입 클리닉",
+        description: "문진표로 취향과 지뢰를 진단하고 애니 처방전을 발급한다.",
         status: "live",
       },
     ],

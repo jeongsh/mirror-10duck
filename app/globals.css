@@ -24,10 +24,23 @@
   --layout-header-height: 57px;
   --layout-main-pt: 1.5rem; /* lg:pt-6 — 스크롤바 시작 위치와 동기화 */
 
-  /* 바이럴 세로 배너 — 공통 LeftSidebar 열(220px)과 동일 가로·세로 슬롯 */
-  --viral-ad-width: var(--layout-left-width);
-  --viral-ad-height: 600px;
-  --viral-ad-inset-x: max(1rem, calc((100vw - var(--layout-max)) / 2 + var(--layout-gutter)));
+  /* MainLayoutClient shell — 바이럴 광고 좌표와 동기화 */
+  --layout-shell-offset: max(0px, calc((100vw - var(--layout-max)) / 2));
+  --layout-shell-pad-left: 1rem;
+  --layout-shell-pad-right: 1rem;
+  --layout-ad-height: min(720px, calc(100dvh - var(--layout-header-height) - var(--layout-main-pt)));
+  --viral-ad-left: calc(var(--layout-shell-offset) + var(--layout-shell-pad-left));
+  --viral-ad-top: calc(var(--layout-header-height) + var(--layout-main-pt));
+  --viral-ad-right-left: calc(
+    100vw - var(--layout-shell-offset) - var(--layout-shell-pad-right) - var(--layout-right-width)
+  );
+}
+
+@media (min-width: 1920px) {
+  :root {
+    --layout-shell-pad-left: var(--layout-gutter);
+    --layout-shell-pad-right: 0px;
+  }
 }
 
 html,
@@ -93,23 +106,34 @@ body:has([data-layout-viral]) {
   background: transparent;
 }
 
-/* 바이럴 광고 — /play/fortune, /play/oshi-card/view 공통 좌표 (LeftSidebar 열 정렬) */
+/* 과몰입 클리닉 — 클리닉 일러스트 전폭 배경 */
+.anime-clinic-page {
+  height: calc(100dvh - var(--layout-header-height));
+  overflow: auto;
+  background-color: #f3effa;
+  background-image: url("/play/clinic-bg.png");
+  background-position: center bottom;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+/* 바이럴 광고 — LeftSidebar 좌측 배너와 동일 크기·그리드 열 위치 */
 .viral-ad-slot {
   display: none;
   position: fixed;
   z-index: 30;
-  top: calc(var(--layout-header-height) + var(--layout-main-pt));
-  width: var(--viral-ad-width);
-  height: var(--viral-ad-height);
+  top: var(--viral-ad-top);
+  width: var(--layout-left-width);
+  height: var(--layout-ad-height);
   pointer-events: none;
 }
 
 .viral-ad-slot--left {
-  left: var(--viral-ad-inset-x);
+  left: var(--viral-ad-left);
 }
 
 .viral-ad-slot--right {
-  right: var(--viral-ad-inset-x);
+  left: var(--viral-ad-right-left);
 }
 
 .viral-ad-slot__frame {
@@ -120,11 +144,12 @@ body:has([data-layout-viral]) {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border: 1px dashed rgb(156 163 175 / 0.35);
+  border: 1px dashed var(--wireframe-border);
+  background: rgb(243 244 246 / 0.5);
   text-align: center;
-  font-size: 10px;
+  font-size: 0.75rem;
   line-height: 1.25;
-  color: rgb(156 163 175 / 0.7);
+  color: rgb(156 163 175);
 }
 
 @media (min-width: 1024px) {

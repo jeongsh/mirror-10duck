@@ -27,6 +27,7 @@
 | Live2D, 캐릭터 리액션, 스티커 팩, 대표 캐릭터, 덕질 비서, 후순위 롤플레잉 | [character-community.md](./plans/character-community.md) | [LIVE2D_CHARACTER_GUIDE.md](./LIVE2D_CHARACTER_GUIDE.md), [ARCHITECTURE_OVERVIEW.md](./ARCHITECTURE_OVERVIEW.md) |
 | 오시(推し) 등록, 최애 작품/캐릭터 프로필 표시, 활동 배지 시스템 | [oshi-badges.md](./plans/oshi-badges.md) | [character-community.md](./plans/character-community.md), [data-model.md](./plans/data-model.md) |
 | 최애 캐릭터 선택 기반 취향분석, 캐릭터 태그 제안, 캐릭터 추가 요청 | [oshi-analysis.md](./plans/oshi-analysis.md) | [viral-entry-ia.md](./plans/viral-entry-ia.md), [oshi-badges.md](./plans/oshi-badges.md) |
+| 과몰입 클리닉 애니 처방전, 태그 기반 애니 추천, AI 결과 카피, 공유 카드 | [anime-prescription-recommendation.md](./plans/anime-prescription-recommendation.md) | [viral-growth-priority.md](./plans/viral-growth-priority.md), [oshi-analysis.md](./plans/oshi-analysis.md) |
 | 화면 완성도, 페이지별 완료 기준, UX 누락 점검 | [screen-acceptance.md](./plans/screen-acceptance.md) | 관련 도메인 문서 |
 | 후순위 실험/확장 후보 백로그 (채택 전 아이디어 포함) | [otaku-experiments.md](./plans/otaku-experiments.md) | [checklist.md](./plans/checklist.md), 관련 도메인 문서 |
 | 바이럴 성장 기능 우선순위, 티어표·인기투표·월드컵 전략 | [viral-growth-priority.md](./plans/viral-growth-priority.md) | [viral-entry-ia.md](./plans/viral-entry-ia.md), [oshi-analysis.md](./plans/oshi-analysis.md) |
