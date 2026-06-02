@@ -57,7 +57,7 @@ export default function AdminCharacterExamsPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-dashed border-gray-500 pb-4">
         <div>
-          <h2 className="text-xl font-bold">시험 상품 관리</h2>
+          <h2 className="text-xl font-bold">시험 관리</h2>
           <p className="mt-1 text-sm text-gray-600">
             유저에게 노출할 캐릭터 중간고사 시험 콘텐츠를 관리합니다.
           </p>

@@ -2,12 +2,17 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import {
   fetchOtakuTypeResult,
   upsertOtakuTypeResult,
 } from "@/lib/supabase/otakuTypeResults";
+import {
+  getAnimeRecommendationsByType,
+  type AnimeRecommendation,
+} from "@/lib/supabase/animeRecommendations";
 
 type V2Type = "idol" | "munchkin" | "school" | "animal" | "monster" | "sports" | "adventure" | "bishounen" | "family";
 
@@ -21,6 +26,7 @@ interface V2Question {
   num: number;
   text: string;
   icon: string;
+  image: string;
   options: V2Option[];
 }
 
@@ -49,6 +55,7 @@ const QUESTIONS: V2Question[] = [
     num: 1,
     text: "새 애니 1화, 10분이 지났는데 아직 아무것도 안 일어났다. 당신은?",
     icon: "📺",
+    image: "/taku-test/v2/Q1.webp",
     options: [
       { label: "A", text: "OST가 분위기 있으면 일단 참고 본다.", type: "idol" },
       { label: "B", text: "10분이면 충분히 판단 가능. 바로 드롭한다.", type: "munchkin" },
@@ -61,6 +68,7 @@ const QUESTIONS: V2Question[] = [
     num: 2,
     text: "나는 애니에서 어떤 장면에 가장 두근거리나?",
     icon: "💓",
+    image: "/taku-test/v2/Q2.webp",
     options: [
       { label: "A", text: "팀이 역전하는 그 순간의 열기!", type: "sports" },
       { label: "B", text: "넓은 세계로 떠나는 모험의 설렘", type: "adventure" },
@@ -73,6 +81,7 @@ const QUESTIONS: V2Question[] = [
     num: 3,
     text: "최애 캐릭터가 다쳤다. 내 반응은?",
     icon: "😭",
+    image: "/taku-test/v2/Q3.webp",
     options: [
       { label: "A", text: "왜 더 강해지지 않았냐며 속에서 열불이 난다.", type: "munchkin" },
       { label: "B", text: "친구들이 곁에 있어서 다행이라고 생각한다.", type: "school" },
@@ -85,6 +94,7 @@ const QUESTIONS: V2Question[] = [
     num: 4,
     text: "시즌 2 제작 발표. 가장 기대되는 건?",
     icon: "🎉",
+    image: "/taku-test/v2/Q4.webp",
     options: [
       { label: "A", text: "새로운 세계와 장소 탐험", type: "adventure" },
       { label: "B", text: "새 미남 캐릭터 추가될 것 같은 예감", type: "bishounen" },
@@ -97,6 +107,7 @@ const QUESTIONS: V2Question[] = [
     num: 5,
     text: "덕질하면서 가장 '아 이래서 이거 보는구나' 싶었던 순간은?",
     icon: "✨",
+    image: "/taku-test/v2/Q5.webp",
     options: [
       { label: "A", text: "친구들이 웃고 떠들며 청춘을 보내는 장면", type: "school" },
       { label: "B", text: "귀여운 마스코트가 엄청 활약하는 장면", type: "animal" },
@@ -109,6 +120,7 @@ const QUESTIONS: V2Question[] = [
     num: 6,
     text: "애니 속 세계에 들어간다면 제일 먼저 하고 싶은 건?",
     icon: "🌀",
+    image: "/taku-test/v2/Q6.webp",
     options: [
       { label: "A", text: "멋진 캐릭터들 곁에서 눈호강하기", type: "bishounen" },
       { label: "B", text: "주인공 팀에 합류해서 따뜻하게 지내기", type: "family" },
@@ -121,6 +133,7 @@ const QUESTIONS: V2Question[] = [
     num: 7,
     text: "다음 중 나를 가장 잘 설명하는 문장은?",
     icon: "🪞",
+    image: "/taku-test/v2/Q7.webp",
     options: [
       { label: "A", text: "귀여운 것에 무장 해제. 힐링이 최우선이다.", type: "animal" },
       { label: "B", text: "강렬한 배틀과 박진감 넘치는 전개를 좋아한다.", type: "monster" },
@@ -133,6 +146,7 @@ const QUESTIONS: V2Question[] = [
     num: 8,
     text: "마지막화를 다 보고 난 뒤 제일 먼저 드는 생각은?",
     icon: "🌙",
+    image: "/taku-test/v2/Q8.webp",
     options: [
       { label: "A", text: "이 멤버들과 함께라서 행복한 여정이었다.", type: "family" },
       { label: "B", text: "OST가 너무 좋아서 BGM 플리를 만들어야겠다.", type: "idol" },
@@ -145,6 +159,7 @@ const QUESTIONS: V2Question[] = [
     num: 9,
     text: "주변에 애니를 추천할 때 나의 기준은?",
     icon: "📋",
+    image: "/taku-test/v2/Q9.webp",
     options: [
       { label: "A", text: "배틀 장면이 시원시원하고 연출이 화려한지", type: "monster" },
       { label: "B", text: "열혈 감동 요소가 있는지, 눈물 흘릴 각인지", type: "sports" },
@@ -157,6 +172,7 @@ const QUESTIONS: V2Question[] = [
     num: 10,
     text: "지금 이 순간, 나를 가장 잘 표현하는 취향은?",
     icon: "🎯",
+    image: "/taku-test/v2/Q10.webp",
     options: [
       { label: "A", text: "반짝이는 무대와 노래, 팬덤 문화", type: "idol" },
       { label: "B", text: "강함을 추구하고 성장하는 주인공", type: "munchkin" },
@@ -356,6 +372,7 @@ function OtakuTypeV2PageContent() {
   );
   const [cur, setCur] = useState(0);
   const [answers, setAnswers] = useState<(number | null)[]>(new Array(QUESTIONS.length).fill(null));
+  const [dbAnimeRecs, setDbAnimeRecs] = useState<AnimeRecommendation[] | undefined>(undefined);
 
   useEffect(() => {
     if (!showSaved) return;
@@ -406,6 +423,20 @@ function OtakuTypeV2PageContent() {
     }).catch(console.error);
   }, [phase, authUser?.id, answers, restoredWinner]);
 
+  useEffect(() => {
+    if (phase !== "result") {
+      setDbAnimeRecs(undefined);
+      return;
+    }
+    const winner = restoredWinner ?? calcResult(answers).winner;
+    let cancelled = false;
+    getAnimeRecommendationsByType("v2", winner)
+      .then((recs) => { if (!cancelled) setDbAnimeRecs(recs); })
+      .catch(() => { if (!cancelled) setDbAnimeRecs([]); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, restoredWinner]);
+
   const select = (idx: number) => {
     const clickedAt = cur;
     setAnswers((prev) => { const next = [...prev]; next[clickedAt] = idx; return next; });
@@ -441,7 +472,7 @@ function OtakuTypeV2PageContent() {
     return (
       <main className="mx-auto flex max-w-[560px] flex-col gap-6 py-8 px-4">
         <div className="text-center">
-          <h1 className="text-[22px] font-medium mb-1.5">🎌 어떤 오타쿠?</h1>
+          <h1 className="text-[22px] font-medium mb-1.5">어떤 오타쿠?</h1>
           <p className="text-sm text-gray-500">10문항으로 알아보는 나의 덕후 장르</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-6 flex flex-col gap-4">
@@ -492,7 +523,7 @@ function OtakuTypeV2PageContent() {
     return (
       <main className="mx-auto flex max-w-[560px] flex-col gap-5 py-8 px-4">
         <div className="text-center">
-          <h1 className="text-[22px] font-medium mb-1.5">🎌 어떤 오타쿠?</h1>
+          <h1 className="text-[22px] font-medium mb-1.5">어떤 오타쿠?</h1>
           <p className="text-sm text-gray-500">진단이 완료됐습니다!</p>
         </div>
 
@@ -536,17 +567,21 @@ function OtakuTypeV2PageContent() {
           </div>
           <div>
             <div className="text-xs font-semibold mb-3" style={{ color: "#534AB7" }}>🎬 추천 애니</div>
-            <div className="flex flex-col gap-2.5">
-              {t.recommendedAnime.map((a) => (
-                <div key={a.title} className="flex gap-2.5 items-start">
-                  <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full mt-1.5" style={{ background: t.badgeColor }} />
-                  <div>
-                    <div className="text-[13px] font-medium text-gray-800">{a.title}</div>
-                    <div className="text-[11px] text-gray-500 mt-0.5">{a.reason}</div>
+            {dbAnimeRecs === undefined ? (
+              <div className="text-xs text-gray-400 py-1">불러오는 중...</div>
+            ) : (
+              <div className="flex flex-col gap-2.5">
+                {(dbAnimeRecs.length > 0 ? dbAnimeRecs : t.recommendedAnime).map((a) => (
+                  <div key={a.title} className="flex gap-2.5 items-start">
+                    <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full mt-1.5" style={{ background: t.badgeColor }} />
+                    <div>
+                      <div className="text-[13px] font-medium text-gray-800">{a.title}</div>
+                      <div className="text-[11px] text-gray-500 mt-0.5">{a.reason}</div>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -569,7 +604,7 @@ function OtakuTypeV2PageContent() {
   return (
     <main className="mx-auto flex max-w-[560px] flex-col gap-5 py-8 px-4">
       <div className="text-center">
-        <h1 className="text-[22px] font-medium mb-1.5">🎌 어떤 오타쿠?</h1>
+        <h1 className="text-[22px] font-medium mb-1.5">어떤 오타쿠?</h1>
         <p className="text-sm text-gray-500">10문항으로 알아보는 나의 덕후 장르</p>
       </div>
 
@@ -580,16 +615,19 @@ function OtakuTypeV2PageContent() {
         <div className="text-xs text-gray-400 mt-1.5 text-right">{safeCur + 1} / {QUESTIONS.length}</div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        {/* 질문 헤더 — 이미지 대신 아이콘 배너 */}
-        <div
-          className="flex items-center justify-center py-10"
-          style={{ background: "linear-gradient(135deg, #EDE9FE 0%, #DDD6FE 100%)" }}
-        >
-          <span className="text-[64px] leading-none">{q.icon}</span>
+      <div className="bg-white border border-gray-200 rounded-xl p-6">
+        <div className="relative w-full aspect-[3/2] rounded-lg mb-5 overflow-hidden bg-gray-50">
+          <Image
+            src={q.image}
+            alt={`Q${q.num} 일러스트`}
+            fill
+            sizes="(max-width: 560px) 100vw, 560px"
+            className="object-cover"
+            priority={q.num <= 2}
+          />
         </div>
 
-        <div className="p-6">
+        <div>
           <div className="text-xs font-medium mb-2" style={{ color: "#534AB7", letterSpacing: "0.05em" }}>
             Q{q.num}
           </div>

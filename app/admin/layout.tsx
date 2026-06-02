@@ -85,7 +85,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               href="/admin/character-exams"
               className="rounded border border-transparent p-2 transition-colors hover:border-gray-300 hover:bg-gray-100"
             >
-              시험 상품 관리
+              시험 관리
             </Link>
             <Link
               href="/admin/character-exams/templates"

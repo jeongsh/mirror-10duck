@@ -10,6 +10,10 @@ import {
   upsertOtakuTypeResult,
   type OtakuTypeResultRow,
 } from "@/lib/supabase/otakuTypeResults";
+import {
+  getAnimeRecommendationsByType,
+  type AnimeRecommendation,
+} from "@/lib/supabase/animeRecommendations";
 
 /* ============================================================
  * 기존 질문지 보관 (어떤 오타쿠인가 — 타입 테스트)
@@ -175,84 +179,84 @@ const LO_AXIS: Record<AxisType, AxisChoice> = {
 // ─── 질문 데이터 ─────────────────────────────────────────────
 
 const QUESTIONS: LevelQuestion[] = [
-  { num: 1, axis: "S/N", text: "주말에 갑자기 아무 계획이 없어졌다. 당신은?", image: "/test/Q1.webp",
+  { num: 1, axis: "S/N", text: "주말에 갑자기 아무 계획이 없어졌다. 당신은?", image: "/taku-test/v1/Q1.webp",
     options: [
       { label: "A", text: "친구에게 연락해서 카페나 영화를 보러 나간다.", axis: "S", weight: 3 },
       { label: "B", text: "좋아하는 시리즈를 다시 보며 방구석 힐링을 즐긴다.", axis: "N", weight: 2 },
       { label: "C", text: "드디어! 밀린 애니 정주행 리스트를 꺼낸다. 오늘은 쉬지 않는다.", axis: "N", weight: 3 },
       { label: "D", text: "생산적인 걸 해야 한다며 청소하고 운동한다.", axis: "S", weight: 2 },
     ] },
-  { num: 2, axis: "D/C", text: "좋아하는 작품에 비판적인 리뷰가 달렸다. 당신의 반응은?", image: "/test/Q2.webp",
+  { num: 2, axis: "D/C", text: "좋아하는 작품에 비판적인 리뷰가 달렸다. 당신의 반응은?", image: "/taku-test/v1/Q2.webp",
     options: [
       { label: "A", text: "같은 팬들과 공유하며 함께 분노한다.", axis: "D", weight: 2 },
       { label: "B", text: "그 리뷰의 논리적 허점을 조목조목 반박하는 댓글을 작성한다.", axis: "D", weight: 3 },
       { label: "C", text: "속으로 화가 나지만 그냥 닫는다.", axis: "C", weight: 2 },
       { label: "D", text: "'그럴 수도 있지' 하며 쿨하게 넘긴다.", axis: "C", weight: 3 },
     ] },
-  { num: 3, axis: "M/L", text: "좋아하는 캐릭터의 굿즈를 발견했다. 당신은?", image: "/test/Q3.webp",
+  { num: 3, axis: "M/L", text: "좋아하는 캐릭터의 굿즈를 발견했다. 당신은?", image: "/taku-test/v1/Q3.webp",
     options: [
       { label: "A", text: "정말 퀄리티 좋은 굿즈만 신중하게 구매한다.", axis: "L", weight: 2 },
       { label: "B", text: "갖고 싶지만 공간이나 돈이 걱정돼 참는다.", axis: "L", weight: 3 },
       { label: "C", text: "한정판이면 무조건. 일반판은 고민한다.", axis: "M", weight: 2 },
       { label: "D", text: "가격 불문. 지르고 나서 생각한다.", axis: "M", weight: 3 },
     ] },
-  { num: 4, axis: "S/N", text: "친구가 '추천할 만한 애니 있어?'라고 물었다. 당신은?", image: "/test/Q4.webp",
+  { num: 4, axis: "S/N", text: "친구가 '추천할 만한 애니 있어?'라고 물었다. 당신은?", image: "/taku-test/v1/Q4.webp",
     options: [
       { label: "A", text: "장르, 분위기, 화수까지 분석해 맞춤 추천 리스트를 만들어준다.", axis: "N", weight: 3 },
       { label: "B", text: "'뭐 좋아해?'라고 반문하며 대화로 이어간다.", axis: "S", weight: 2 },
       { label: "C", text: "'요즘 유행하는 거 봐봐'라며 인기작 하나만 추천한다.", axis: "S", weight: 3 },
       { label: "D", text: "내가 제일 좋아하는 작품을 강력히 밀어붙인다.", axis: "N", weight: 2 },
     ] },
-  { num: 5, axis: "D/C", text: "좋아하는 성우나 아티스트의 오프라인 이벤트가 열렸다. 당신은?", image: "/test/Q5.webp",
+  { num: 5, axis: "D/C", text: "좋아하는 성우나 아티스트의 오프라인 이벤트가 열렸다. 당신은?", image: "/taku-test/v1/Q5.webp",
     options: [
       { label: "A", text: "같이 갈 동료를 모집해 단체 원정을 계획한다.", axis: "D", weight: 2 },
       { label: "B", text: "온라인 중계가 있으면 집에서 본다.", axis: "C", weight: 3 },
       { label: "C", text: "알림 설정해두고 티켓팅 시작 30분 전부터 대기한다.", axis: "D", weight: 3 },
       { label: "D", text: "가고 싶지만 줄 서고 대기하는 게 귀찮아서 고민한다.", axis: "C", weight: 2 },
     ] },
-  { num: 6, axis: "M/L", text: "방 안에 굿즈와 피규어가 점점 늘어가고 있다. 당신의 생각은?", image: "/test/Q6.webp",
+  { num: 6, axis: "M/L", text: "방 안에 굿즈와 피규어가 점점 늘어가고 있다. 당신의 생각은?", image: "/taku-test/v1/Q6.webp",
     options: [
       { label: "A", text: "슬슬 미니멀리즘을 실천해야 할 것 같다.", axis: "L", weight: 3 },
       { label: "B", text: "이게 행복이다. 더 늘릴 계획을 세운다.", axis: "M", weight: 3 },
       { label: "C", text: "정리하고 싶은데 손이 안 간다.", axis: "L", weight: 2 },
       { label: "D", text: "사진 찍고 SNS에 올리며 컬렉션을 뽐낸다.", axis: "M", weight: 2 },
     ] },
-  { num: 7, axis: "S/N", text: "새 시즌 첫 화를 봤는데 기대와 달랐다. 당신은?", image: "/test/Q7.webp",
+  { num: 7, axis: "S/N", text: "새 시즌 첫 화를 봤는데 기대와 달랐다. 당신은?", image: "/taku-test/v1/Q7.webp",
     options: [
       { label: "A", text: "'그럴 수도 있지, 계속 보다 보면 좋아지겠지' 생각한다.", axis: "S", weight: 2 },
       { label: "B", text: "커뮤니티에서 다른 팬들의 반응을 확인한다.", axis: "N", weight: 2 },
       { label: "C", text: "바로 드롭하고 다른 작품을 찾아본다.", axis: "S", weight: 3 },
       { label: "D", text: "스태프 정보, 원작 비교 등을 찾아보며 이유를 분석한다.", axis: "N", weight: 3 },
     ] },
-  { num: 8, axis: "D/C", text: "덕질 관련 이야기를 모르는 사람에게 할 때 당신은?", image: "/test/Q8.webp",
+  { num: 8, axis: "D/C", text: "덕질 관련 이야기를 모르는 사람에게 할 때 당신은?", image: "/taku-test/v1/Q8.webp",
     options: [
       { label: "A", text: "설명하다 보면 흥분해서 한 시간은 기본이다.", axis: "D", weight: 3 },
       { label: "B", text: "굳이 설명하지 않는다. 어차피 모를 것 같아서.", axis: "C", weight: 3 },
       { label: "C", text: "'입문하게 해주겠다'며 자료를 준비해온다.", axis: "D", weight: 2 },
       { label: "D", text: "상대가 관심 있어 보이면 조금, 아니면 생략한다.", axis: "C", weight: 2 },
     ] },
-  { num: 9, axis: "M/L", text: "최애 작품이 실망스러운 엔딩으로 끝났다. 당신은?", image: "/test/Q9.webp",
+  { num: 9, axis: "M/L", text: "최애 작품이 실망스러운 엔딩으로 끝났다. 당신은?", image: "/taku-test/v1/Q9.webp",
     options: [
       { label: "A", text: "커뮤니티에서 실컷 떠들고 털어버린다.", axis: "M", weight: 2 },
       { label: "B", text: "한동안 멍하다가 다른 작품으로 넘어간다.", axis: "L", weight: 2 },
       { label: "C", text: "이차창작이나 팬픽으로 내 머릿속의 엔딩을 완성한다.", axis: "M", weight: 3 },
       { label: "D", text: "엔딩은 아쉽지만 전체적인 여정을 기억하기로 한다.", axis: "L", weight: 3 },
     ] },
-  { num: 10, axis: "S/N", text: "처음 만난 사람이 같은 작품을 좋아한다는 걸 알게 됐다. 당신은?", image: "/test/Q10.webp",
+  { num: 10, axis: "S/N", text: "처음 만난 사람이 같은 작품을 좋아한다는 걸 알게 됐다. 당신은?", image: "/taku-test/v1/Q10.webp",
     options: [
       { label: "A", text: "가볍게 공감하고 다른 얘기로 넘어간다.", axis: "S", weight: 3 },
       { label: "B", text: "운명이다. 숨겨둔 덕력을 전부 꺼낸다.", axis: "N", weight: 3 },
       { label: "C", text: "'혹시 OO도 알아?' 하며 레이더를 가동한다.", axis: "N", weight: 2 },
       { label: "D", text: "공통 화제가 생겨 반갑지만 일단 천천히 탐색한다.", axis: "S", weight: 2 },
     ] },
-  { num: 11, axis: "D/C", text: "좋아하는 캐릭터의 생일이 다가왔다. 당신은?", image: "/test/Q11.webp",
+  { num: 11, axis: "D/C", text: "좋아하는 캐릭터의 생일이 다가왔다. 당신은?", image: "/taku-test/v1/Q11.webp",
     options: [
       { label: "A", text: "SNS에 축하 일러스트나 글을 올리며 함께 기념한다.", axis: "D", weight: 2 },
       { label: "B", text: "속으로 축하하고 굿즈를 하나 사며 조용히 챙긴다.", axis: "C", weight: 2 },
       { label: "C", text: "'아 오늘이었구나' 하고 마음속으로만 축하한다.", axis: "C", weight: 3 },
       { label: "D", text: "카페 대관해 생일 카페를 열거나, 광고·서포트에 참여한다.", axis: "D", weight: 3 },
     ] },
-  { num: 12, axis: "M/L", text: "좋아하는 작품의 콜라보 카페·팝업스토어가 열렸다. 당신은?", image: "/test/Q12.webp",
+  { num: 12, axis: "M/L", text: "좋아하는 작품의 콜라보 카페·팝업스토어가 열렸다. 당신은?", image: "/taku-test/v1/Q12.webp",
     options: [
       { label: "A", text: "오픈런 한다. 메뉴 풀세트에 굿즈도 종류별로 쓸어담는다.", axis: "M", weight: 3 },
       { label: "B", text: "한정 굿즈만 노리고 가서 그것만 사 온다.", axis: "M", weight: 2 },
@@ -515,6 +519,7 @@ function OtakuTypePageContent() {
   const [phase, setPhase] = useState<"intro" | "quiz" | "result">("intro");
   const [cur, setCur] = useState(0);
   const [answers, setAnswers] = useState<(number | null)[]>(new Array(QUESTIONS.length).fill(null));
+  const [dbAnimeRecs, setDbAnimeRecs] = useState<AnimeRecommendation[] | undefined>(undefined);
 
   useEffect(() => {
     if (!showSaved) return;
@@ -575,6 +580,21 @@ function OtakuTypePageContent() {
       },
     }).catch(console.error);
   }, [phase, authUser?.id, answers, loadedResult]);
+
+  useEffect(() => {
+    if (phase !== "result") {
+      setDbAnimeRecs(undefined);
+      return;
+    }
+    const { scores } = loadedResult ?? calcResult(answers);
+    const typeCode = `${scores.snT}${scores.dcT}${scores.mlT}`;
+    let cancelled = false;
+    getAnimeRecommendationsByType("v1", typeCode)
+      .then((recs) => { if (!cancelled) setDbAnimeRecs(recs); })
+      .catch(() => { if (!cancelled) setDbAnimeRecs([]); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, loadedResult]);
 
   const select = (idx: number) => {
     const clickedAt = cur;
@@ -701,7 +721,7 @@ function OtakuTypePageContent() {
     return (
       <main className="mx-auto flex max-w-[560px] flex-col gap-6 py-8 px-4">
         <div className="text-center">
-          <h1 className="text-[22px] font-medium mb-1.5">🌸 오타쿠 레벨 테스트</h1>
+          <h1 className="text-[22px] font-medium mb-1.5">오타쿠 레벨 테스트</h1>
           <p className="text-sm text-gray-500">진단이 완료됐습니다!</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-6 text-center">
@@ -742,14 +762,18 @@ function OtakuTypePageContent() {
           <div className="mt-3.5 p-3 rounded-lg text-sm text-left" style={{ background: "#FCE7EF", color: "#A82E58" }}>{t.compat}</div>
           <div className="mt-3 p-3.5 rounded-lg text-left bg-gray-50">
             <div className="text-sm font-medium text-gray-700 mb-2.5">🎬 추천 애니</div>
-            <div className="flex flex-col gap-2">
-              {t.recommendedAnime.map((a) => (
-                <div key={a.title} className="flex flex-col gap-0.5">
-                  <span className="text-[13px] font-medium text-gray-800">· {a.title}</span>
-                  <span className="text-[11px] text-gray-500 leading-snug pl-2.5">{a.reason}</span>
-                </div>
-              ))}
-            </div>
+            {dbAnimeRecs === undefined ? (
+              <div className="text-xs text-gray-400 py-1">불러오는 중...</div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {(dbAnimeRecs.length > 0 ? dbAnimeRecs : t.recommendedAnime).map((a) => (
+                  <div key={a.title} className="flex flex-col gap-0.5">
+                    <span className="text-[13px] font-medium text-gray-800">· {a.title}</span>
+                    <span className="text-[11px] text-gray-500 leading-snug pl-2.5">{a.reason}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div className="mt-3 p-3 rounded-lg text-sm text-left bg-gray-50 text-gray-500">
             <strong>{d.tier.name}</strong> — {d.tier.desc}
@@ -773,7 +797,7 @@ function OtakuTypePageContent() {
   return (
     <main className="mx-auto flex max-w-[560px] flex-col gap-6 py-8 px-4">
       <div className="text-center">
-        <h1 className="text-[22px] font-medium mb-1.5">🌸 오타쿠 레벨 테스트</h1>
+        <h1 className="text-[22px] font-medium mb-1.5">오타쿠 레벨 테스트</h1>
         <p className="text-sm text-gray-500">12문항으로 알아보는 8가지 덕후 유형</p>
       </div>
 
