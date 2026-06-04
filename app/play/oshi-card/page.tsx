@@ -21,6 +21,7 @@ import CardImageCropModal from "@/components/profile/CardImageCropModal";
 import OshiCardManagePanel from "./OshiCardManagePanel";
 import type { OfficialWork } from "@/types/official";
 import OshiCardStyles from "./OshiCardStyles";
+import { canUseDeviceOrientationTilt } from "./_config";
 
 const WORK_OPTIONS = ["슈타게", "봇치 더 록", "리제로", "주술회전", "프리렌", "체인소 맨", "에반게리온", "메이드 인 어비스"];
 const TAG_OPTIONS = ["순애파", "피폐물 좋아함", "작화충", "원작 설정 경찰", "굿즈 수집", "1화 판독관", "오프닝 스킵 불가", "성우 따라감"];
@@ -520,6 +521,7 @@ function OshiCardPageContent() {
   };
 
   const requestDeviceTilt = async () => {
+    if (!canUseDeviceOrientationTilt()) return;
     if (orientationPermissionRef.current === "denied" || typeof window === "undefined") return;
     const DeviceOrientation = window.DeviceOrientationEvent as DeviceOrientationWithPermission | undefined;
     if (!DeviceOrientation) return;
@@ -537,7 +539,7 @@ function OshiCardPageContent() {
 
   const handleCardPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (!isDeviceTiltEnabled) handleTilt(event);
-    void requestDeviceTilt();
+    if (canUseDeviceOrientationTilt()) void requestDeviceTilt();
   };
 
   const exportBlob = async (): Promise<Blob> => {

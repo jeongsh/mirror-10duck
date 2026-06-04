@@ -50,3 +50,10 @@ export const TYPE_OPTIONS = TYPE_OPTION_DEFS.map((item) => ({
 export const GRADE_OPTIONS = ["라이트 입덕", "현역 오타쿠", "심연 입구", "심연 거주자", "공식 설정 사서"];
 
 export type CardType = (typeof TYPE_OPTIONS)[number];
+
+/** PC(호버 + 정밀 포인터)는 마우스 tilt만. 모바일·태블릿에서만 deviceorientation tilt 허용. */
+export function canUseDeviceOrientationTilt(): boolean {
+  if (typeof window === "undefined") return false;
+  if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) return false;
+  return window.matchMedia("(hover: none), (pointer: coarse)").matches;
+}

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { CSSProperties, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ImagePlus } from "lucide-react";
-import { TYPE_OPTIONS, GRADE_OPTIONS, type CardType } from "../_config";
+import { TYPE_OPTIONS, GRADE_OPTIONS, canUseDeviceOrientationTilt, type CardType } from "../_config";
 import OshiCardStyles from "../OshiCardStyles";
 import { fetchOshiCardShare } from "@/lib/supabase/oshiCardShares";
 
@@ -138,6 +138,7 @@ export default function OshiCardViewPage() {
   };
 
   const requestDeviceTilt = async () => {
+    if (!canUseDeviceOrientationTilt()) return;
     if (orientationPermissionRef.current === "denied" || typeof window === "undefined") return;
     const DeviceOrientation = window.DeviceOrientationEvent as DeviceOrientationWithPermission | undefined;
     if (!DeviceOrientation) return;
@@ -155,7 +156,7 @@ export default function OshiCardViewPage() {
 
   const handleCardPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (!isDeviceTiltEnabled) handleTilt(event);
-    void requestDeviceTilt();
+    if (canUseDeviceOrientationTilt()) void requestDeviceTilt();
   };
 
   const renderCardFace = () => (
