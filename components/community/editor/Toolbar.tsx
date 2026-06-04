@@ -21,7 +21,8 @@ import {
 } from "lucide-react";
 import StickerPicker from "@/components/stickers/StickerPicker";
 import { useEffect, useRef, useState } from "react";
-import { supabase } from "@/lib/supabase/client";
+import { getPostMediaErrorMessage } from "@/lib/supabase/postMediaAssets";
+import { uploadAndInsertEditorImage } from "./editorImageUpload";
 
 interface Props {
   editor: Editor | null;
@@ -62,21 +63,6 @@ export default function Toolbar({ editor, userId, allowMedia = true }: Props) {
 
   if (!editor) return null;
 
-  const getImageSize = (file: File) =>
-    new Promise<{ width: number; height: number }>((resolve) => {
-      const image = new Image();
-      const objectUrl = URL.createObjectURL(file);
-      image.onload = () => {
-        resolve({ width: image.naturalWidth, height: image.naturalHeight });
-        URL.revokeObjectURL(objectUrl);
-      };
-      image.onerror = () => {
-        resolve({ width: 0, height: 0 });
-        URL.revokeObjectURL(objectUrl);
-      };
-      image.src = objectUrl;
-    });
-
   const centerSelectedImage = () => {
     const imageType = selectedImageType;
     if (!imageType) return;
@@ -106,39 +92,9 @@ export default function Toolbar({ editor, userId, allowMedia = true }: Props) {
 
     setUploadingImage(true);
     try {
-      const imageSize = await getImageSize(file);
-      const resolvedUserId = userId ?? (await supabase.auth.getUser()).data.user?.id;
-      if (!resolvedUserId) {
-        alert("이미지를 업로드하려면 로그인이 필요합니다.");
-        return;
-      }
-
-      const fileExt = file.name.split(".").pop() || "jpg";
-      const fileName = `${resolvedUserId}-${crypto.randomUUID()}.${fileExt}`;
-      const filePath = `uploads/${fileName}`;
-
-      const { error } = await supabase.storage
-        .from("post-assets")
-        .upload(filePath, file);
-
-      if (error) throw error;
-
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("post-assets").getPublicUrl(filePath);
-
-      const initialWidth =
-        imageSize.width > 0 ? Math.min(imageSize.width, 760) : 760;
-
-      editor.chain().focus().setImage({
-        src: publicUrl,
-        width: initialWidth,
-        containerStyle: `width: ${initialWidth}px; height: auto; cursor: pointer; margin: 0.5rem auto;`,
-        wrapperStyle: "display: flex; margin: 0;",
-      } as any).run();
+      await uploadAndInsertEditorImage({ editor, file, userId });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "알 수 없는 오류";
-      alert("이미지 업로드 실패: " + message);
+      alert("이미지 업로드 실패: " + getPostMediaErrorMessage(error, "알 수 없는 오류"));
     } finally {
       setUploadingImage(false);
       if (fileInputRef.current) fileInputRef.current.value = "";

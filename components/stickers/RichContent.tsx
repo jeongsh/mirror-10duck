@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { splitMentionText } from "@/lib/community/mentionEditor";
 import { splitContentSegments } from "@/lib/stickers/token";
+import { useAuthUser } from "@/lib/supabase/useAuthUser";
 import CharacterSticker from "./CharacterSticker";
 import { supabase } from "@/lib/supabase/client";
 
@@ -166,6 +167,186 @@ function SnsEmbed({ url, type }: { url: string; type: string }) {
   );
 }
 
+function PendingImageBlock({ assetId, message = "이미지 안전 검사 중입니다." }: { assetId?: string | null; message?: string }) {
+  return (
+    <div className="my-2 rounded border border-dashed border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+      {message}
+      {assetId ? <span className="ml-1 font-mono text-[10px] text-amber-700">{assetId.slice(0, 8)}</span> : null}
+    </div>
+  );
+}
+
+function AdultBlurredImage({
+  src,
+  alt,
+  style,
+}: {
+  src: string;
+  alt: string;
+  style?: React.CSSProperties;
+}) {
+  const user = useAuthUser();
+  const [revealed, setRevealed] = useState(false);
+  const [verified, setVerified] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (user === undefined) {
+      setVerified(null);
+      return;
+    }
+    if (!user) {
+      setVerified(false);
+      return;
+    }
+
+    let cancelled = false;
+    supabase
+      .from("adult_verifications")
+      .select("user_id")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setVerified(Boolean(data?.user_id));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  if (revealed) {
+    return (
+      <img
+        src={src}
+        alt={alt}
+        style={style}
+        className="mx-1 my-2 rounded border border-dashed border-gray-400 max-w-full"
+      />
+    );
+  }
+
+  return (
+    <div className="relative my-2 inline-block max-w-full overflow-hidden rounded border border-dashed border-amber-400 bg-amber-50">
+      <img
+        src={src}
+        alt={alt}
+        style={style}
+        className="max-w-full blur-xl"
+      />
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/35 p-4 text-center text-white">
+        <p className="text-sm font-bold">성인 이미지입니다.</p>
+        {verified ? (
+          <button
+            type="button"
+            onClick={() => setRevealed(true)}
+            className="border border-white bg-white px-3 py-1.5 text-xs font-bold text-gray-900 hover:bg-gray-100"
+          >
+            이미지 보기
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled
+            className="border border-white/60 bg-white/20 px-3 py-1.5 text-xs font-bold text-white opacity-80"
+          >
+            성인 인증 필요
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ModeratedPostImage({
+  assetId,
+  fallbackSrc,
+  alt = "게시글 이미지",
+  style,
+}: {
+  assetId?: string | null;
+  fallbackSrc?: string | null;
+  alt?: string;
+  style?: React.CSSProperties;
+}) {
+  const [state, setState] = useState<{
+    loading: boolean;
+    status: string | null;
+    riskLevel: string | null;
+    publicUrl: string | null;
+    rejectedReason: string | null;
+  }>({
+    loading: Boolean(assetId),
+    status: null,
+    riskLevel: null,
+    publicUrl: null,
+    rejectedReason: null,
+  });
+
+  useEffect(() => {
+    if (!assetId) return;
+    let cancelled = false;
+
+    supabase
+      .from("post_media_assets")
+      .select("scan_status, risk_level, public_url, rejected_reason")
+      .eq("id", assetId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return;
+        const row = data as {
+          scan_status?: string | null;
+          risk_level?: string | null;
+          public_url?: string | null;
+          rejected_reason?: string | null;
+        } | null;
+        setState({
+          loading: false,
+          status: row?.scan_status ?? null,
+          riskLevel: row?.risk_level ?? null,
+          publicUrl: row?.public_url ?? null,
+          rejectedReason: row?.rejected_reason ?? null,
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [assetId]);
+
+  if (state.publicUrl && state.status === "approved") {
+    return (
+      <img
+        src={state.publicUrl}
+        alt={alt}
+        style={style}
+        className="mx-1 my-2 rounded border border-dashed border-gray-400 max-w-full"
+      />
+    );
+  }
+
+  if (!assetId && fallbackSrc) {
+    return (
+      <img
+        src={fallbackSrc}
+        alt={alt}
+        style={style}
+        className="mx-1 my-2 rounded border border-dashed border-gray-400 max-w-full"
+      />
+    );
+  }
+
+  if (state.status === "rejected") {
+    return <PendingImageBlock assetId={assetId} message={state.rejectedReason || "이미지가 안전 정책에 따라 차단되었습니다."} />;
+  }
+
+  return (
+    <PendingImageBlock
+      assetId={assetId}
+      message={state.loading ? "이미지 안전 검사 상태를 확인 중입니다." : "이미지 안전 검사 대기 중입니다."}
+    />
+  );
+}
+
 export default function RichContent({ content, className, disableMentions = false }: Props) {
   const isJson = content.trim().startsWith('{') && content.trim().endsWith('}');
 
@@ -208,6 +389,9 @@ export default function RichContent({ content, className, disableMentions = fals
               className="my-2 block max-w-full rounded border border-dashed border-gray-300"
             />
           );
+        }
+        if (seg.type === "pendingImage") {
+          return <ModeratedPostImage key={idx} assetId={seg.assetId} />;
         }
         return null;
       })}
@@ -320,6 +504,26 @@ function TiptapJsonRenderer({ json }: { json: any }) {
         const isCentered =
           node.attrs.containerStyle?.includes('auto') &&
           !node.attrs.wrapperStyle?.includes('float:');
+
+        if (node.attrs.mediaAssetId) {
+          return (
+            <ModeratedPostImage
+              key={index}
+              assetId={node.attrs.mediaAssetId}
+              fallbackSrc={node.attrs.src}
+              alt={node.attrs.alt || "이미지"}
+              style={{
+                width: imgWidth,
+                height: imgHeight,
+                display: floatStyle !== 'none' || isCentered ? 'block' : 'inline-block',
+                float: floatStyle !== 'none' ? floatStyle : undefined,
+                marginLeft: isCentered ? 'auto' : undefined,
+                marginRight: isCentered ? 'auto' : undefined,
+                verticalAlign: 'middle'
+              }}
+            />
+          );
+        }
 
         return (
           <img 

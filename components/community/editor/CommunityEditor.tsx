@@ -12,6 +12,8 @@ import { EmbedExtension } from "./extensions/EmbedExtension";
 import ResizeImage from "tiptap-extension-resize-image";
 import Toolbar from "./Toolbar";
 import { useEffect, useRef, useState } from "react";
+import { getPostMediaErrorMessage } from "@/lib/supabase/postMediaAssets";
+import { uploadAndInsertEditorImage } from "./editorImageUpload";
 
 /** multicolor 기본값이 mark에 `color: inherit`를 넣어 textStyle 색이 에디터에서 가려지는 경우가 있어 배경만 둔다. */
 const HighlightNoTextInherit = Highlight.extend({
@@ -38,6 +40,39 @@ const HighlightNoTextInherit = Highlight.extend({
   },
 });
 
+const ModeratedResizeImage = ResizeImage.extend({
+  addAttributes() {
+    const parentAttributes = this.parent?.() ?? {};
+    return {
+      ...parentAttributes,
+      mediaAssetId: {
+        default: null,
+        parseHTML: (element: HTMLElement) => element.getAttribute("data-media-asset-id"),
+        renderHTML: (attributes: Record<string, unknown>) =>
+          attributes.mediaAssetId ? { "data-media-asset-id": attributes.mediaAssetId } : {},
+      },
+      mediaStatus: {
+        default: null,
+        parseHTML: (element: HTMLElement) => element.getAttribute("data-media-status"),
+        renderHTML: (attributes: Record<string, unknown>) =>
+          attributes.mediaStatus ? { "data-media-status": attributes.mediaStatus } : {},
+      },
+      mediaBucket: {
+        default: null,
+        parseHTML: (element: HTMLElement) => element.getAttribute("data-media-bucket"),
+        renderHTML: (attributes: Record<string, unknown>) =>
+          attributes.mediaBucket ? { "data-media-bucket": attributes.mediaBucket } : {},
+      },
+      mediaPath: {
+        default: null,
+        parseHTML: (element: HTMLElement) => element.getAttribute("data-media-path"),
+        renderHTML: (attributes: Record<string, unknown>) =>
+          attributes.mediaPath ? { "data-media-path": attributes.mediaPath } : {},
+      },
+    };
+  },
+});
+
 interface Props {
   content: string;
   onChange: (content: string) => void;
@@ -48,6 +83,7 @@ interface Props {
 
 export default function CommunityEditor({ content, onChange, userId, allowMedia = true, placeholder }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [uploadingDropImage, setUploadingDropImage] = useState(false);
   const [imageSizeOverlay, setImageSizeOverlay] = useState<{
     left: number;
     top: number;
@@ -65,7 +101,7 @@ export default function CommunityEditor({ content, onChange, userId, allowMedia 
       Color,
       HighlightNoTextInherit.configure({ multicolor: true }),
       FontSize,
-      ResizeImage.configure({
+      ModeratedResizeImage.configure({
         inline: false,
         minWidth: 80,
         maxWidth: 900,
@@ -92,8 +128,40 @@ export default function CommunityEditor({ content, onChange, userId, allowMedia 
       attributes: {
         class: 'prose prose-sm max-w-none focus:outline-none min-h-[300px] p-4 text-sm leading-7 text-gray-800',
       },
+      handlePaste: (_view, event) => {
+        if (!allowMedia || !editor) return false;
+        const files = Array.from(event.clipboardData?.files ?? []).filter((file) => file.type.startsWith("image/"));
+        if (files.length === 0) return false;
+
+        event.preventDefault();
+        void uploadEditorImages(files);
+        return true;
+      },
+      handleDrop: (_view, event) => {
+        if (!allowMedia || !editor) return false;
+        const files = Array.from(event.dataTransfer?.files ?? []).filter((file) => file.type.startsWith("image/"));
+        if (files.length === 0) return false;
+
+        event.preventDefault();
+        void uploadEditorImages(files);
+        return true;
+      },
     },
   });
+
+  const uploadEditorImages = async (files: File[]) => {
+    if (!editor || files.length === 0) return;
+    setUploadingDropImage(true);
+    try {
+      for (const file of files) {
+        await uploadAndInsertEditorImage({ editor, file, userId });
+      }
+    } catch (error) {
+      alert("이미지 업로드 실패: " + getPostMediaErrorMessage(error, "알 수 없는 오류"));
+    } finally {
+      setUploadingDropImage(false);
+    }
+  };
 
   const loadExternalScript = (src: string) =>
     new Promise<void>((resolve, reject) => {
@@ -240,6 +308,11 @@ export default function CommunityEditor({ content, onChange, userId, allowMedia 
   return (
     <div ref={containerRef} className="relative flex flex-col border border-dashed border-gray-500 bg-white tiptap-container">
       <Toolbar editor={editor} userId={userId} allowMedia={allowMedia} />
+      {uploadingDropImage ? (
+        <div className="border-b border-dashed border-amber-300 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+          이미지 업로드 중...
+        </div>
+      ) : null}
       <EditorContent editor={editor} />
       {imageSizeOverlay && (
         <div

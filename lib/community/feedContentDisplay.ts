@@ -37,6 +37,7 @@ export function splitFeedBodyForDisplay(content: string): {
         imageUrls.push(segment.url);
         return "";
       }
+      if (segment.type === "pendingImage") return `!image_pending[${segment.assetId}]`;
       if (segment.type === "sticker") return segment.token.raw;
       return segment.value;
     })

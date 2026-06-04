@@ -14,6 +14,7 @@ import type { StickerToken } from "@/types/community";
 
 const STICKER_TOKEN_PATTERN = /:sticker\/([A-Za-z0-9_-]+)\/([A-Za-z0-9_-]+):/g;
 const IMAGE_TOKEN_PATTERN = /!image\[([^\]]+)\]/g;
+const PENDING_IMAGE_TOKEN_PATTERN = /!image_pending\[([0-9a-f-]{36})\]/gi;
 
 export function buildStickerToken(characterId: string, emotion: string): string {
   return `:sticker/${characterId}/${emotion}:`;
@@ -32,7 +33,8 @@ export function parseStickerToken(input: string): StickerToken | null {
 export type ContentSegment =
   | { type: "text"; value: string }
   | { type: "sticker"; token: StickerToken }
-  | { type: "image"; url: string };
+  | { type: "image"; url: string }
+  | { type: "pendingImage"; assetId: string };
 
 export function splitContentSegments(content: string): ContentSegment[] {
   if (!content) return [];
@@ -41,7 +43,7 @@ export function splitContentSegments(content: string): ContentSegment[] {
   
   // 모든 토큰(스티커, 이미지)을 하나의 정규식으로 통합하여 순서대로 처리
   const combinedPattern = new RegExp(
-    `(${STICKER_TOKEN_PATTERN.source})|(${IMAGE_TOKEN_PATTERN.source})`,
+    `(${STICKER_TOKEN_PATTERN.source})|(${PENDING_IMAGE_TOKEN_PATTERN.source})|(${IMAGE_TOKEN_PATTERN.source})`,
     "g"
   );
 
@@ -49,7 +51,7 @@ export function splitContentSegments(content: string): ContentSegment[] {
   let match: RegExpExecArray | null;
   
   while ((match = combinedPattern.exec(content)) !== null) {
-    const [raw, stickerRaw, characterId, emotion, imageRaw, imageUrl] = match;
+    const [raw, stickerRaw, characterId, emotion, pendingImageRaw, pendingAssetId, imageRaw, imageUrl] = match;
     
     // 이전 텍스트 추가
     if (match.index > lastIndex) {
@@ -60,6 +62,11 @@ export function splitContentSegments(content: string): ContentSegment[] {
       segments.push({
         type: "sticker",
         token: { characterId, emotion, raw: stickerRaw },
+      });
+    } else if (pendingImageRaw) {
+      segments.push({
+        type: "pendingImage",
+        assetId: pendingAssetId,
       });
     } else if (imageRaw) {
       segments.push({

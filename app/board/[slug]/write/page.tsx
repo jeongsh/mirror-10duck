@@ -12,6 +12,7 @@ import { normalizeBoardSlug } from "@/lib/community/boardSlug";
 import { isSpoilerPrefix } from "@/lib/community/boardTitlePrefix";
 import { bumpMissionProgress } from "@/lib/community/missions";
 import { grantExperience, XP_AMOUNTS } from "@/lib/supabase/experience";
+import { attachPostMediaAssetsToPost, getPostMediaErrorMessage } from "@/lib/supabase/postMediaAssets";
 
 function WritePostContent() {
   const router = useRouter();
@@ -169,10 +170,18 @@ function WritePostContent() {
         })
         .eq("id", editId);
 
-      setLoading(false);
-
       if (error) {
+        setLoading(false);
         setMessage(error.message);
+        return;
+      }
+
+      try {
+        setMessage("이미지 안전 검사 중입니다.");
+        await attachPostMediaAssetsToPost(content, editId);
+      } catch (assetError) {
+        setLoading(false);
+        setMessage(getPostMediaErrorMessage(assetError, "이미지 검역 정보를 연결하지 못했습니다."));
         return;
       }
 
@@ -198,14 +207,23 @@ function WritePostContent() {
         .select("id")
         .single();
 
-      setLoading(false);
-
       if (error) {
+        setLoading(false);
         setMessage(error.message);
         return;
       }
 
       const newId = data.id as string;
+
+      try {
+        setMessage("이미지 안전 검사 중입니다.");
+        await attachPostMediaAssetsToPost(content, newId);
+      } catch (assetError) {
+        await supabase.from("posts").delete().eq("id", newId);
+        setLoading(false);
+        setMessage(getPostMediaErrorMessage(assetError, "이미지 검역 정보를 연결하지 못했습니다."));
+        return;
+      }
 
       if (!isAnonymous && userId) {
         void grantExperience(userId, XP_AMOUNTS.POST_CREATED);

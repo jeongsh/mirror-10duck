@@ -20,6 +20,12 @@ import { supabase } from "@/lib/supabase/client";
 import MentionTextarea from "@/components/community/MentionTextarea";
 import { processMentionsForFeedPost } from "@/lib/community/mentions";
 import { grantExperience, XP_AMOUNTS } from "@/lib/supabase/experience";
+import {
+  attachPostMediaAssetsToPost,
+  getPostMediaErrorMessage,
+  uploadPostMediaAsset,
+  validatePostImageFile,
+} from "@/lib/supabase/postMediaAssets";
 
 const MAX_FEED_LENGTH = 280;
 const MAX_MEDIA_COUNT = 4;
@@ -114,12 +120,18 @@ export default function FeedComposer({
     setContent(next);
   };
 
-  const handleSelectMedia = (files: FileList | null) => {
-    if (!files) return;
-
+  const addMediaFiles = (files: File[]) => {
     const slots = MAX_MEDIA_COUNT - media.length;
-    const nextFiles = Array.from(files)
-      .filter((file) => file.type.startsWith("image/"))
+    const nextFiles = files
+      .filter((file) => {
+        try {
+          validatePostImageFile(file);
+          return true;
+        } catch (error) {
+          setMessage(getPostMediaErrorMessage(error, "이미지 파일을 확인해 주세요."));
+          return false;
+        }
+      })
       .slice(0, slots);
 
     if (nextFiles.length === 0) return;
@@ -137,6 +149,11 @@ export default function FeedComposer({
     focusComposer();
   };
 
+  const handleSelectMedia = (files: FileList | null) => {
+    if (!files) return;
+    addMediaFiles(Array.from(files));
+  };
+
   const removeMediaAt = (index: number) => {
     setMedia((prev) => {
       const target = prev[index];
@@ -146,27 +163,18 @@ export default function FeedComposer({
   };
 
   const uploadMedia = async () => {
-    const urls: string[] = [];
+    const assetIds: string[] = [];
 
     for (const item of media) {
-      const fileExt = item.file.name.split(".").pop() || "jpg";
-      const fileName = `${userId}-${crypto.randomUUID()}.${fileExt}`;
-      const filePath = `uploads/${fileName}`;
-
-      const { error } = await supabase.storage
-        .from("post-assets")
-        .upload(filePath, item.file);
-
-      if (error) throw error;
-
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("post-assets").getPublicUrl(filePath);
-
-      urls.push(publicUrl);
+      const asset = await uploadPostMediaAsset({
+        file: item.file,
+        userId,
+        source: "feed_composer",
+      });
+      assetIds.push(asset.id);
     }
 
-    return urls;
+    return assetIds;
   };
 
   const submitPost = useCallback(async () => {
@@ -184,8 +192,8 @@ export default function FeedComposer({
     setMessage("");
 
     try {
-      const imageUrls = await uploadMedia();
-      const imageTokens = imageUrls.map((url) => `!image[${url}]`).join("\n");
+      const imageAssetIds = await uploadMedia();
+      const imageTokens = imageAssetIds.map((id) => `!image_pending[${id}]`).join("\n");
       const nextContent = [content.trim(), imageTokens].filter(Boolean).join("\n");
 
       const { data, error } = await supabase
@@ -203,6 +211,12 @@ export default function FeedComposer({
       if (error) throw error;
 
       if (userId && data?.id) {
+        try {
+          await attachPostMediaAssetsToPost(nextContent, data.id as string);
+        } catch (assetError) {
+          await supabase.from("posts").delete().eq("id", data.id as string);
+          throw assetError;
+        }
         void grantExperience(userId, XP_AMOUNTS.FEED_CREATED);
         await processMentionsForFeedPost({
           text: nextContent,
@@ -220,7 +234,7 @@ export default function FeedComposer({
       });
       onPosted();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "피드를 올리지 못했습니다.");
+      setMessage(getPostMediaErrorMessage(error, "피드를 올리지 못했습니다."));
     } finally {
       setLoading(false);
     }
@@ -239,6 +253,23 @@ export default function FeedComposer({
       onSubmit={onSubmit}
       className="border-b border-dashed border-gray-500 bg-white/70"
       onClick={focusComposer}
+      onPaste={(event) => {
+        const imageFiles = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
+        if (imageFiles.length === 0) return;
+        event.preventDefault();
+        addMediaFiles(imageFiles);
+      }}
+      onDragOver={(event) => {
+        if (Array.from(event.dataTransfer.items).some((item) => item.kind === "file" && item.type.startsWith("image/"))) {
+          event.preventDefault();
+        }
+      }}
+      onDrop={(event) => {
+        const imageFiles = Array.from(event.dataTransfer.files).filter((file) => file.type.startsWith("image/"));
+        if (imageFiles.length === 0) return;
+        event.preventDefault();
+        addMediaFiles(imageFiles);
+      }}
     >
       <div className="flex gap-3 p-4">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden border border-dashed border-gray-400 bg-gray-50 text-[10px] font-bold uppercase text-gray-400">
