@@ -59,6 +59,8 @@ export default function FeedPage() {
   const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [followerCount, setFollowerCount] = useState<number | null>(null);
+  const [followingCount, setFollowingCount] = useState<number | null>(null);
 
   const enrichProfiles = useCallback(async (rows: CommunityPost[]) => {
     const missingAuthorIds = Array.from(
@@ -232,6 +234,23 @@ export default function FeedPage() {
   useEffect(() => {
     void fetchFeed();
   }, [fetchFeed]);
+
+  useEffect(() => {
+    const userId = authUser?.id;
+    if (!userId) {
+      setFollowerCount(null);
+      setFollowingCount(null);
+      return;
+    }
+    void (async () => {
+      const [{ count: followers }, { count: following }] = await Promise.all([
+        supabase.from("follows_user").select("*", { count: "exact", head: true }).eq("following_id", userId),
+        supabase.from("follows_user").select("*", { count: "exact", head: true }).eq("follower_id", userId),
+      ]);
+      setFollowerCount(followers ?? 0);
+      setFollowingCount(following ?? 0);
+    })();
+  }, [authUser]);
 
   useEffect(() => {
     const query = searchQuery.trim();
@@ -413,6 +432,27 @@ export default function FeedPage() {
             </button>
           ) : null}
         </div>
+
+        {authUser && followerCount !== null && followingCount !== null ? (
+          <div className="mt-2 flex items-center gap-4 px-1 text-xs text-gray-500">
+            <button
+              type="button"
+              onClick={() => router.push(`/profile`)}
+              className="flex items-center gap-1 hover:text-gray-800"
+            >
+              <span className="font-bold text-gray-800">{followerCount}</span>
+              <span>팔로워</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push(`/profile`)}
+              className="flex items-center gap-1 hover:text-gray-800"
+            >
+              <span className="font-bold text-gray-800">{followingCount}</span>
+              <span>팔로잉</span>
+            </button>
+          </div>
+        ) : null}
 
         {searchFocused && searchQuery.trim() ? (
           <div className="absolute left-3 right-3 top-14 z-30 max-h-96 overflow-y-auto border border-dashed border-gray-500 bg-white p-2 shadow-sm">

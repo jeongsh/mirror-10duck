@@ -44,6 +44,8 @@ export default function UserFeedPage() {
   const [loading, setLoading] = useState(true);
   const [isFollowing, setIsFollowing] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
+  const [followerCount, setFollowerCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
   
   const fetchUserData = useCallback(async () => {
     setLoading(true);
@@ -73,6 +75,13 @@ export default function UserFeedPage() {
     }
 
     setTargetProfile(profile);
+
+    const [{ count: followers }, { count: following }] = await Promise.all([
+      supabase.from("follows_user").select("*", { count: "exact", head: true }).eq("following_id", profile.user_id),
+      supabase.from("follows_user").select("*", { count: "exact", head: true }).eq("follower_id", profile.user_id),
+    ]);
+    setFollowerCount(followers ?? 0);
+    setFollowingCount(following ?? 0);
 
     const [oshiRows, interestRows, badgeRows] = await Promise.all([
       getOshiList(profile.user_id),
@@ -168,11 +177,13 @@ export default function UserFeedPage() {
         .eq("follower_id", currentUser.id)
         .eq("following_id", targetProfile.user_id);
       setIsFollowing(false);
+      setFollowerCount((prev) => Math.max(0, prev - 1));
     } else {
       await supabase
         .from("follows_user")
         .insert({ follower_id: currentUser.id, following_id: targetProfile.user_id });
       setIsFollowing(true);
+      setFollowerCount((prev) => prev + 1);
       await createNotification({
         receiverId: targetProfile.user_id,
         senderId: currentUser.id,
@@ -207,6 +218,7 @@ export default function UserFeedPage() {
             .eq("follower_id", currentUser.id)
             .eq("following_id", targetProfile.user_id);
           setIsFollowing(false);
+          setFollowerCount((prev) => Math.max(0, prev - 1));
         }
       } catch (err: any) {
         alert("차단 실패: " + err.message);
@@ -307,6 +319,16 @@ export default function UserFeedPage() {
             )}
           </div>
           <p className="text-sm text-gray-500">@{targetProfile.handle || targetProfile.nickname}</p>
+          <div className="mt-2 flex items-center gap-4 text-sm">
+            <span>
+              <span className="font-bold text-gray-900">{followerCount}</span>
+              <span className="ml-1 text-gray-500">팔로워</span>
+            </span>
+            <span>
+              <span className="font-bold text-gray-900">{followingCount}</span>
+              <span className="ml-1 text-gray-500">팔로잉</span>
+            </span>
+          </div>
         </div>
 
         {targetProfile.bio && (
