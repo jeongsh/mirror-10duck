@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { Pencil, Plus, RotateCcw, Share2, Sparkles, X } from "lucide-react";
+import { Download, Pencil, Plus, RotateCcw, Share2, Sparkles, X } from "lucide-react";
 import type { OshiAnalysisCharacter, OshiAnalysisWork } from "@/lib/supabase/oshiAnalysis";
 import type {
   DangerGauge,
@@ -325,6 +325,7 @@ export default function OshiAnalysisResultLayout({
   busy,
   copied = false,
   onShare,
+  onDownload,
   onReselect,
   onReset,
 }: {
@@ -340,6 +341,7 @@ export default function OshiAnalysisResultLayout({
   busy: boolean;
   copied?: boolean;
   onShare: () => void;
+  onDownload: () => void;
   onReselect: () => void;
   onReset: () => void;
 }) {
@@ -443,6 +445,15 @@ export default function OshiAnalysisResultLayout({
           >
             <Share2 size={16} />
             {copied ? "링크 복사됨" : "공유하기"}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onDownload}
+            className="inline-flex items-center justify-center gap-2 border border-dashed border-pink-500 bg-pink-50 px-4 py-2.5 text-sm font-black text-pink-700 hover:bg-pink-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Download size={16} />
+            이미지 저장
           </button>
           <button
             type="button"

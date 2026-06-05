@@ -878,6 +878,36 @@ function OshiAnalysisPageContent() {
     }
   };
 
+  const exportResultBlob = async (): Promise<Blob> => {
+    const el = resultRef.current;
+    if (!el) throw new Error("결과 카드를 찾을 수 없습니다.");
+    setBusy(true);
+    const wrapper = el.parentElement;
+    const prevOpacity = wrapper?.style.opacity;
+    try {
+      if (wrapper) wrapper.style.opacity = "1";
+      const { domToBlob } = await import("modern-screenshot");
+      return await domToBlob(el, { scale: 2, type: "image/png" });
+    } finally {
+      if (wrapper) wrapper.style.opacity = prevOpacity ?? "";
+      setBusy(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    try {
+      const blob = await exportResultBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `10duck-oshi-analysis-${Date.now()}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("oshi-analysis download failed:", error);
+    }
+  };
+
   const handleReset = () => {
     setSelected([]);
     setResult(null);
@@ -1026,6 +1056,7 @@ function OshiAnalysisPageContent() {
           busy={busy}
           copied={copied}
           onShare={() => void handleShare()}
+          onDownload={() => void handleDownload()}
           onReselect={() => {
             router.replace("/play/oshi-analysis");
             setStep("select");
