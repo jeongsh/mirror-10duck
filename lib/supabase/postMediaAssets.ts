@@ -36,12 +36,66 @@ export function getPostMediaErrorMessage(error: unknown, fallback = "이미지 �
 }
 
 function getExtension(file: File): string {
-  const fromName = file.name.split(".").pop()?.toLowerCase();
-  if (fromName && /^[a-z0-9]+$/.test(fromName)) return fromName;
   if (file.type === "image/png") return "png";
   if (file.type === "image/webp") return "webp";
   if (file.type === "image/gif") return "gif";
+  const fromName = file.name.split(".").pop()?.toLowerCase();
+  if (fromName && /^[a-z0-9]+$/.test(fromName)) return fromName;
   return "jpg";
+}
+
+const COMPRESS_MAX_DIMENSION = 1920;
+const COMPRESS_QUALITY = 0.85;
+
+async function compressImageFile(
+  file: File,
+): Promise<{ file: File; width: number; height: number }> {
+  // GIF은 애니메이션이 깨지므로 원본 그대로
+  if (file.type === "image/gif") {
+    return { file, width: 0, height: 0 };
+  }
+
+  const bitmap = await createImageBitmap(file);
+  const origW = bitmap.width;
+  const origH = bitmap.height;
+
+  const scale = Math.min(1, COMPRESS_MAX_DIMENSION / Math.max(origW, origH));
+  const targetW = Math.round(origW * scale);
+  const targetH = Math.round(origH * scale);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = targetW;
+  canvas.height = targetH;
+  const ctx = canvas.getContext("2d")!;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(bitmap, 0, 0, targetW, targetH);
+  bitmap.close();
+
+  const toBlob = (type: string) =>
+    new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, COMPRESS_QUALITY));
+
+  let blob = await toBlob("image/webp");
+  let outType = "image/webp";
+  let ext = "webp";
+
+  if (!blob || blob.size === 0) {
+    blob = await toBlob("image/jpeg");
+    outType = "image/jpeg";
+    ext = "jpg";
+  }
+
+  if (!blob) throw new Error("이미지 압축에 실패했습니다.");
+
+  // 리사이즈 없이 압축 결과가 더 크면 원본 사용 (단, 형식은 변환)
+  const useCompressed = scale < 1 || blob.size < file.size;
+  if (!useCompressed) {
+    return { file, width: origW, height: origH };
+  }
+
+  const baseName = file.name.replace(/\.[^.]+$/, "");
+  const compressedFile = new File([blob], `${baseName}.${ext}`, { type: outType });
+  return { file: compressedFile, width: targetW, height: targetH };
 }
 
 export function validatePostImageFile(file: File): void {
@@ -60,9 +114,15 @@ export async function uploadPostMediaAsset(params: {
   width?: number;
   height?: number;
 }): Promise<UploadedPostMediaAsset> {
-  const { file, userId, source, width, height } = params;
+  const { userId, source } = params;
   if (!userId) throw new Error("이미지를 업로드하려면 로그인이 필요합니다.");
-  validatePostImageFile(file);
+  validatePostImageFile(params.file);
+
+  const { file, width, height } = await compressImageFile(params.file).then((result) => ({
+    file: result.file,
+    width: result.width || params.width,
+    height: result.height || params.height,
+  }));
 
   const objectPath = `${userId}/${crypto.randomUUID()}.${getExtension(file)}`;
 
@@ -79,7 +139,7 @@ export async function uploadPostMediaAsset(params: {
       bucket_id: POST_MEDIA_QUARANTINE_BUCKET,
       object_path: objectPath,
       source,
-      original_name: file.name,
+      original_name: params.file.name,
       mime_type: file.type,
       size_bytes: file.size,
       width: width && width > 0 ? Math.round(width) : null,

@@ -174,7 +174,29 @@ export async function scanPostMediaAssetsByIds(params: {
       skipped += 1;
       continue;
     }
-    processed.push(await scanPostMediaAsset({ supabase, openaiApiKey, row }));
+    try {
+      processed.push(await scanPostMediaAsset({ supabase, openaiApiKey, row }));
+    } catch (error) {
+      await supabase
+        .from("post_media_assets")
+        .update({
+          scan_status: "pending",
+          risk_level: "unknown",
+          moderation_labels: {
+            scanner: "post-media-openai-v1",
+            error: error instanceof Error ? error.message : "scan failed",
+            failedAt: new Date().toISOString(),
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", row.id);
+      processed.push({
+        id: row.id,
+        scanStatus: "needs_review",
+        riskLevel: "medium",
+        reason: error instanceof Error ? error.message : "scan failed",
+      });
+    }
   }
 
   return { processed, skipped };

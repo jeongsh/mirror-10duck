@@ -13,13 +13,13 @@ import {
   Underline as UnderlineIcon,
   Type,
   Highlighter,
-  Eraser,
   Video,
   Share2,
   Undo,
   Redo,
 } from "lucide-react";
 import StickerPicker from "@/components/stickers/StickerPicker";
+import { ColorPicker } from "./ColorPicker";
 import { useEffect, useRef, useState } from "react";
 import { getPostMediaErrorMessage } from "@/lib/supabase/postMediaAssets";
 import { uploadAndInsertEditorImage } from "./editorImageUpload";
@@ -34,6 +34,27 @@ export default function Toolbar({ editor, userId, allowMedia = true }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [selectedImageType, setSelectedImageType] = useState<"imageResize" | "image" | null>(null);
+  const savedColorSel = useRef<{ from: number; to: number } | null>(null);
+  const savedHighlightSel = useRef<{ from: number; to: number } | null>(null);
+
+  const saveSelection = (ref: React.MutableRefObject<{ from: number; to: number } | null>) => {
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    ref.current = { from, to };
+  };
+
+  const applyWithSelection = (
+    ref: React.MutableRefObject<{ from: number; to: number } | null>,
+    command: (chain: ReturnType<Editor["chain"]>) => boolean,
+  ) => {
+    if (!editor) return;
+    const saved = ref.current;
+    const chain = editor.chain().focus();
+    if (saved && saved.from !== saved.to) {
+      chain.setTextSelection(saved);
+    }
+    command(chain);
+  };
 
   useEffect(() => {
     if (!editor) {
@@ -187,43 +208,29 @@ export default function Toolbar({ editor, userId, allowMedia = true }: Props) {
 
       <div className="mx-1 h-6 w-px bg-gray-300" />
 
-      {/* 폰트 색상 */}
-      <div className="relative flex items-center">
-        <input 
-          type="color" 
-          onInput={e => editor.chain().focus().setColor((e.target as HTMLInputElement).value).run()}
-          className="h-7 w-7 cursor-pointer border-none bg-transparent p-0"
-          value={editor.getAttributes('textStyle').color || '#000000'}
-        />
-        <Type size={14} className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 mix-blend-difference invert" />
-      </div>
+      {/* 글자색 */}
+      <ColorPicker
+        value={editor.getAttributes("textStyle").color || "#000000"}
+        onChange={(color) => applyWithSelection(savedColorSel, (c) => c.setColor(color).run())}
+        onBeforeCustomPick={() => saveSelection(savedColorSel)}
+        icon={<Type size={14} />}
+        quickSetLabel="검은색으로 설정"
+        quickSetValue="#000000"
+      />
 
-      {/* 하이라이트 색상 */}
-      <div className="relative flex items-center gap-0.5">
-        <div className="relative flex items-center">
-          <input
-            type="color"
-            onInput={(e) =>
-              editor.chain().focus().setHighlight({ color: (e.target as HTMLInputElement).value }).run()
-            }
-            className="h-7 w-7 cursor-pointer border-none bg-transparent p-0"
-            value={editor.getAttributes("highlight").color || "#ffff00"}
-          />
-          <Highlighter
-            size={14}
-            className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 mix-blend-difference invert"
-          />
-        </div>
-        <button
-          type="button"
-          title="배경색(형광펜) 제거"
-          onClick={() => editor.chain().focus().unsetHighlight().run()}
-          disabled={!editor.isActive("highlight")}
-          className="p-1.5 hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-30"
-        >
-          <Eraser size={18} />
-        </button>
-      </div>
+      {/* 배경색(형광펜) */}
+      <ColorPicker
+        value={editor.getAttributes("highlight").color || "transparent"}
+        onChange={(color) =>
+          color === "transparent"
+            ? applyWithSelection(savedHighlightSel, (c) => c.unsetHighlight().run())
+            : applyWithSelection(savedHighlightSel, (c) => c.setHighlight({ color }).run())
+        }
+        onBeforeCustomPick={() => saveSelection(savedHighlightSel)}
+        icon={<Highlighter size={14} />}
+        quickSetLabel="투명으로 설정"
+        quickSetValue="transparent"
+      />
 
       {/* 폰트 크기 */}
       <select 

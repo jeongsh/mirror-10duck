@@ -5,6 +5,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { Color } from "@tiptap/extension-color";
 import { TextStyle } from "@tiptap/extension-text-style";
 import Highlight from "@tiptap/extension-highlight";
+import Underline from "@tiptap/extension-underline";
 import { Youtube } from "@tiptap/extension-youtube";
 import { StickerExtension } from "./extensions/StickerExtension";
 import { FontSize } from "./extensions/FontSize";
@@ -99,6 +100,7 @@ export default function CommunityEditor({ content, onChange, userId, allowMedia 
       StarterKit,
       TextStyle,
       Color,
+      Underline,
       HighlightNoTextInherit.configure({ multicolor: true }),
       FontSize,
       ModeratedResizeImage.configure({
