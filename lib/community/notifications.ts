@@ -375,6 +375,55 @@ export async function getUnreadNotificationCount(userId: string): Promise<number
   return count ?? 0;
 }
 
+export type UnreadNotificationSummary = {
+  count: number;
+  latestEventAt: string | null;
+};
+
+export async function getUnreadNotificationSummary(userId: string): Promise<UnreadNotificationSummary> {
+  const now = new Date().toISOString();
+  const { count, data, error } = await supabase
+    .from("notifications")
+    .select("created_at, last_event_at", { count: "exact", head: false })
+    .eq("receiver_id", userId)
+    .eq("is_read", false)
+    .or(`expires_at.is.null,expires_at.gt.${now}`)
+    .order("last_event_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (isExpiresAtSchemaError(error) || isAggregateSchemaError(error)) {
+    const { count: legacyCount, data: legacyData, error: legacyError } = await supabase
+      .from("notifications")
+      .select("created_at", { count: "exact", head: false })
+      .eq("receiver_id", userId)
+      .eq("is_read", false)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (legacyError) {
+      console.error("[notifications] unread summary failed:", legacyError.message);
+      return { count: 0, latestEventAt: null };
+    }
+
+    return {
+      count: legacyCount ?? 0,
+      latestEventAt: (legacyData?.[0]?.created_at as string | null | undefined) ?? null,
+    };
+  }
+
+  if (error) {
+    console.error("[notifications] unread summary failed:", error.message);
+    return { count: 0, latestEventAt: null };
+  }
+
+  const head = data?.[0] as { created_at?: string | null; last_event_at?: string | null } | undefined;
+  return {
+    count: count ?? 0,
+    latestEventAt: head?.last_event_at ?? head?.created_at ?? null,
+  };
+}
+
 export async function markNotificationAsRead(notificationId: string, userId: string) {
   const { error } = await supabase
     .from("notifications")

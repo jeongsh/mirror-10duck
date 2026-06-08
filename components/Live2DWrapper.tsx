@@ -24,8 +24,12 @@ import { fetchMissionBoard, summarizeMissionBoard } from "@/lib/community/missio
 import {
   LIVE2D_NOTIFICATION_TYPES,
   fetchUserNotificationSettings,
+  markAllAsRead,
   type NotificationType,
 } from "@/lib/community/notifications";
+import {
+  useUnreadNotificationNotice,
+} from "@/lib/community/useUnreadNotificationCount";
 import { saveLive2DEnabledPreference } from "@/lib/supabase/characterPreferences";
 import { fetchFollowedOfficialWorkTitles } from "@/lib/supabase/officialWorkFollows";
 
@@ -491,6 +495,9 @@ export default function Live2DWrapper() {
   const modelPath = useCharacterStore((s) => s.modelPath);
   const authUser = useAuthUser();
   const userId = authUser?.id ?? null;
+  const unreadNotificationNotice = useUnreadNotificationNotice();
+  const showPersistentNotificationNotice =
+    unreadNotificationNotice.shouldShowNotice && !assistantOpen && !whatNowFlow;
   const isGuest = !authUser;
   const assistantSlots = isGuest ? getGuestAssistantSlots(pathname) : getAssistantSlots(pathname);
   const setLoading = useCharacterStore((s) => s.setLoading);
@@ -560,6 +567,23 @@ export default function Live2DWrapper() {
     setAssistantBusy(null);
     setWhatNowFlow(null);
     useCharacterStore.getState().setMessage(null);
+  }
+
+  function closeUnreadNotificationNotice() {
+    unreadNotificationNotice.acknowledge();
+    closeSpeechBubble();
+  }
+
+  function openNotificationsFromNotice() {
+    unreadNotificationNotice.acknowledge();
+    router.push("/notifications");
+  }
+
+  async function markUnreadNotificationsReadFromNotice() {
+    if (!userId) return;
+    await markAllAsRead(userId);
+    unreadNotificationNotice.acknowledge();
+    closeSpeechBubble();
   }
 
   async function hideCharacterFromAssistant() {
@@ -2091,7 +2115,20 @@ export default function Live2DWrapper() {
         )}
 
         {isReady && (
-          <SpeechBubble anchor={speechAnchor} bubbleRef={speechBubbleRef} onClose={closeSpeechBubble}>
+          <SpeechBubble
+            anchor={speechAnchor}
+            bubbleRef={speechBubbleRef}
+            fallbackContent={
+              showPersistentNotificationNotice ? (
+                <NotificationNoticeContent
+                  count={unreadNotificationNotice.count}
+                  onOpenNotifications={openNotificationsFromNotice}
+                  onMarkRead={() => void markUnreadNotificationsReadFromNotice()}
+                />
+              ) : null
+            }
+            onClose={showPersistentNotificationNotice ? closeUnreadNotificationNotice : closeSpeechBubble}
+          >
             {whatNowFlow && (
               <WhatNowChoices
                 flow={whatNowFlow}
@@ -2229,25 +2266,31 @@ function useTypewriter(text: string, speedMs = SPEECH_TYPING_SPEED_MS): { shown:
 function SpeechBubble({
   anchor,
   bubbleRef,
+  fallbackMessage = "",
+  fallbackContent = null,
   onClose,
   children,
 }: {
   anchor: SpeechAnchor | null;
   bubbleRef: RefObject<HTMLDivElement | null>;
+  fallbackMessage?: string;
+  fallbackContent?: ReactNode;
   onClose: () => void;
   children?: ReactNode;
 }) {
   const message = useCharacterStore((s) => s.message);
   const rawMessage = typeof message === "string" ? message.trim() : "";
+  const rawFallbackMessage = fallbackMessage.trim();
   const childNodes = children ? Children.toArray(children) : [];
   const hasChildren = childNodes.length > 0;
+  const hasFallbackContent = Boolean(fallbackContent);
   const lastMessageRef = useRef("");
   if (rawMessage) lastMessageRef.current = rawMessage;
   // 메뉴/선택지가 떠 있는 동안에는 자동 닫힘 타이머나 알림이 메시지를 비워도
   // 마지막 안내 문구를 유지해, 말풍선만 남고 텍스트가 사라지는 상황을 막는다.
-  const cleanMessage = rawMessage || (hasChildren ? lastMessageRef.current : "");
+  const cleanMessage = rawMessage || (hasChildren ? lastMessageRef.current : rawFallbackMessage);
   const { shown, done } = useTypewriter(cleanMessage);
-  if (!cleanMessage && !hasChildren) {
+  if (!cleanMessage && !hasChildren && !hasFallbackContent) {
     lastMessageRef.current = "";
     return null;
   }
@@ -2262,7 +2305,7 @@ function SpeechBubble({
       }}
     >
       <div className="live2d-bubble-in pointer-events-auto relative w-full break-words whitespace-normal rounded-2xl border-2 border-pink-200 bg-white px-4 py-3 text-center text-sm font-semibold leading-5 text-gray-800 shadow-lg before:absolute before:-bottom-2 before:left-1/2 before:h-4 before:w-4 before:-translate-x-1/2 before:rotate-45 before:border-b-2 before:border-r-2 before:border-pink-200 before:bg-white before:content-['']">
-        {hasChildren && (
+        {(hasChildren || rawFallbackMessage || hasFallbackContent) && (
           <button
             type="button"
             aria-label="말풍선 닫기"
@@ -2290,7 +2333,44 @@ function SpeechBubble({
             </span>
           </div>
         )}
+        {!rawMessage && !hasChildren && hasFallbackContent && fallbackContent}
         {childNodes}
+      </div>
+    </div>
+  );
+}
+
+function NotificationNoticeContent({
+  count,
+  onOpenNotifications,
+  onMarkRead,
+}: {
+  count: number;
+  onOpenNotifications: () => void;
+  onMarkRead: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <p>
+        확인하지 않은 알림{" "}
+        <span className="font-black text-red-500">{count > 99 ? "99+" : count}</span>
+        개가 있어요.
+      </p>
+      <div className="flex flex-wrap justify-center gap-1.5">
+        <button
+          type="button"
+          onClick={onOpenNotifications}
+          className="rounded-full border border-pink-200 bg-pink-50 px-3 py-1 text-[11px] font-bold text-pink-700 hover:bg-pink-100"
+        >
+          알림 보러가기
+        </button>
+        <button
+          type="button"
+          onClick={onMarkRead}
+          className="rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-bold text-gray-600 hover:bg-gray-100"
+        >
+          지금 쌓인 알림 확인처리
+        </button>
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ import {
   markNotificationAsRead,
   type NotificationRow,
 } from "@/lib/community/notifications";
+import { useUnreadNotificationNotice } from "@/lib/community/useUnreadNotificationCount";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 
 const TYPE_LABEL: Record<NotificationRow["type"], string> = {
@@ -40,6 +41,9 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const userId = authUser?.id ?? null;
+  const unreadNotice = useUnreadNotificationNotice();
+  const unreadNoticeCount = unreadNotice.count;
+  const acknowledgeUnreadNotice = unreadNotice.acknowledge;
 
   const refresh = useCallback(async () => {
     if (authUser === undefined) return;
@@ -58,6 +62,11 @@ export default function NotificationsPage() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!userId || loading || unreadNoticeCount <= 0) return;
+    acknowledgeUnreadNotice();
+  }, [acknowledgeUnreadNotice, loading, unreadNoticeCount, userId]);
 
   const readAll = async () => {
     if (!userId) return;

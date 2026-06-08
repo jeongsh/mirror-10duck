@@ -20,6 +20,9 @@ import {
   mergeProfiles,
   resolvePreferredProfile,
 } from "@/lib/live2d/profileSync";
+import {
+  useUnreadNotificationNotice,
+} from "@/lib/community/useUnreadNotificationCount";
 
 type Live2DClientOnlyProps = {
   variant?: "desktop" | "mobile";
@@ -174,6 +177,8 @@ function MobileLive2DLauncher({
 }) {
   const profile = useCharacterStore((s) => s.profile);
   const setEmotion = useCharacterStore((s) => s.setEmotion);
+  const unreadNotice = useUnreadNotificationNotice();
+  const unreadCount = unreadNotice.count;
   const characterName = profile?.name?.replace(/\s*\(.*?\)\s*$/g, "").trim() || "캐릭터";
 
   const handleOpen = () => {
@@ -183,24 +188,29 @@ function MobileLive2DLauncher({
 
   if (!open) {
     return (
-      <button
-        type="button"
-        aria-label={`${characterName}와 대화하기`}
-        onClick={handleOpen}
-        className="fixed bottom-5 right-4 z-50 h-16 w-16 overflow-hidden rounded-full border-2 border-pink-200 bg-white shadow-xl outline-none transition hover:-translate-y-0.5 hover:border-pink-300 hover:shadow-2xl focus-visible:ring-2 focus-visible:ring-pink-300"
-      >
-        {profile?.thumbnailUrl ? (
-          <img
-            src={profile.thumbnailUrl}
-            alt=""
-            className="absolute inset-0 h-full w-full scale-125 object-cover object-top"
-          />
-        ) : (
-          <span className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-pink-50 via-white to-sky-50 text-lg font-black text-pink-500">
-            캐
+      <div className="fixed bottom-5 right-4 z-50">
+        <button
+          type="button"
+          aria-label={`${characterName}와 대화하기`}
+          onClick={handleOpen}
+          className="relative h-16 w-16 rounded-full border-2 border-pink-200 bg-white shadow-xl outline-none transition hover:-translate-y-0.5 hover:border-pink-300 hover:shadow-2xl focus-visible:ring-2 focus-visible:ring-pink-300"
+        >
+          <CharacterNotificationBadge count={unreadCount} className="right-0 top-0" />
+          <span className="absolute inset-0 overflow-hidden rounded-full">
+            {profile?.thumbnailUrl ? (
+              <img
+                src={profile.thumbnailUrl}
+                alt=""
+                className="absolute inset-0 h-full w-full scale-125 object-cover object-top"
+              />
+            ) : (
+              <span className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-pink-50 via-white to-sky-50 text-lg font-black text-pink-500">
+                캐
+              </span>
+            )}
           </span>
-        )}
-      </button>
+        </button>
+      </div>
     );
   }
 
@@ -213,7 +223,10 @@ function MobileLive2DLauncher({
     >
       <div className="flex items-center justify-between border-b border-pink-100 bg-white px-4 py-3 shadow-sm">
         <div className="min-w-0">
-          <p className="truncate text-sm font-black text-gray-900">{characterName}</p>
+          <div className="flex min-w-0 items-center gap-2">
+            <p className="truncate text-sm font-black text-gray-900">{characterName}</p>
+            <InlineNotificationBadge count={unreadCount} />
+          </div>
           <p className="text-xs font-semibold text-gray-500">캐릭터 대화</p>
         </div>
         <button
@@ -244,6 +257,8 @@ function CharacterDisabledPanel() {
   const [saving, setSaving] = useState(false);
   const [bubbleOpen, setBubbleOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const unreadNotice = useUnreadNotificationNotice();
+  const unreadCount = unreadNotice.count;
   const profile = useCharacterStore((s) => s.profile);
   const setLive2DEnabled = useCharacterStore((s) => s.setLive2DEnabled);
   const setMessage = useCharacterStore((s) => s.setMessage);
@@ -314,30 +329,62 @@ function CharacterDisabledPanel() {
           </div>
         </div>
         )}
+        {!bubbleOpen && unreadNotice.shouldShowNotice && (
+          <span className="sr-only">확인하지 않은 알림 {unreadNotice.count}개</span>
+        )}
         <button
           type="button"
           aria-label={`숨겨진 ${characterName} 열기`}
           disabled={saving}
           onClick={() => setBubbleOpen((open) => !open)}
-          className="group relative h-20 w-20 overflow-hidden rounded-full border-2 border-pink-200 bg-white shadow-lg outline-none transition hover:-translate-y-0.5 hover:border-pink-300 hover:shadow-xl focus-visible:ring-2 focus-visible:ring-pink-300 disabled:opacity-60"
+          className="group relative h-20 w-20 rounded-full border-2 border-pink-200 bg-white shadow-lg outline-none transition hover:-translate-y-0.5 hover:border-pink-300 hover:shadow-xl focus-visible:ring-2 focus-visible:ring-pink-300 disabled:opacity-60"
         >
-          {profile?.thumbnailUrl ? (
-            <img
-              src={profile.thumbnailUrl}
-              alt=""
-              className="absolute inset-0 h-full w-full scale-125 object-cover object-top transition group-hover:scale-[1.32]"
-            />
-          ) : (
-            <span
-              className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-pink-50 via-white to-sky-50 text-xl font-black text-pink-500 transition group-hover:scale-105"
-              aria-hidden
-            >
-              캐
-            </span>
-          )}
+          <CharacterNotificationBadge count={unreadCount} className="right-0 top-0" />
+          <span className="absolute inset-0 overflow-hidden rounded-full">
+            {profile?.thumbnailUrl ? (
+              <img
+                src={profile.thumbnailUrl}
+                alt=""
+                className="absolute inset-0 h-full w-full scale-125 object-cover object-top transition group-hover:scale-[1.32]"
+              />
+            ) : (
+              <span
+                className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-pink-50 via-white to-sky-50 text-xl font-black text-pink-500 transition group-hover:scale-105"
+                aria-hidden
+              >
+                캐
+              </span>
+            )}
+          </span>
         </button>
       </div>
     </div>
+  );
+}
+
+function CharacterNotificationBadge({ count, className = "" }: { count: number; className?: string }) {
+  if (count <= 0) return null;
+
+  return (
+    <span
+      className={`absolute z-10 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-[10px] font-black leading-none text-white shadow-md ${className}`}
+      aria-label={`읽지 않은 알림 ${count}개`}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
+function InlineNotificationBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+
+  return (
+    <span
+      className="shrink-0 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white"
+      aria-label={`읽지 않은 알림 ${count}개`}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
   );
 }
 
