@@ -882,14 +882,25 @@ function OshiAnalysisPageContent() {
     const el = resultRef.current;
     if (!el) throw new Error("결과 카드를 찾을 수 없습니다.");
     setBusy(true);
-    const wrapper = el.parentElement;
-    const prevOpacity = wrapper?.style.opacity;
+    const clone = el.cloneNode(true) as HTMLDivElement;
     try {
-      if (wrapper) wrapper.style.opacity = "1";
+      clone.style.position = "fixed";
+      clone.style.left = "0";
+      clone.style.top = "0";
+      clone.style.width = `${el.offsetWidth || 734}px`;
+      clone.style.opacity = "1";
+      clone.style.pointerEvents = "none";
+      clone.style.zIndex = "-1";
+      document.body.appendChild(clone);
       const { domToBlob } = await import("modern-screenshot");
-      return await domToBlob(el, { scale: 2, type: "image/png" });
+      return await Promise.race([
+        domToBlob(clone, { scale: 2, type: "image/png" }),
+        new Promise<Blob>((_, reject) => {
+          window.setTimeout(() => reject(new Error("이미지 생성 시간이 초과됐습니다.")), 12000);
+        }),
+      ]);
     } finally {
-      if (wrapper) wrapper.style.opacity = prevOpacity ?? "";
+      clone.remove();
       setBusy(false);
     }
   };

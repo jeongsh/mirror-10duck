@@ -375,6 +375,40 @@ export function isRetryAction(value: string | undefined): value is RetryAction {
   return value === "lighter" || value === "stronger" || value === "oshi" || value === "safe";
 }
 
+function isPrescriptionCategory(value: unknown): value is PrescriptionCategory {
+  return value === "즉효약" || value === "장기복용약" || value === "응급처방" || value === "고위험 고효능";
+}
+
+function normalizeSharedPrescriptions(value: unknown): Prescription[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const prescriptions = value
+    .slice(0, 3)
+    .map((item, index): Prescription | null => {
+      if (!item || typeof item !== "object") return null;
+      const row = item as Partial<Prescription>;
+      if (typeof row.title !== "string" || !row.title.trim()) return null;
+      const slot = row.slot === "1차 처방" || row.slot === "2차 처방" || row.slot === "3차 처방"
+        ? row.slot
+        : (["1차 처방", "2차 처방", "3차 처방"][index] as Prescription["slot"]);
+
+      return {
+        slot,
+        title: row.title.trim(),
+        category: isPrescriptionCategory(row.category) ? row.category : "즉효약",
+        effect: typeof row.effect === "string" ? row.effect : "",
+        dosage: typeof row.dosage === "string" ? row.dosage : "",
+        sideEffect: typeof row.sideEffect === "string" ? row.sideEffect : "",
+        matchedTags: Array.isArray(row.matchedTags)
+          ? row.matchedTags.filter((tag): tag is string => typeof tag === "string").slice(0, 5)
+          : [],
+        warning: typeof row.warning === "string" ? row.warning : undefined,
+      };
+    })
+    .filter((item): item is Prescription => Boolean(item));
+
+  return prescriptions.length > 0 ? prescriptions : undefined;
+}
+
 export function encodeClinicPayload(payload: ClinicSharePayload) {
   const json = JSON.stringify(payload);
   return btoa(encodeURIComponent(json))
@@ -410,6 +444,7 @@ export function decodeClinicPayload(value: string): ClinicSharePayload | null {
       liked: toList(parsed.liked),
       disliked: toList(parsed.disliked),
       retry: isRetryAction(parsed.retry) ? parsed.retry : undefined,
+      prescriptions: normalizeSharedPrescriptions(parsed.prescriptions),
     };
   } catch {
     return null;
