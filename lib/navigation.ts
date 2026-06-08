@@ -1,3 +1,5 @@
+import { FEED_FEATURE_ENABLED } from "@/lib/features";
+
 export type NavItem = {
   href: string;
   label: string;
@@ -11,13 +13,18 @@ export type NavGroup = {
   items: NavItem[];
 };
 
-export const PRIMARY_NAV_ITEMS: NavItem[] = [
+const PRIMARY_NAV_ITEMS_BASE: NavItem[] = [
   { href: "/", label: "홈", matchPrefix: null },
   { href: "/board", label: "채널", matchPrefix: null },
+  { href: "/hot", label: "실시간 베스트", matchPrefix: null },
   { href: "/feed", label: "피드", matchPrefix: null },
   { href: "/news", label: "소식", matchPrefix: null },
   { href: "/season/current", label: "이번 분기", matchPrefix: "/season" },
 ];
+
+export const PRIMARY_NAV_ITEMS: NavItem[] = PRIMARY_NAV_ITEMS_BASE.filter(
+  (item) => FEED_FEATURE_ENABLED || item.href !== "/feed",
+);
 
 export const CREATE_NAV_GROUPS: NavGroup[] = [
   {

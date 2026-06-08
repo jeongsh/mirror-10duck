@@ -19,6 +19,7 @@ import UserActionModal from "@/components/community/UserActionModal";
 import { normalizeBoardSlug } from "@/lib/community/boardSlug";
 import { grantExperience, XP_AMOUNTS } from "@/lib/supabase/experience";
 import { postHasSpoilerTitlePrefix, splitBoardTitle } from "@/lib/community/boardTitlePrefix";
+import { FEED_FEATURE_ENABLED } from "@/lib/features";
 
 export default function BoardPostDetailPage() {
   const router = useRouter();
@@ -454,14 +455,16 @@ export default function BoardPostDetailPage() {
           </>
         ) : null}
 
-        <button
-          type="button"
-          onClick={shareToFeed}
-          disabled={shareLoading}
-          className="border border-dashed border-gray-400 bg-blue-50 px-3 py-2 text-sm text-blue-700 hover:bg-blue-100 disabled:opacity-50"
-        >
-          {shareLoading ? "공유 중..." : "내 피드에 공유"}
-        </button>
+        {FEED_FEATURE_ENABLED ? (
+          <button
+            type="button"
+            onClick={shareToFeed}
+            disabled={shareLoading}
+            className="border border-dashed border-gray-400 bg-blue-50 px-3 py-2 text-sm text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+          >
+            {shareLoading ? "공유 중..." : "내 피드에 공유"}
+          </button>
+        ) : null}
 
         {!canEdit && (
           <button

@@ -3,6 +3,14 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import {
+  REALTIME_BEST_FETCH_LIMIT,
+  REALTIME_BEST_HOME_LIMIT,
+  REALTIME_BEST_MIN_SCORE,
+  compareRealtimeBestPosts,
+  isRealtimeBestPost,
+} from "@/lib/community/realtimeBest";
+import { formatCommunityDate } from "@/lib/utils/formatDate";
 import { Board, CommunityPost, postAggregateDefaults } from "@/types/community";
 
 function buildPostHref(post: CommunityPost, boardSlugById: Map<string, string>): string {
@@ -10,7 +18,7 @@ function buildPostHref(post: CommunityPost, boardSlugById: Map<string, string>):
     const slug = boardSlugById.get(post.board_id);
     if (slug) return `/board/${slug}/${post.id}`;
   }
-  return "/feed";
+  return "/board";
 }
 
 function truncateNickname(nickname: string, maxLength: number = 6): string {
@@ -35,14 +43,18 @@ export default function HomeContent() {
           .from("posts")
           .select("*, profiles(id, nickname, display_name)")
           .eq("status", "NORMAL")
+          .eq("source_type", "BOARD")
           .order("created_at", { ascending: false })
-          .limit(10),
+          .limit(REALTIME_BEST_FETCH_LIMIT),
       ]);
 
       if (cancelled) return;
 
       const nextBoards = (boardResponse.data as Board[] | null) ?? [];
-      const nextPosts = (postResponse.data as CommunityPost[] | null) ?? [];
+      const nextPosts = ((postResponse.data as CommunityPost[] | null) ?? [])
+        .filter(isRealtimeBestPost)
+        .sort(compareRealtimeBestPosts)
+        .slice(0, REALTIME_BEST_HOME_LIMIT);
       setBoards(nextBoards);
       setHotPosts(nextPosts);
 
@@ -94,7 +106,9 @@ export default function HomeContent() {
       <div className="border border-dashed border-gray-500 bg-white/70 p-4">
         <div className="mb-4 flex items-end justify-between border-b border-dashed border-gray-400 pb-2">
           <h2 className="text-xl font-bold text-gray-800">실시간 베스트</h2>
-          <span className="text-xs text-gray-500">통합 추천글</span>
+          <Link href="/hot" className="text-xs text-gray-500 hover:underline">
+            {REALTIME_BEST_MIN_SCORE}점 이상 누적 보기
+          </Link>
         </div>
 
         {loading ? (
@@ -102,10 +116,7 @@ export default function HomeContent() {
         ) : hotPosts.length > 0 ? (
           <ul className="flex flex-col divide-y divide-dashed divide-gray-300">
             {hotPosts.map((post) => {
-              const boardLabel =
-                post.source_type === "FEED"
-                  ? "피드"
-                  : (post.board_id && boardNameById.get(post.board_id)) || "게시판";
+              const boardLabel = (post.board_id && boardNameById.get(post.board_id)) || "게시판";
 
               return (
                 <li key={post.id} className="py-2 transition-colors hover:bg-gray-100">
@@ -129,8 +140,8 @@ export default function HomeContent() {
                       {postAggregateDefaults(post).comment_count} · 추천{" "}
                       {postAggregateDefaults(post).upvote_count}
                     </span>
-                    <span className="w-8 shrink-0 text-right text-xs font-bold text-red-500">
-                      {post.is_hot ? "HOT" : "N"}
+                    <span className="w-16 shrink-0 text-right text-xs text-gray-500">
+                      {formatCommunityDate(post.created_at)}
                     </span>
                   </Link>
                 </li>
@@ -139,7 +150,7 @@ export default function HomeContent() {
           </ul>
         ) : (
           <div className="py-10 text-center text-sm text-gray-500">
-            아직 등록된 게시물이 없습니다.
+            아직 베스트 기준을 넘긴 게시물이 없습니다.
           </div>
         )}
       </div>
