@@ -32,6 +32,7 @@
 | 후순위 실험/확장 후보 백로그 (채택 전 아이디어 포함) | [otaku-experiments.md](./plans/otaku-experiments.md) | [checklist.md](./plans/checklist.md), 관련 도메인 문서 |
 | 바이럴 성장 기능 우선순위, 티어표·인기투표·월드컵 전략 | [viral-growth-priority.md](./plans/viral-growth-priority.md) | [viral-entry-ia.md](./plans/viral-entry-ia.md), [oshi-analysis.md](./plans/oshi-analysis.md) |
 | 기존 바이럴 기능 미니게임화, 최애카드·성향테스트·취향분석 리디자인 | [viral-minigame-polish.md](./plans/viral-minigame-polish.md) | [viral-growth-priority.md](./plans/viral-growth-priority.md), [oshi-analysis.md](./plans/oshi-analysis.md) |
+| 리텐션 — 연속 출석 Streak, 이정표 배지/호칭, 위클리 미션 후속 | [retention-streak.md](./plans/retention-streak.md) | [oshi-badges.md](./plans/oshi-badges.md), [moderation-notifications.md](./plans/moderation-notifications.md) |
 
 ## 2. 프로젝트 개요
 

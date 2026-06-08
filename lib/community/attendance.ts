@@ -1,5 +1,12 @@
 import { supabase } from "@/lib/supabase/client";
 import { bumpMissionProgress } from "@/lib/community/missions";
+import {
+  checkInStreak,
+  getReachedMilestone,
+  grantStreakBadges,
+  type StreakCheckInResult,
+  type StreakGrantedBadge,
+} from "@/lib/community/streak";
 
 const ATTENDANCE_MISSION_SLUG = "attendance";
 
@@ -44,15 +51,45 @@ export async function hasAttendanceToday(userId: string, now: Date = new Date())
   return Boolean(progress.completed_at) || (progress.progress_count ?? 0) >= 1;
 }
 
-/** 로그인 시 하루 1회 출석 미션을 자동 완료한다. */
-export async function recordAutoAttendance(userId: string): Promise<{ recorded: boolean }> {
-  if (!userId) return { recorded: false };
+export type AutoAttendanceResult = {
+  /** 오늘 처음 출석을 기록했는지 여부. */
+  recorded: boolean;
+  /** Streak 체크인 결과. 인증/네트워크 실패 시 null. */
+  streak: StreakCheckInResult | null;
+  /** 이번 호출로 새로 도달한 streak 이정표 (배지 지급 결과 포함). 없으면 null. */
+  streakReward: {
+    days: number;
+    badgeId: string;
+    rarity: "common" | "rare" | "epic" | "legendary";
+    grantedBadges: StreakGrantedBadge[];
+  } | null;
+};
+
+/**
+ * 로그인 시 하루 1회 출석 미션을 자동 완료하고, 동시에 연속 출석(streak)을 체크인한다.
+ * streak 이정표에 새로 도달하면 배지를 지급하고 결과를 함께 돌려준다.
+ */
+export async function recordAutoAttendance(userId: string): Promise<AutoAttendanceResult> {
+  if (!userId) return { recorded: false, streak: null, streakReward: null };
 
   const already = await hasAttendanceToday(userId);
-  if (already) return { recorded: false };
 
-  await bumpMissionProgress(userId, "attendance", 1);
-  return { recorded: true };
+  if (!already) {
+    await bumpMissionProgress(userId, "attendance", 1);
+  }
+
+  const streak = await checkInStreak();
+
+  let streakReward: AutoAttendanceResult["streakReward"] = null;
+  if (streak) {
+    const reached = getReachedMilestone(streak.milestoneReached);
+    if (reached) {
+      const grantedBadges = await grantStreakBadges();
+      streakReward = { ...reached, grantedBadges };
+    }
+  }
+
+  return { recorded: !already, streak, streakReward };
 }
 
 async function getAttendanceMissionId(): Promise<string | null> {

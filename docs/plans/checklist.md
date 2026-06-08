@@ -247,6 +247,28 @@
 - [ ] `/missions` 사용자 화면, `/admin/missions` 운영자 화면
 - [ ] `Live2DWrapper.tsx`: 말풍선 전역 60초 / type별 5분 쿨다운 + 사용자 설정 체크
 
+### 6.2 리텐션 — 연속 출석 Streak (2026-06-08 기획 확정)
+
+세부 기획은 [retention-streak.md](./retention-streak.md) 참조.
+
+- [ ] DB 마이그레이션: `user_streaks(user_id, current_streak, longest_streak, last_check_in_date, total_check_ins, streak_freeze_count, updated_at)` 신규 + RLS
+- [ ] DB 마이그레이션: `badges` 시드 7종 (`streak_3 / 7 / 14 / 30 / 50 / 100 / 365`)
+- [ ] DB 마이그레이션: `condition_type = 'streak_days'` 처리 추가
+- [ ] Postgres RPC: `check_in_streak()` — KST 기준 멱등 체크인, 끊김 처리, 이정표 반환
+- [ ] Postgres RPC: `grant_streak_badges()` — 클라이언트 임의 호출 방지용 배지 지급 함수
+- [ ] `lib/community/streak.ts`: `checkInStreak()`, `fetchStreak()` 헬퍼 + 세션당 1회 가드
+- [ ] `lib/community/badges.ts`: `streak_days` 분기 추가
+- [ ] `useAuthUser` 또는 부팅 훅에서 로그인 직후 자동 체크인 호출
+- [ ] `/missions` 상단 Streak 카드 (현재/최장/다음 이정표까지)
+- [x] 이정표 보상 모달 (배지·호칭 + 공유 CTA + `seen_streak_milestones` 로컬 저장)
+- [x] 끊긴 다음 첫 진입 시 회복 안내 모달 (`streak:broken` 이벤트 → `StreakMilestoneModal` 내 처리)
+- [x] `/profile` "최애 & 배지" 탭에 Streak 컴팩트 위젯
+- [x] `/user/[handle]` 공개 프로필에 현재 streak 칩 + 최장 streak 표시
+- [ ] 비로그인 `/missions` 안내 카드 (가입 유도 CTA)
+- [ ] 후속: 닉네임 옆 🔥 칩 노출 + 사용자 설정 ON/OFF
+- [ ] 후속: 끊김 방어권(streak freeze) 발행/사용 로직
+- [ ] 후속: 위클리 미션 (`weekly_missions` 테이블)
+
 ## Phase 7. 창작자 트랙과 웹툰/소설
 
 - [x] 일반 게시글과 미디어 업로드 기반

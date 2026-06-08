@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { AuthProvider } from "@/lib/supabase/useAuthUser";
 import AttendanceRecorder from "@/components/AttendanceRecorder";
+import StreakMilestoneModal from "@/components/streak/StreakMilestoneModal";
 import GlobalNavigation from "@/components/GlobalNavigation";
 import MainLayoutClient from "@/components/MainLayoutClient";
 import ScrollToTop from "@/components/ScrollToTop";
@@ -30,6 +31,7 @@ export default function RootLayout({
         <ScrollToTop />
         <AuthProvider>
           <AttendanceRecorder />
+          <StreakMilestoneModal />
           <GlobalNavigation />
           <MainLayoutClient>{children}</MainLayoutClient>
         </AuthProvider>

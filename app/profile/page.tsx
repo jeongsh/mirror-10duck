@@ -42,6 +42,7 @@ import AuthorProfileCard from "@/components/community/AuthorProfileCard";
 import { CARD_THEMES, THEME_ORDER } from "@/lib/cardThemes";
 import CardImageCropModal from "@/components/profile/CardImageCropModal";
 import PlayHistoryPanel from "@/components/profile/PlayHistoryPanel";
+import StreakCard from "@/components/streak/StreakCard";
 import type { OfficialOshiCharacter, OfficialWork } from "@/types/official";
 
 type TabId = "profile" | "library" | "subscription" | "oshi" | "card" | "play" | "account";
@@ -1110,6 +1111,16 @@ function ProfilePageContent() {
               <div className="border border-dashed border-yellow-400 bg-yellow-50 px-5 py-3 text-xs font-bold text-yellow-700 flex items-center gap-3">
                 <span className="text-lg">🎉</span>
                 새 배지 획득! {newBadgeIds.map((id) => allBadges.find((b) => b.id === id)?.name).filter(Boolean).join(", ")}
+              </div>
+            )}
+
+            {/* 연속 출석 Streak 위젯 */}
+            {user && (
+              <div>
+                <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-gray-500">
+                  연속 출석
+                </p>
+                <StreakCard userId={user.id} full={false} />
               </div>
             )}
 

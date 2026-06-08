@@ -92,6 +92,14 @@ const DEFAULT_BADGES: Badge[] = [
     condition_value: 1,
     created_at: new Date().toISOString(),
   },
+  // 연속 출석 Streak 이정표 배지 (DB 연동 전 폴백용)
+  { id: "streak_3",   name: "사흘짜리 다짐",     description: "연속 출석 3일 달성",   icon: "🔥", rarity: "common",    condition_type: "streak_days", condition_value: 3,   created_at: new Date().toISOString() },
+  { id: "streak_7",   name: "일주일의 약속",     description: "연속 출석 7일 달성",   icon: "🔥", rarity: "common",    condition_type: "streak_days", condition_value: 7,   created_at: new Date().toISOString() },
+  { id: "streak_14",  name: "본방사수 14일",     description: "연속 출석 14일 달성",  icon: "🔥", rarity: "rare",      condition_type: "streak_days", condition_value: 14,  created_at: new Date().toISOString() },
+  { id: "streak_30",  name: "한 달 만근개근",    description: "연속 출석 30일 달성",  icon: "🔥", rarity: "rare",      condition_type: "streak_days", condition_value: 30,  created_at: new Date().toISOString() },
+  { id: "streak_50",  name: "안방 출퇴근러",     description: "연속 출석 50일 달성",  icon: "🔥", rarity: "epic",      condition_type: "streak_days", condition_value: 50,  created_at: new Date().toISOString() },
+  { id: "streak_100", name: "100일 회차 정주행", description: "연속 출석 100일 달성", icon: "🔥", rarity: "epic",      condition_type: "streak_days", condition_value: 100, created_at: new Date().toISOString() },
+  { id: "streak_365", name: "1년차 고인물",      description: "연속 출석 365일 달성", icon: "🔥", rarity: "legendary", condition_type: "streak_days", condition_value: 365, created_at: new Date().toISOString() },
 ];
 
 export async function getAllBadges(): Promise<Badge[]> {

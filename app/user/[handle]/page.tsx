@@ -22,6 +22,7 @@ import { splitFeedBodyForDisplay } from "@/lib/community/feedContentDisplay";
 import { blockUser, unblockUser, checkIsBlocked } from "@/lib/supabase/profiles";
 import { formatOshiPrimaryTitle, formatOshiSubtitle, getOshiList } from "@/lib/supabase/oshi";
 import SharedPostOriginCard from "@/components/community/SharedPostOriginCard";
+import { fetchStreak, type StreakState } from "@/lib/community/streak";
 
 function profileName(profile: UserProfile) {
   return profile.display_name || profile.nickname || "사용자";
@@ -336,6 +337,7 @@ export default function UserFeedPage() {
         )}
 
         <ProfileTasteSummary
+          userId={targetProfile.user_id ?? targetProfile.id}
           oshiList={oshiList}
           interestWorks={interestWorks}
           userBadges={userBadges}
@@ -463,14 +465,27 @@ export default function UserFeedPage() {
 }
 
 function ProfileTasteSummary({
+  userId,
   oshiList,
   interestWorks,
   userBadges,
 }: {
+  userId: string;
   oshiList: OshiRegistration[];
   interestWorks: OfficialWork[];
   userBadges: UserBadge[];
 }) {
+  const [streak, setStreak] = useState<StreakState | null>(null);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    void fetchStreak(userId).then((s) => {
+      if (!cancelled) setStreak(s);
+    });
+    return () => { cancelled = true; };
+  }, [userId]);
+
   const mainOshi = oshiList.find((oshi) => oshi.rank === 1) ?? oshiList[0];
   const subOshi = oshiList.filter((oshi) => oshi.id !== mainOshi?.id).slice(0, 4);
   const badges = userBadges
@@ -478,7 +493,7 @@ function ProfileTasteSummary({
     .filter((badge): badge is Badge => Boolean(badge))
     .slice(0, 4);
 
-  if (!mainOshi && interestWorks.length === 0 && badges.length === 0) return null;
+  if (!mainOshi && interestWorks.length === 0 && badges.length === 0 && !streak) return null;
 
   return (
     <div className="mt-5 space-y-3 border-t border-dashed border-gray-300 pt-4">
@@ -555,6 +570,19 @@ function ProfileTasteSummary({
               {badge.name}
             </span>
           ))}
+        </div>
+      ) : null}
+
+      {streak && streak.currentStreak > 0 ? (
+        <div className="flex items-center gap-1.5">
+          <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-orange-300 bg-orange-50 px-2.5 py-1 text-[11px] font-bold text-orange-700">
+            🔥 {streak.currentStreak}일 연속 출석
+          </span>
+          {streak.longestStreak > streak.currentStreak && (
+            <span className="text-[10px] text-gray-400">
+              최장 {streak.longestStreak}일
+            </span>
+          )}
         </div>
       ) : null}
     </div>
