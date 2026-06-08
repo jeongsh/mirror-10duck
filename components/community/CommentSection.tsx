@@ -183,6 +183,9 @@ export default function CommentSection({
     });
   };
 
+  const canSubmitText =
+    (viewerId || effectiveAllowAnonymous) && !submitting && Boolean(text.trim());
+
   const handleSubmitText = async () => {
     const isAnonymous = !viewerId;
     if (isAnonymous && !effectiveAllowAnonymous) {
@@ -296,6 +299,17 @@ export default function CommentSection({
     setReplyTo(null);
     await refresh();
     onThreadChanged?.();
+  };
+
+  const handleCommentKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (
+      event.key === "Enter" &&
+      (event.ctrlKey || event.metaKey) &&
+      !event.nativeEvent.isComposing
+    ) {
+      event.preventDefault();
+      if (canSubmitText) void handleSubmitText();
+    }
   };
 
   const handleSubmitStickerOnly = async (token: string) => {
@@ -799,6 +813,9 @@ export default function CommentSection({
             onChange={setText}
             restoreCaret={restoreCaret}
             onRestoreCaret={() => setRestoreCaret(null)}
+            onSubmitShortcut={() => {
+              if (canSubmitText) void handleSubmitText();
+            }}
             disabled={!viewerId && !effectiveAllowAnonymous}
             placeholder={
               viewerId || effectiveAllowAnonymous
@@ -820,6 +837,7 @@ export default function CommentSection({
             }
             value={text}
             onChange={(e) => setText(e.target.value)}
+            onKeyDown={handleCommentKeyDown}
             disabled={!viewerId && !effectiveAllowAnonymous}
             className="w-full border border-dashed border-gray-400 bg-white px-3 py-2 text-sm disabled:bg-gray-100 disabled:text-gray-400"
           />
@@ -834,14 +852,15 @@ export default function CommentSection({
           <button
             type="button"
             onClick={handleSubmitText}
-            disabled={(!viewerId && !effectiveAllowAnonymous) || submitting || !text.trim()}
+            disabled={!canSubmitText}
+            title="Ctrl+Enter로 등록 (Mac: ⌘+Enter)"
             className="ml-auto border border-dashed border-gray-800 bg-gray-900 px-4 py-2 text-xs font-bold uppercase tracking-widest text-white hover:bg-gray-700 disabled:opacity-50"
           >
             {submitting ? "등록 중..." : "댓글 등록"}
           </button>
         </div>
         <p className="text-[10px] text-gray-400">
-          텍스트 입력 후 [댓글 등록] / 입력 없이 [스티커 답글로 바로 등록] 으로 짧은 감정 답을 보낼 수 있습니다.
+          텍스트 입력 후 [댓글 등록] 또는 Ctrl+Enter(⌘+Enter) / 입력 없이 [스티커 답글로 바로 등록] 으로 짧은 감정 답을 보낼 수 있습니다.
         </p>
       </div>
     </section>

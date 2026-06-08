@@ -66,6 +66,25 @@ const ASSISTANT_PROMPTS_GUEST = [
 function pickRandomLine(lines: string[]): string {
   return lines[Math.floor(Math.random() * lines.length)] ?? "";
 }
+
+function isEditableElementFocused(): boolean {
+  if (typeof document === "undefined") return false;
+  const el = document.activeElement;
+  if (!el) return false;
+  if (
+    el instanceof HTMLInputElement ||
+    el instanceof HTMLTextAreaElement ||
+    el instanceof HTMLSelectElement
+  ) {
+    return true;
+  }
+  return el instanceof HTMLElement && el.isContentEditable;
+}
+
+function isComposePage(pathname: string): boolean {
+  return pathname.includes("/write");
+}
+
 const ASSISTANT_LOADING_MESSAGE = "\ud655\uc778 \uc911\uc774\uc5d0\uc694.";
 const ASSISTANT_RESPONSE_DURATION_MS = 4500;
 
@@ -260,35 +279,48 @@ const LIVE2D_BUBBLE_COOLDOWN_GLOBAL_MS = 60 * 1000;
 const LIVE2D_BUBBLE_COOLDOWN_PER_TYPE_MS = 5 * 60 * 1000;
 const CHARACTER_POINTER_FALLBACK_DELAY_MS = 80;
 const CHARACTER_POINTER_BOUNDS_PADDING = 24;
-const CHARACTER_HIDE_DELAY_MS = 1700;
-
 // 말풍선이 한 글자씩 "말하듯" 찍히는 속도(글자당 ms).
 const SPEECH_TYPING_SPEED_MS = 28;
 // 자동 닫힘 전 최소/최대 노출 시간.
 const SPEECH_MIN_DURATION_MS = 2600;
 const SPEECH_MAX_DURATION_MS = 8000;
+const SPEECH_ACTION_READ_MS = 1000;
 
 /**
- * 문장 길이에 맞춰 말풍선 노출 시간을 계산한다.
+ * 문장 길이에 맞춰 말풍선의 타이핑/읽기 시간을 계산한다.
  * - 타이핑 애니메이션 시간 + 읽는 시간을 합산해, 짧은 대사는 가볍게 지나가고
  *   긴 대사는 충분히 머무르도록 자연스러운 호흡을 준다.
  */
-function estimateSpeechDuration(text: string): number {
+function estimateSpeechTiming(text: string): { typingMs: number; readingMs: number; durationMs: number } {
   const length = text.trim().length;
   const typingMs = length * SPEECH_TYPING_SPEED_MS;
   const readingMs = 1100 + length * 55;
-  return Math.min(Math.max(typingMs + readingMs, SPEECH_MIN_DURATION_MS), SPEECH_MAX_DURATION_MS);
+  const durationMs = Math.min(Math.max(typingMs + readingMs, SPEECH_MIN_DURATION_MS), SPEECH_MAX_DURATION_MS);
+  return { typingMs, readingMs, durationMs };
+}
+
+function estimateSpeechDuration(text: string): number {
+  return estimateSpeechTiming(text).durationMs;
 }
 
 /**
  * 말풍선 안내 후 페이지를 이동하기까지의 지연.
  * 대사가 전부 타이핑된 뒤(typingMs) 잠깐 읽을 시간을 더해, 대사가 끝나기 전에
- * 화면이 넘어가지 않도록 한다. 너무 길게 기다리지 않도록 상한을 둔다.
+ * 화면이 넘어가지 않도록 한다. 긴 대사는 상한보다 타이핑 완료를 우선한다.
  */
 function estimateNavDelay(text: string): number {
-  const length = text.trim().length;
-  const typingMs = length * SPEECH_TYPING_SPEED_MS;
-  return Math.min(Math.max(typingMs + 1000, 1800), 4500);
+  const { typingMs } = estimateSpeechTiming(text);
+  return Math.max(1800, Math.min(typingMs + SPEECH_ACTION_READ_MS, 4500), typingMs + 350);
+}
+
+/**
+ * 캐릭터 숨김, 페이지 이동처럼 캐릭터 자체가 사라지거나 화면이 바뀌는 액션은
+ * 타이핑 중에 실행하지 않는다. 짧은 대사는 최소 노출 시간을 지키고, 긴 대사는
+ * 타이핑 완료를 최우선으로 보장한다.
+ */
+function estimateCharacterActionDelay(text: string): number {
+  const { typingMs, durationMs } = estimateSpeechTiming(text);
+  return Math.max(durationMs, typingMs + SPEECH_ACTION_READ_MS);
 }
 
 function patchPixiCancelResize(app: Application): void {
@@ -436,6 +468,7 @@ export default function Live2DWrapper() {
   const actionIdleTimeoutSeqRef = useRef(0);
   const pointerFallbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hideCharacterTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressCharacterClickUntilRef = useRef(0);
   const suppressEmotionDialogueUntilRef = useRef(0);
   const lastHitAtRef = useRef(0);
@@ -476,6 +509,13 @@ export default function Live2DWrapper() {
     if (messageTimeoutRef.current) {
       clearTimeout(messageTimeoutRef.current);
       messageTimeoutRef.current = null;
+    }
+  }
+
+  function clearHideCharacterTimeout() {
+    if (hideCharacterTimeoutRef.current) {
+      clearTimeout(hideCharacterTimeoutRef.current);
+      hideCharacterTimeoutRef.current = null;
     }
   }
 
@@ -524,21 +564,34 @@ export default function Live2DWrapper() {
 
   async function hideCharacterFromAssistant() {
     clearMessageTimeout();
+    clearHideCharacterTimeout();
     setAssistantOpen(false);
     setAssistantBusy(null);
     setWhatNowFlow(null);
     const store = useCharacterStore.getState();
+    const hideMessage = "아, 잠깐 숨어 있을게요. 그래도 필요한 알림은 아래에 띄워둘게요.";
+    const hiddenMessage = "캐릭터를 접어뒀어요. 알림은 토스트로 계속 보여드릴게요.";
+    const hideDelay = estimateCharacterActionDelay(hideMessage);
+    const hideReadyAt = Date.now() + hideDelay;
     store.setEmotion("sad");
-    store.setMessage("아, 잠깐 숨어 있을게요. 그래도 필요한 알림은 아래에 띄워둘게요.");
+    setTemporaryMessage(hideMessage, hideDelay + 800);
 
     try {
       await saveLive2DEnabledPreference(false);
-      window.setTimeout(() => {
+      const remainingHideDelay = Math.max(0, hideReadyAt - Date.now());
+      hideCharacterTimeoutRef.current = setTimeout(() => {
+        hideCharacterTimeoutRef.current = null;
         setLive2DEnabled(false);
         const nextStore = useCharacterStore.getState();
-        nextStore.setMessage("캐릭터를 접어뒀어요. 알림은 토스트로 계속 보여드릴게요.");
-      }, CHARACTER_HIDE_DELAY_MS);
+        nextStore.setMessage(hiddenMessage);
+        window.setTimeout(() => {
+          const state = useCharacterStore.getState();
+          if (state.message === hiddenMessage) state.setMessage(null);
+          if (state.emotion === "sad") state.setEmotion("idle");
+        }, estimateSpeechDuration(hiddenMessage));
+      }, remainingHideDelay);
     } catch (error) {
+      clearHideCharacterTimeout();
       setLive2DEnabled(true);
       useCharacterStore
         .getState()
@@ -547,8 +600,8 @@ export default function Live2DWrapper() {
       window.setTimeout(() => {
         const state = useCharacterStore.getState();
         if (state.emotion === "sad") state.setEmotion("idle");
-        if (state.message) state.setMessage(null);
-      }, CHARACTER_HIDE_DELAY_MS + 3200);
+        if (state.message === hideMessage) state.setMessage(null);
+      }, hideDelay + 900);
     }
   }
 
@@ -755,6 +808,7 @@ export default function Live2DWrapper() {
     // 포함돼 있으니 준비된 시점에 한 번 트리거되어 자연스럽게 인사가 뜬다.
     if (!isReady) return;
     if (assistantOpen || assistantBusy) return;
+    if (isComposePage(pathname)) return;
 
     const preset = PAGE_DIALOGUE_PRESETS.find((item) => item.match(pathname));
     if (!preset) return;
@@ -1179,6 +1233,7 @@ export default function Live2DWrapper() {
 
     const handleKeyDown = () => {
       resetIdleTimer();
+      if (isEditableElementFocused() || (pathname && isComposePage(pathname))) return;
       if (Math.random() > 0.8) {
         playAction("typing");
       }
@@ -1195,7 +1250,7 @@ export default function Live2DWrapper() {
       window.removeEventListener("pointermove", handlePointerMoveGlobal);
       clearTimeout(idleTimeout);
     };
-  }, [appReady, modelPath, isReady]);
+  }, [appReady, modelPath, isReady, pathname]);
 
   // --------------------------------------------------------------------
   // Effect 4 · 감정 상태 → 표정 + 사운드 + 대사
@@ -1523,7 +1578,10 @@ export default function Live2DWrapper() {
     const opensAssistant =
       safeAction === "attention" || safeAction === "tap_head" || safeAction === "tap_other";
     const lines = profile.dialogues.actions[safeAction] ?? DEFAULT_ACTION_LINES[safeAction];
-    if (!opensAssistant && lines && lines.length > 0) {
+    const suppressTypingDialogue =
+      safeAction === "typing" &&
+      (isEditableElementFocused() || (pathname ? isComposePage(pathname) : false));
+    if (!opensAssistant && !suppressTypingDialogue && lines && lines.length > 0) {
       const line = lines[Math.floor(Math.random() * lines.length)];
       setTemporaryMessage(line);
     }
