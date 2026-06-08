@@ -62,6 +62,7 @@ export type ClinicSharePayload = {
   liked: string[];
   disliked: string[];
   retry?: RetryAction;
+  prescriptions?: Prescription[];
 };
 
 export type ClinicCopyResult = {

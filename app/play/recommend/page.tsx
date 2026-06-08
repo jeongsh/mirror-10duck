@@ -423,6 +423,7 @@ export default function AnimeRecommendPage() {
   const [loadingLineIndex, setLoadingLineIndex] = useState(0);
   const [candidates, setCandidates] = useState<AnimeCandidate[]>(FALLBACK_CANDIDATES);
   const [copyResult, setCopyResult] = useState<ClinicCopyResult | null>(null);
+  const [sharedPrescriptions, setSharedPrescriptions] = useState<Prescription[] | null>(null);
   const [coverByTitle, setCoverByTitle] = useState<Record<string, string>>({});
   const [imageDataUrls, setImageDataUrls] = useState<Record<string, string>>({});
   const [imagesReady, setImagesReady] = useState(false);
@@ -449,13 +450,14 @@ export default function AnimeRecommendPage() {
   }, [answers, candidates, department.axes, disliked, liked]);
 
   const diagnosis = useMemo(() => getDiagnosis(scores, allergies), [allergies, scores]);
-  const prescriptions = useMemo(
+  const basePrescriptions = useMemo(
     () => buildPrescriptions(candidates, scores, allergies, answers, retry),
     [allergies, answers, candidates, retry, scores],
   );
+  const prescriptions = sharedPrescriptions ?? basePrescriptions;
   const displayPrescriptions = useMemo(
-    () => mergeCopyIntoPrescriptions(prescriptions, copyResult),
-    [copyResult, prescriptions],
+    () => sharedPrescriptions ?? mergeCopyIntoPrescriptions(basePrescriptions, copyResult),
+    [basePrescriptions, copyResult, sharedPrescriptions],
   );
   const immersionScore = useMemo(() => getImmersionScore(scores, allergies), [allergies, scores]);
   const keywords = useMemo(() => {
@@ -475,8 +477,9 @@ export default function AnimeRecommendPage() {
       liked,
       disliked,
       retry,
+      prescriptions: displayPrescriptions,
     }),
-    [allergies, answers, departmentId, disliked, liked, retry],
+    [allergies, answers, departmentId, disliked, displayPrescriptions, liked, retry],
   );
 
   useEffect(() => {
@@ -528,6 +531,7 @@ export default function AnimeRecommendPage() {
     setLiked(payload.liked);
     setDisliked(payload.disliked);
     setRetry(payload.retry);
+    setSharedPrescriptions(payload.prescriptions ?? null);
     setQuestionIndex(QUESTIONS.length);
     setStep("result");
   }, []);
@@ -614,6 +618,7 @@ export default function AnimeRecommendPage() {
     setLiked([]);
     setDisliked([]);
     setRetry(undefined);
+    setSharedPrescriptions(null);
     setCopyResult(null);
     setCopied(false);
     window.history.replaceState(null, "", "/play/recommend");
@@ -622,18 +627,21 @@ export default function AnimeRecommendPage() {
   const beginDiagnosis = () => {
     if (!canSeeResult) return;
     setCopied(false);
+    setSharedPrescriptions(null);
     setStep("loading");
   };
 
   const applyRetry = (action: RetryAction) => {
     setRetry(action);
     setCopied(false);
+    setSharedPrescriptions(null);
     setStep("loading");
   };
 
   const handleShare = async () => {
     try {
-      const shareUrl = window.location.href;
+      const shareUrl = `${window.location.origin}/play/recommend?clinic=${encodeClinicPayload(currentPayload)}`;
+      window.history.replaceState(null, "", shareUrl);
       let copiedLink = false;
 
       try {
