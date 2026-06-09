@@ -121,6 +121,7 @@ export default function AdminEventListPage({ kind }: { kind: AdminEventKind }) {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [uploadingImageField, setUploadingImageField] = useState<"imageUrl" | "detailImageUrl" | null>(null);
+  const draftStorageKeyRef = useRef<string | null>(null);
 
   async function fetchEvents() {
     setLoading(true);
@@ -323,7 +324,25 @@ export default function AdminEventListPage({ kind }: { kind: AdminEventKind }) {
     }
   }
 
+  function openCreateModal() {
+    draftStorageKeyRef.current = crypto.randomUUID();
+    setEditForm({
+      id: "",
+      eventType: "offline_event",
+      title: "",
+      startsAt: "",
+      endsAt: "",
+      location: "",
+      sourceUrl: "",
+      imageUrl: "",
+      detailImageUrl: "",
+      status: "DRAFT",
+      description: toEditorBody(null),
+    });
+  }
+
   function openEditModal(event: AdminEventRow) {
+    draftStorageKeyRef.current = null;
     setEditForm({
       id: event.id,
       eventType: event.event_type.toLowerCase() as CalendarEventType,
@@ -346,30 +365,39 @@ export default function AdminEventListPage({ kind }: { kind: AdminEventKind }) {
       return;
     }
 
-    setSavingId(editForm.id);
+    const isCreating = !editForm.id;
+    setSavingId(isCreating ? "__creating__" : editForm.id);
     try {
-      const { error } = await supabase
-        .from("release_events")
-        .update({
-          event_type: editForm.eventType.toUpperCase(),
-          title: editForm.title.trim(),
-          description: emptyToNull(editForm.description),
-          starts_at: dateToKstIso(editForm.startsAt),
-          ends_at: editForm.endsAt ? dateToKstIso(editForm.endsAt) : null,
-          location: emptyToNull(editForm.location),
-          source_url: emptyToNull(editForm.sourceUrl),
-          image_url: emptyToNull(editForm.imageUrl),
-          detail_image_url: emptyToNull(editForm.detailImageUrl),
-          status: editForm.status,
-        })
-        .eq("id", editForm.id);
+      const payload = {
+        event_type: editForm.eventType.toUpperCase(),
+        title: editForm.title.trim(),
+        description: emptyToNull(editForm.description),
+        starts_at: dateToKstIso(editForm.startsAt),
+        ends_at: editForm.endsAt ? dateToKstIso(editForm.endsAt) : null,
+        location: emptyToNull(editForm.location),
+        source_url: emptyToNull(editForm.sourceUrl),
+        image_url: emptyToNull(editForm.imageUrl),
+        detail_image_url: emptyToNull(editForm.detailImageUrl),
+        status: editForm.status,
+      };
 
-      if (error) throw error;
+      if (isCreating) {
+        const { error } = await supabase.from("release_events").insert({
+          ...payload,
+          timezone: "Asia/Seoul",
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("release_events").update(payload).eq("id", editForm.id);
+        if (error) throw error;
+      }
+
+      draftStorageKeyRef.current = null;
       setEditForm(null);
       await fetchEvents();
     } catch (error) {
       const message = error instanceof Error ? error.message : "알 수 없는 오류";
-      alert(`이벤트 수정 실패: ${message}`);
+      alert(`이벤트 ${isCreating ? "등록" : "수정"} 실패: ${message}`);
     } finally {
       setSavingId(null);
     }
@@ -387,7 +415,8 @@ export default function AdminEventListPage({ kind }: { kind: AdminEventKind }) {
     setUploadingImageField(field);
     try {
       const fileExt = file.name.split(".").pop() || "jpg";
-      const filePath = `event-images/${editForm.id}/${field}-${crypto.randomUUID()}.${fileExt}`;
+      const storageKey = editForm.id || draftStorageKeyRef.current || crypto.randomUUID();
+      const filePath = `event-images/${storageKey}/${field}-${crypto.randomUUID()}.${fileExt}`;
       const { error } = await supabase.storage.from("post-assets").upload(filePath, file, {
         contentType: file.type,
         upsert: false,
@@ -448,9 +477,8 @@ export default function AdminEventListPage({ kind }: { kind: AdminEventKind }) {
           </Link>
           <button
             type="button"
-            disabled
-            className="inline-flex cursor-not-allowed items-center gap-1 rounded border border-dashed border-gray-300 bg-gray-100 px-3 py-2 text-sm text-gray-400"
-            title="다음 단계에서 등록 페이지를 연결합니다."
+            onClick={openCreateModal}
+            className="inline-flex items-center gap-1 rounded border border-dashed border-gray-600 bg-gray-900 px-3 py-2 text-sm font-semibold text-white hover:bg-gray-700"
           >
             <Plus size={15} />
             새로 등록
@@ -537,7 +565,7 @@ export default function AdminEventListPage({ kind }: { kind: AdminEventKind }) {
           <div className="w-full max-w-3xl border border-dashed border-gray-600 bg-white shadow-xl">
             <div className="flex items-start justify-between gap-3 border-b border-dashed border-gray-300 p-4">
               <div>
-                <h3 className="text-lg font-bold">이벤트 수정</h3>
+                <h3 className="text-lg font-bold">{editForm.id ? "이벤트 수정" : "이벤트 등록"}</h3>
                 <p className="mt-1 text-sm text-gray-500">공개 이벤트 목록과 상세 페이지에 반영됩니다.</p>
               </div>
               <button
@@ -646,7 +674,7 @@ export default function AdminEventListPage({ kind }: { kind: AdminEventKind }) {
               <div className="flex flex-col gap-1 text-xs font-bold text-gray-500 md:col-span-2">
                 <span>대표 이미지 URL</span>
                 <EventImageUrlInput
-                  id={`event-image-${editForm.id}`}
+                  id={`event-image-${editForm.id || draftStorageKeyRef.current || "new"}`}
                   value={editForm.imageUrl}
                   uploading={uploadingImageField === "imageUrl"}
                   onChange={(value) =>
@@ -659,7 +687,7 @@ export default function AdminEventListPage({ kind }: { kind: AdminEventKind }) {
               <div className="flex flex-col gap-1 text-xs font-bold text-gray-500 md:col-span-2">
                 <span>상세 이미지 URL</span>
                 <EventImageUrlInput
-                  id={`event-detail-image-${editForm.id}`}
+                  id={`event-detail-image-${editForm.id || draftStorageKeyRef.current || "new"}`}
                   value={editForm.detailImageUrl}
                   uploading={uploadingImageField === "detailImageUrl"}
                   onChange={(value) =>
@@ -694,11 +722,11 @@ export default function AdminEventListPage({ kind }: { kind: AdminEventKind }) {
               <button
                 type="button"
                 onClick={() => void handleSaveEvent()}
-                disabled={savingId === editForm.id}
+                disabled={savingId === (editForm.id || "__creating__")}
                 className="inline-flex h-9 items-center justify-center gap-1 border border-dashed border-gray-600 bg-gray-900 px-3 text-sm font-semibold text-white hover:bg-gray-700 disabled:cursor-wait disabled:bg-gray-400"
               >
                 <Save size={14} />
-                {savingId === editForm.id ? "저장 중" : "저장"}
+                {savingId === (editForm.id || "__creating__") ? "저장 중" : "저장"}
               </button>
             </div>
           </div>
