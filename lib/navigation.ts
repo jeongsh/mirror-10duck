@@ -20,6 +20,7 @@ const PRIMARY_NAV_ITEMS_BASE: NavItem[] = [
   { href: "/feed", label: "피드", matchPrefix: null },
   { href: "/news", label: "소식", matchPrefix: null },
   { href: "/season/current", label: "이번 분기", matchPrefix: "/season" },
+  { href: "/events", label: "이벤트", matchPrefix: "/events" },
 ];
 
 export const PRIMARY_NAV_ITEMS: NavItem[] = PRIMARY_NAV_ITEMS_BASE.filter(

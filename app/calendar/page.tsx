@@ -9,9 +9,12 @@ import {
   ChevronRight,
   Clock3,
   Edit3,
+  ExternalLink,
+  ImageIcon,
   MapPin,
   MessageSquareText,
   Plus,
+  Send,
   Trash2,
   User,
   X,
@@ -24,29 +27,48 @@ import {
   type AttendanceMonthSummary,
 } from "@/lib/community/attendance";
 import {
-  CATEGORY_LABELS,
+  CALENDAR_TAB_LABELS,
   EVENT_TYPE_LABELS,
-  PUBLIC_CATEGORIES,
+  PUBLIC_CALENDAR_TABS,
   addMonths,
   buildMonthGrid,
-  filterByCategory,
+  filterByCalendarTab,
   getCalendarEvents,
+  getCalendarEventCategory,
   startOfMonth,
+  type CalendarTab,
   type CalendarEvent,
   type CalendarEventType,
-  type OtakuCategory,
   ymdKey,
 } from "@/lib/otaku/hub";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
-const TABS: OtakuCategory[] = PUBLIC_CATEGORIES;
+const TABS: CalendarTab[] = PUBLIC_CALENDAR_TABS;
 const PERSONAL_EVENTS_STORAGE_KEY = "duck-personal-calendar-events-v1";
+const SUBMITTABLE_EVENT_TYPES = [
+  "goods_preorder",
+  "goods_release",
+  "offline_event",
+  "ticket_event",
+  "live_event",
+] as const;
 
 type PersonalCalendarForm = {
   id: string | null;
   title: string;
   startsAt: string;
   location: string;
+};
+
+type EventSubmissionForm = {
+  eventType: (typeof SUBMITTABLE_EVENT_TYPES)[number];
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  location: string;
+  sourceUrl: string;
+  imageUrl: string;
+  description: string;
 };
 
 type ReleaseDateRow = {
@@ -58,7 +80,7 @@ type ReleaseDateRow = {
 
 export default function CalendarPage() {
   const [cursor, setCursor] = useState<Date>(() => startOfMonth(new Date()));
-  const [activeCategory, setActiveCategory] = useState<OtakuCategory>("all");
+  const [activeTab, setActiveTab] = useState<CalendarTab>("all");
   const [followingOnly, setFollowingOnly] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [personalEvents, setPersonalEvents] = useState<CalendarEvent[]>([]);
@@ -71,11 +93,23 @@ export default function CalendarPage() {
   const [followedReleaseIds, setFollowedReleaseIds] = useState<Set<string>>(new Set());
   const [userId, setUserId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
+  const [submittingEvent, setSubmittingEvent] = useState(false);
   const [personalForm, setPersonalForm] = useState<PersonalCalendarForm>({
     id: null,
     title: "",
     startsAt: "",
     location: "",
+  });
+  const [submissionForm, setSubmissionForm] = useState<EventSubmissionForm>({
+    eventType: "goods_preorder",
+    title: "",
+    startsAt: "",
+    endsAt: "",
+    location: "",
+    sourceUrl: "",
+    imageUrl: "",
+    description: "",
   });
 
   const today = useMemo(() => new Date(), []);
@@ -89,11 +123,15 @@ export default function CalendarPage() {
           id,
           title,
           starts_at,
+          ends_at,
           timezone,
           event_type,
           episode_label,
           platform,
+          description,
+          location,
           source_url,
+          image_url,
           release_item_id,
           release_items (
             category
@@ -132,21 +170,25 @@ export default function CalendarPage() {
         const mappedData: CalendarEvent[] = ((data ?? []) as any[]).map((item) => ({
           id: item.id,
           contentId: item.release_item_id,
-          category: item.release_items?.category?.toLowerCase() || "anime",
+          category: getCalendarEventCategory(item.event_type, item.release_items?.category),
           type: item.event_type.toLowerCase() as CalendarEventType,
           title: item.title,
+          description: item.description ?? undefined,
           startsAt: item.starts_at,
+          endsAt: item.ends_at ?? undefined,
           timezone: item.timezone,
           episodeLabel: item.episode_label,
           platform: item.platform,
+          location: item.location ?? undefined,
           sourceUrl: item.source_url,
+          imageUrl: item.image_url ?? undefined,
           isFollowing: false,
           reminderOffsetMinutes: null,
         }));
         const mappedReleaseDates: CalendarEvent[] = ((releaseItems ?? []) as ReleaseDateRow[]).map((item) => ({
           id: `release-date-${item.id}`,
           contentId: item.id,
-          category: item.category.toLowerCase() as Exclude<OtakuCategory, "all">,
+          category: item.category.toLowerCase() as "anime" | "manga" | "game",
           type: item.category === "MANGA" ? "manga_volume" : "anime_airing",
           title: item.title,
           startsAt: dateOnlyToKstIso(item.release_date),
@@ -193,12 +235,12 @@ export default function CalendarPage() {
     [baseEvents, dbEvents, followedReleaseIds, personalEvents],
   );
   const monthEvents = useMemo(() => {
-    const categoryFiltered = filterByCategory(events, activeCategory);
-    return categoryFiltered
+    const tabFiltered = filterByCalendarTab(events, activeTab);
+    return tabFiltered
       .filter((event) => isSameMonth(new Date(event.startsAt), cursor))
       .filter((event) => (followingOnly ? event.isFollowing : true))
       .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
-  }, [activeCategory, cursor, events, followingOnly]);
+  }, [activeTab, cursor, events, followingOnly]);
 
   const weeks = useMemo(() => buildMonthGrid(cursor), [cursor]);
   const eventsByDay = useMemo(() => {
@@ -343,6 +385,55 @@ export default function CalendarPage() {
     }
   }
 
+  async function handleSubmitEventSuggestion(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!userId) {
+      alert("로그인 후 일정을 제보할 수 있습니다.");
+      return;
+    }
+    if (!submissionForm.title.trim() || !submissionForm.startsAt || !submissionForm.sourceUrl.trim()) {
+      alert("제목, 날짜, 출처 URL은 필수입니다.");
+      return;
+    }
+
+    setSubmittingEvent(true);
+    try {
+      const { error } = await supabase.from("calendar_event_submissions").insert({
+        user_id: userId,
+        event_type: submissionForm.eventType.toUpperCase(),
+        title: submissionForm.title.trim(),
+        starts_at: new Date(submissionForm.startsAt).toISOString(),
+        ends_at: submissionForm.endsAt ? new Date(submissionForm.endsAt).toISOString() : null,
+        timezone: "Asia/Seoul",
+        location: emptyToNullish(submissionForm.location),
+        source_url: submissionForm.sourceUrl.trim(),
+        image_url: emptyToNullish(submissionForm.imageUrl),
+        description: emptyToNullish(submissionForm.description),
+        status: "PENDING",
+      });
+
+      if (error) throw error;
+
+      setSubmissionForm({
+        eventType: "goods_preorder",
+        title: "",
+        startsAt: "",
+        endsAt: "",
+        location: "",
+        sourceUrl: "",
+        imageUrl: "",
+        description: "",
+      });
+      setIsSubmitModalOpen(false);
+      alert("제보가 접수되었습니다. 운영자 확인 후 공개됩니다.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "알 수 없는 오류";
+      alert("일정 제보 실패: " + message);
+    } finally {
+      setSubmittingEvent(false);
+    }
+  }
+
   return (
     <main className="flex w-full flex-col gap-4">
       <header className="border border-dashed border-gray-500 bg-white/80 p-4">
@@ -357,6 +448,13 @@ export default function CalendarPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Link
+              href="/events"
+              className="inline-flex items-center gap-1 border border-dashed border-gray-500 bg-white px-3 py-2 text-sm hover:bg-gray-100"
+            >
+              <CalendarDays size={16} />
+              이벤트
+            </Link>
             <Link
               href="/news"
               className="inline-flex items-center gap-1 border border-dashed border-gray-500 bg-white px-3 py-2 text-sm hover:bg-gray-100"
@@ -405,14 +503,14 @@ export default function CalendarPage() {
                 <button
                   key={tab}
                   type="button"
-                  onClick={() => setActiveCategory(tab)}
+                  onClick={() => setActiveTab(tab)}
                   className={`border border-dashed px-3 py-2 text-xs font-semibold ${
-                    activeCategory === tab
+                    activeTab === tab
                       ? "border-gray-800 bg-gray-300 text-gray-950"
                       : "border-gray-500 bg-white text-gray-600 hover:bg-gray-100"
                   }`}
                 >
-                  {CATEGORY_LABELS[tab]}
+                  {CALENDAR_TAB_LABELS[tab]}
                 </button>
               ))}
               <button
@@ -450,6 +548,14 @@ export default function CalendarPage() {
             >
               <Plus size={14} />
               내 캘린더 저장
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsSubmitModalOpen(true)}
+              className="inline-flex h-9 items-center justify-center gap-1 border border-dashed border-gray-500 bg-white px-3 text-sm font-semibold text-gray-800 hover:bg-gray-100"
+            >
+              <Send size={14} />
+              일정 제보
             </button>
           </div>
 
@@ -629,6 +735,135 @@ export default function CalendarPage() {
           </form>
         </div>
       ) : null}
+      {isSubmitModalOpen ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/35 p-4">
+          <form
+            onSubmit={handleSubmitEventSuggestion}
+            className="w-full max-w-lg border border-dashed border-gray-500 bg-white p-4"
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-gray-900">일정 제보</h3>
+                <p className="mt-1 text-xs text-gray-500">
+                  공식 발매, 예약, 티켓, 팝업, 라이브 일정을 제보해 주세요.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSubmitModalOpen(false)}
+                className="inline-flex h-8 w-8 items-center justify-center border border-dashed border-gray-400 bg-white hover:bg-gray-100"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            {!userId ? (
+              <p className="mb-3 border border-dashed border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                로그인 후 일정을 제보할 수 있습니다.
+              </p>
+            ) : null}
+            <div className="space-y-2">
+              <select
+                value={submissionForm.eventType}
+                onChange={(event) =>
+                  setSubmissionForm((current) => ({
+                    ...current,
+                    eventType: event.target.value as EventSubmissionForm["eventType"],
+                  }))
+                }
+                className="h-10 w-full border border-dashed border-gray-400 bg-white px-3 text-sm outline-none focus:border-gray-700"
+              >
+                {SUBMITTABLE_EVENT_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {EVENT_TYPE_LABELS[type]}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={submissionForm.title}
+                onChange={(event) =>
+                  setSubmissionForm((current) => ({ ...current, title: event.target.value }))
+                }
+                type="text"
+                placeholder="일정 제목"
+                className="h-10 w-full border border-dashed border-gray-400 bg-white px-3 text-sm outline-none focus:border-gray-700"
+                required
+              />
+              <input
+                value={submissionForm.startsAt}
+                onChange={(event) =>
+                  setSubmissionForm((current) => ({ ...current, startsAt: event.target.value }))
+                }
+                type="datetime-local"
+                className="h-10 w-full border border-dashed border-gray-400 bg-white px-3 text-sm outline-none focus:border-gray-700"
+                required
+              />
+              <input
+                value={submissionForm.endsAt}
+                onChange={(event) =>
+                  setSubmissionForm((current) => ({ ...current, endsAt: event.target.value }))
+                }
+                type="datetime-local"
+                aria-label="종료일"
+                className="h-10 w-full border border-dashed border-gray-400 bg-white px-3 text-sm outline-none focus:border-gray-700"
+              />
+              <input
+                value={submissionForm.location}
+                onChange={(event) =>
+                  setSubmissionForm((current) => ({ ...current, location: event.target.value }))
+                }
+                type="text"
+                placeholder="장소 또는 판매처"
+                className="h-10 w-full border border-dashed border-gray-400 bg-white px-3 text-sm outline-none focus:border-gray-700"
+              />
+              <input
+                value={submissionForm.sourceUrl}
+                onChange={(event) =>
+                  setSubmissionForm((current) => ({ ...current, sourceUrl: event.target.value }))
+                }
+                type="url"
+                placeholder="출처 URL"
+                className="h-10 w-full border border-dashed border-gray-400 bg-white px-3 text-sm outline-none focus:border-gray-700"
+                required
+              />
+              <input
+                value={submissionForm.imageUrl}
+                onChange={(event) =>
+                  setSubmissionForm((current) => ({ ...current, imageUrl: event.target.value }))
+                }
+                type="url"
+                placeholder="이미지 URL"
+                className="h-10 w-full border border-dashed border-gray-400 bg-white px-3 text-sm outline-none focus:border-gray-700"
+              />
+              <textarea
+                value={submissionForm.description}
+                onChange={(event) =>
+                  setSubmissionForm((current) => ({ ...current, description: event.target.value }))
+                }
+                placeholder="메모"
+                rows={3}
+                className="w-full resize-none border border-dashed border-gray-400 bg-white px-3 py-2 text-sm outline-none focus:border-gray-700"
+              />
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsSubmitModalOpen(false)}
+                className="inline-flex h-9 items-center justify-center border border-dashed border-gray-400 bg-white px-3 text-sm hover:bg-gray-100"
+              >
+                취소
+              </button>
+              <button
+                type="submit"
+                disabled={!userId || submittingEvent}
+                className="inline-flex h-9 items-center justify-center gap-1 border border-dashed border-gray-600 bg-gray-900 px-3 text-sm font-semibold text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Send size={14} />
+                {submittingEvent ? "접수 중" : "제보하기"}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </main>
   );
 }
@@ -659,9 +894,17 @@ function MiniEventPopup({
   return (
     <aside
       data-event-popup="true"
-      className="absolute top-full left-0 z-20 mt-1 w-[260px] border border-gray-400 bg-white p-3 shadow-[0_4px_16px_rgba(0,0,0,0.18)]"
+      className="absolute top-full left-0 z-20 mt-1 w-[280px] border border-gray-400 bg-white p-3 shadow-[0_4px_16px_rgba(0,0,0,0.18)]"
     >
+      {event.imageUrl ? (
+        <div className="mb-2 h-28 overflow-hidden border border-dashed border-gray-300 bg-gray-100">
+          <img src={event.imageUrl} alt="" className="h-full w-full object-cover" />
+        </div>
+      ) : null}
       <h3 className="truncate text-sm font-bold text-gray-900">{event.title}</h3>
+      {event.description ? (
+        <p className="mt-1 line-clamp-3 text-[11px] leading-4 text-gray-600">{event.description}</p>
+      ) : null}
       <div className="mt-2 flex flex-col gap-1.5 text-[11px] text-gray-700">
         <p className="flex items-center gap-1">
           <Clock3 size={12} />
@@ -669,8 +912,25 @@ function MiniEventPopup({
         </p>
         <p className="flex items-center gap-1">
           <MapPin size={12} />
-          {event.platform ?? "미정"}
+          {event.location ?? event.platform ?? "미정"}
         </p>
+        {event.imageUrl ? (
+          <p className="flex items-center gap-1">
+            <ImageIcon size={12} />
+            이미지 등록됨
+          </p>
+        ) : null}
+        {event.sourceUrl ? (
+          <a
+            href={event.sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1 text-blue-600 hover:underline"
+          >
+            <ExternalLink size={12} />
+            공식/출처 링크
+          </a>
+        ) : null}
         <p className="flex items-center gap-1">
           <User size={12} />
           {event.isFollowing ? "관심 일정" : "공개 일정"}
@@ -686,6 +946,15 @@ function MiniEventPopup({
             <Bell size={12} />
             팔로우 해제
           </button>
+        ) : null}
+        {event.category !== "personal" ? (
+          <Link
+            href={getEventDetailHref(event)}
+            className="inline-flex items-center justify-center gap-1 border border-dashed border-gray-500 bg-white px-2 py-1.5 hover:bg-gray-100"
+          >
+            <CalendarDays size={12} />
+            상세
+          </Link>
         ) : null}
         {onEditPersonal ? (
           <button
@@ -724,4 +993,17 @@ function toLocalDateTimeValue(value: string): string {
 
 function dateOnlyToKstIso(value: string): string {
   return `${value}T00:00:00+09:00`;
+}
+
+function emptyToNullish(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function getEventDetailHref(event: CalendarEvent): string {
+  if (event.id.startsWith("release-date-") && event.contentId) return `/releases/${event.contentId}`;
+  if (["goods_preorder", "goods_release", "offline_event", "ticket_event", "live_event"].includes(event.type)) {
+    return `/events/${event.id}`;
+  }
+  return `/calendar/events/${event.id}`;
 }

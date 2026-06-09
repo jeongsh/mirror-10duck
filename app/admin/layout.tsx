@@ -66,6 +66,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             신작 관리
           </Link>
           <Link
+            href="/admin/events"
+            className="rounded border border-transparent p-2 transition-colors hover:border-gray-300 hover:bg-gray-100"
+          >
+            이벤트 관리
+          </Link>
+          <Link
             href="/admin/news"
             className="rounded border border-transparent p-2 transition-colors hover:border-gray-300 hover:bg-gray-100"
           >

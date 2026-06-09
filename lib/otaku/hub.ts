@@ -40,6 +40,11 @@ export type CalendarEventType =
   | "anime_ott"
   | "manga_serial"
   | "manga_volume"
+  | "goods_preorder"
+  | "goods_release"
+  | "offline_event"
+  | "ticket_event"
+  | "live_event"
   | "game_release"
   | "game_update"
   | "game_maintenance"
@@ -47,17 +52,23 @@ export type CalendarEventType =
   | "personal"
   | "attendance";
 
+export type CalendarTab = "all" | "release";
+
 export type CalendarEvent = {
   id: string;
   contentId?: string;
-  category: Exclude<OtakuCategory, "all"> | "community" | "personal";
+  category: Exclude<OtakuCategory, "all"> | "goods" | "offline" | "community" | "personal";
   type: CalendarEventType;
   title: string;
+  description?: string;
   startsAt: string;
+  endsAt?: string;
   timezone: string;
   episodeLabel?: string;
   platform?: string;
+  location?: string;
   sourceUrl?: string;
+  imageUrl?: string;
   kakaoPlace?: {
     id: string;
     name: string;
@@ -82,11 +93,23 @@ export const CATEGORY_LABELS: Record<OtakuCategory, string> = {
 
 export const PUBLIC_CATEGORIES: OtakuCategory[] = ["all", "anime", "manga"];
 
+export const CALENDAR_TAB_LABELS: Record<CalendarTab, string> = {
+  all: "전체",
+  release: "이벤트",
+};
+
+export const PUBLIC_CALENDAR_TABS: CalendarTab[] = ["all", "release"];
+
 export const EVENT_TYPE_LABELS: Record<CalendarEventType, string> = {
   anime_airing: "방영",
   anime_ott: "OTT",
   manga_serial: "연재",
   manga_volume: "발매",
+  goods_preorder: "예약",
+  goods_release: "발매",
+  offline_event: "행사",
+  ticket_event: "티켓",
+  live_event: "라이브",
   game_release: "출시",
   game_update: "업데이트",
   game_maintenance: "점검",
@@ -216,6 +239,29 @@ export function filterByCategory<T extends { category: string }>(
   return items.filter((item) => item.category === category);
 }
 
+export function filterByCalendarTab<T extends { category: string; type: CalendarEventType }>(
+  items: T[],
+  tab: CalendarTab,
+): T[] {
+  if (tab === "all") return items;
+  return items.filter((item) =>
+    ["goods_preorder", "goods_release", "offline_event", "ticket_event", "live_event"].includes(item.type),
+  );
+}
+
+export function getCalendarEventCategory(
+  eventType: string,
+  releaseCategory?: string | null,
+): CalendarEvent["category"] {
+  if (["GOODS_PREORDER", "GOODS_RELEASE"].includes(eventType)) {
+    return "goods";
+  }
+  if (["OFFLINE_EVENT", "TICKET_EVENT", "LIVE_EVENT"].includes(eventType)) {
+    return "offline";
+  }
+  return (releaseCategory?.toLowerCase() as CalendarEvent["category"] | undefined) ?? "anime";
+}
+
 export function formatRelativeDate(value: string, now = new Date()): string {
   const target = new Date(value);
   const diff = target.getTime() - now.getTime();
@@ -235,6 +281,37 @@ export function formatDateTime(value: string): string {
     minute: "2-digit",
     hour12: false,
   }).format(new Date(value));
+}
+
+export function formatEventPeriod(startsAt: string, endsAt?: string): string {
+  if (!endsAt) return formatDateTime(startsAt);
+  const start = new Date(startsAt);
+  const end = new Date(endsAt);
+  const sameDay =
+    start.getFullYear() === end.getFullYear() &&
+    start.getMonth() === end.getMonth() &&
+    start.getDate() === end.getDate();
+
+  if (sameDay) {
+    const day = new Intl.DateTimeFormat("ko-KR", {
+      month: "2-digit",
+      day: "2-digit",
+      weekday: "short",
+    }).format(start);
+    const startTime = new Intl.DateTimeFormat("ko-KR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(start);
+    const endTime = new Intl.DateTimeFormat("ko-KR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(end);
+    return `${day} ${startTime}~${endTime}`;
+  }
+
+  return `${formatDateTime(startsAt)} ~ ${formatDateTime(endsAt)}`;
 }
 
 export function ymdKey(value: string | Date): string {
