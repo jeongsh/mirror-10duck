@@ -8,7 +8,7 @@ import RichContent from "@/components/stickers/RichContent";
 import { supabase } from "@/lib/supabase/client";
 import {
   EVENT_TYPE_LABELS,
-  formatEventPeriod,
+  formatEventDatePeriod,
   getCalendarEventCategory,
   type CalendarEvent,
   type CalendarEventType,
@@ -152,7 +152,7 @@ export default function EventDetailPage({
           {relatedReleaseTitle ? <p className="mt-2 text-sm text-gray-600">관련 작품: {relatedReleaseTitle}</p> : null}
 
           <section className="mt-4 grid gap-3 border-t border-dashed border-gray-300 pt-4 md:grid-cols-2">
-            <InfoBlock label="일정" value={formatEventPeriod(event.startsAt, event.endsAt)} />
+            <InfoBlock label="일정" value={formatEventDatePeriod(event.startsAt, event.endsAt)} />
             {!isGoods ? (
               <InfoBlock label="위치" value={event.location ?? event.platform ?? "미정"} icon={<MapPin size={13} />} />
             ) : null}

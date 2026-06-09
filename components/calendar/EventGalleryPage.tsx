@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import {
   EVENT_TYPE_LABELS,
-  formatEventPeriod,
+  formatEventDatePeriod,
   getCalendarEventCategory,
   type CalendarEvent,
   type CalendarEventType,
@@ -127,75 +127,75 @@ export default function EventGalleryPage({ kind }: { kind: EventSectionKind }) {
   };
 
   return (
-    <main className="flex w-full flex-col gap-4">
-      <header className="border border-dashed border-gray-500 bg-white/80 p-4">
-        <div className="flex flex-wrap items-end justify-between gap-3">
+    <main className="flex w-full flex-col gap-3">
+      <header className="border border-dashed border-gray-500 bg-white/80 p-3">
+        <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-500">
               {meta.eyebrow}
             </p>
-            <h1 className="mt-1 text-2xl font-bold text-gray-900">{meta.title}</h1>
-            <p className="mt-1 text-sm text-gray-600">{meta.description}</p>
+            <h1 className="mt-0.5 text-xl font-bold text-gray-900">{meta.title}</h1>
+            <p className="mt-0.5 text-xs text-gray-600">{meta.description}</p>
           </div>
           <Link
             href="/calendar"
-            className="inline-flex items-center gap-1 border border-dashed border-gray-500 bg-white px-3 py-2 text-sm hover:bg-gray-100"
+            className="inline-flex items-center gap-1 border border-dashed border-gray-500 bg-white px-2.5 py-1.5 text-xs hover:bg-gray-100"
           >
-            <CalendarDays size={16} />
+            <CalendarDays size={14} />
             캘린더
           </Link>
         </div>
       </header>
 
-      <section className="border border-dashed border-gray-500 bg-white/70 p-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-1 text-xs font-semibold text-gray-600">
+      <section className="border border-dashed border-gray-500 bg-white/70 p-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <label className="flex items-center gap-1 text-[11px] font-semibold text-gray-600">
               시작
               <input
                 value={startDate}
                 onChange={(event) => setStartDate(event.target.value)}
                 type="date"
-                className="h-9 border border-dashed border-gray-400 bg-white px-2 text-sm font-normal text-gray-900"
+                className="h-8 border border-dashed border-gray-400 bg-white px-2 text-xs font-normal text-gray-900"
               />
             </label>
-            <label className="flex items-center gap-1 text-xs font-semibold text-gray-600">
+            <label className="flex items-center gap-1 text-[11px] font-semibold text-gray-600">
               종료
               <input
                 value={endDate}
                 onChange={(event) => setEndDate(event.target.value)}
                 type="date"
-                className="h-9 border border-dashed border-gray-400 bg-white px-2 text-sm font-normal text-gray-900"
+                className="h-8 border border-dashed border-gray-400 bg-white px-2 text-xs font-normal text-gray-900"
               />
             </label>
             <button
               type="button"
               onClick={resetDateRange}
-              className="inline-flex h-9 items-center gap-1 border border-dashed border-gray-400 bg-white px-2 text-xs font-semibold text-gray-600 hover:bg-gray-100"
+              className="inline-flex h-8 items-center gap-1 border border-dashed border-gray-400 bg-white px-2 text-[11px] font-semibold text-gray-600 hover:bg-gray-100"
             >
-              <RotateCcw size={13} />
+              <RotateCcw size={12} />
               초기화
             </button>
           </div>
-          <p className="text-xs font-semibold text-gray-500">
+          <p className="text-[11px] font-semibold text-gray-500">
             {visibleEvents.length}개 일정
           </p>
         </div>
       </section>
 
-      <section className="min-h-[320px]">
+      <section className="min-h-[240px]">
         {loading ? (
-          <div className="border border-dashed border-gray-400 bg-white/70 p-6 text-sm text-gray-500">
+          <div className="border border-dashed border-gray-400 bg-white/70 p-4 text-xs text-gray-500">
             일정 불러오는 중...
           </div>
         ) : null}
         {!loading && visibleEvents.length === 0 ? (
-          <div className="border border-dashed border-gray-400 bg-white/70 p-6 text-sm text-gray-500">
+          <div className="border border-dashed border-gray-400 bg-white/70 p-4 text-xs text-gray-500">
             {startDate || endDate ? meta.empty : "공개된 이벤트가 없습니다."}
           </div>
         ) : null}
         {!loading && visibleEvents.length > 0 ? (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
             {visibleEvents.map((event) => (
               <GalleryEventCard key={event.id} event={event} detailBase={meta.detailBase} />
             ))}
@@ -211,44 +211,44 @@ function GalleryEventCard({ event, detailBase }: { event: CalendarEvent; detailB
   return (
     <article className="border border-dashed border-gray-400 bg-white/75 hover:bg-white">
       <Link href={`${detailBase}/${event.id}`} className="block">
-        <div className="flex aspect-[16/9] items-center justify-center overflow-hidden border-b border-dashed border-gray-300 bg-gray-100">
+        <div className="flex aspect-[480/600] items-center justify-center overflow-hidden border-b border-dashed border-gray-300 bg-gray-100">
           {event.imageUrl ? (
             <img src={event.imageUrl} alt="" className="h-full w-full object-cover" />
           ) : (
-            <ImageIcon size={28} className="text-gray-400" />
+            <ImageIcon size={20} className="text-gray-400" />
           )}
         </div>
-        <div className="p-2.5">
-          <div className="flex items-center justify-between gap-2 text-[11px] font-semibold text-gray-500">
-            <span>{EVENT_TYPE_LABELS[event.type]}</span>
-            <span>{formatEventPeriod(event.startsAt, event.endsAt)}</span>
+        <div className="p-2">
+          <div className="flex items-center justify-between gap-1.5 text-[10px] font-semibold text-gray-500">
+            <span className="truncate">{EVENT_TYPE_LABELS[event.type]}</span>
+            <span className="shrink-0">{formatEventDatePeriod(event.startsAt, event.endsAt)}</span>
           </div>
-          <h2 className="mt-1.5 line-clamp-2 min-h-9 text-sm font-bold leading-[18px] text-gray-950">
+          <h2 className="mt-1 line-clamp-2 min-h-8 text-xs font-bold leading-4 text-gray-950">
             {event.title}
           </h2>
           {!isGoods ? (
-            <p className="mt-1.5 flex items-center gap-1 text-xs text-gray-500">
-              <MapPin size={12} />
+            <p className="mt-1 flex items-center gap-0.5 text-[11px] text-gray-500">
+              <MapPin size={10} />
               <span className="line-clamp-1">{event.location ?? event.platform ?? "장소 미정"}</span>
             </p>
           ) : (
-            <p className="mt-1.5 line-clamp-1 text-xs text-gray-500">
+            <p className="mt-1 line-clamp-1 text-[11px] text-gray-500">
               {event.description ?? "공식 발매 정보"}
             </p>
           )}
         </div>
       </Link>
-      <div className="flex items-center justify-between border-t border-dashed border-gray-300 px-2.5 py-2">
+      <div className="flex items-center justify-between border-t border-dashed border-gray-300 px-2 py-1.5">
         <button
           type="button"
-          className="inline-flex h-8 items-center gap-1 border border-dashed border-gray-400 bg-white px-2 text-xs font-semibold text-gray-700 hover:bg-gray-100"
+          className="inline-flex h-7 items-center gap-0.5 border border-dashed border-gray-400 bg-white px-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-100"
         >
-          <Heart size={13} />
+          <Heart size={11} />
           팔로우
         </button>
         <Link
           href={`${detailBase}/${event.id}`}
-          className="inline-flex h-8 items-center border border-dashed border-gray-400 bg-white px-2 text-xs font-semibold text-gray-700 hover:bg-gray-100"
+          className="inline-flex h-7 items-center border border-dashed border-gray-400 bg-white px-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-100"
         >
           상세
         </Link>

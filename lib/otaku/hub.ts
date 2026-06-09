@@ -283,6 +283,28 @@ export function formatDateTime(value: string): string {
   }).format(new Date(value));
 }
 
+export function formatEventDate(value: string): string {
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+  }).format(new Date(value));
+}
+
+export function formatEventDatePeriod(startsAt: string, endsAt?: string): string {
+  if (!endsAt) return formatEventDate(startsAt);
+  const start = new Date(startsAt);
+  const end = new Date(endsAt);
+  const sameDay =
+    start.getFullYear() === end.getFullYear() &&
+    start.getMonth() === end.getMonth() &&
+    start.getDate() === end.getDate();
+
+  if (sameDay) return formatEventDate(startsAt);
+
+  return `${formatEventDate(startsAt)} ~ ${formatEventDate(endsAt)}`;
+}
+
 export function formatEventPeriod(startsAt: string, endsAt?: string): string {
   if (!endsAt) return formatDateTime(startsAt);
   const start = new Date(startsAt);
