@@ -15,6 +15,7 @@ export type ReleaseAiCandidate = {
   titleNative: string | null;
   titleEnglish: string | null;
   titleRomaji: string | null;
+  synonyms: string[];
   synopsisSeed: string;
   posterUrl: string | null;
   bannerUrl: string | null;
@@ -61,6 +62,7 @@ type AniListMedia = {
     native?: string | null;
     userPreferred?: string | null;
   } | null;
+  synonyms?: string[] | null;
   coverImage?: {
     extraLarge?: string | null;
     large?: string | null;
@@ -149,6 +151,7 @@ export async function fetchSeasonAnimeCandidates(cours: string): Promise<Release
               native
               userPreferred
             }
+            synonyms
             description(asHtml: false)
             coverImage {
               extraLarge
@@ -219,33 +222,7 @@ export async function fetchSeasonAnimeCandidates(cours: string): Promise<Release
 
     const mediaList = json.data?.Page?.media ?? [];
     for (const media of mediaList) {
-      const staff = buildStaffSummary(media.staff?.edges ?? []);
-
-      results.push({
-        mediaId: media.id,
-        popularity: media.popularity ?? results.length + 1,
-        sourceType: media.source?.trim() || null,
-        isAdult: Boolean(media.isAdult),
-        titleNative: media.title?.native?.trim() || null,
-        titleEnglish: media.title?.english?.trim() || media.title?.userPreferred?.trim() || null,
-        titleRomaji: media.title?.romaji?.trim() || media.title?.userPreferred?.trim() || null,
-        synopsisSeed: normalizeSynopsis(media.description),
-        posterUrl:
-          media.coverImage?.extraLarge ||
-          media.coverImage?.large ||
-          null,
-        bannerUrl: media.bannerImage || null,
-        genres: uniqueStrings(media.genres ?? []),
-        studios: extractStudioNames(media.studios?.nodes ?? []),
-        season: media.season ?? null,
-        seasonYear: media.seasonYear ?? null,
-        format: media.format?.trim() || null,
-        status: media.status?.trim() || null,
-        airedFrom: formatDateValue(media.startDate),
-        airedTo: formatDateValue(media.endDate),
-        episodes: media.episodes ?? null,
-        staff,
-      });
+      results.push(mapAniListMediaToCandidate(media, results.length + 1));
     }
 
     hasNextPage = Boolean(json.data?.Page?.pageInfo?.hasNextPage);
@@ -253,6 +230,95 @@ export async function fetchSeasonAnimeCandidates(cours: string): Promise<Release
   }
 
   return results;
+}
+
+export async function searchAnimeCandidatesByTitle(title: string): Promise<ReleaseAiCandidate[]> {
+  const search = title.trim();
+  if (!search) return [];
+
+  const query = `
+    query ReleaseSearch($search: String!, $perPage: Int!) {
+      Page(page: 1, perPage: $perPage) {
+        media(search: $search, type: ANIME, sort: SEARCH_MATCH) {
+          id
+          isAdult
+          format
+          source
+          status
+          title {
+            romaji
+            english
+            native
+            userPreferred
+          }
+          synonyms
+          description(asHtml: false)
+          coverImage {
+            extraLarge
+            large
+          }
+          bannerImage
+          genres
+          popularity
+          studios(isMain: true) {
+            nodes {
+              name
+            }
+          }
+          staff(perPage: 35, sort: RELEVANCE) {
+            edges {
+              role
+              node {
+                name {
+                  userPreferred
+                  native
+                }
+              }
+            }
+          }
+          season
+          seasonYear
+          episodes
+          startDate {
+            year
+            month
+            day
+          }
+          endDate {
+            year
+            month
+            day
+          }
+        }
+      }
+    }
+  `;
+
+  const response = await fetch(ANILIST_GRAPHQL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      query,
+      variables: {
+        search,
+        perPage: 8,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`AniList 검색 요청 실패: ${response.status}`);
+  }
+
+  const json = (await response.json()) as AniListSeasonResponse;
+  if (json.errors?.length) {
+    throw new Error(json.errors[0]?.message ?? "AniList GraphQL 오류");
+  }
+
+  return (json.data?.Page?.media ?? []).map((media, index) => mapAniListMediaToCandidate(media, index + 1));
 }
 
 export function buildTitlePrompt(cours: string, items: ReleaseAiCandidate[]): string {
@@ -327,8 +393,6 @@ export function buildDetailEntries(item: ReleaseAiCandidate) {
     { label: "캐릭터 디자인", value: joinOrMissing(item.staff.characterDesign) },
     { label: "음악", value: joinOrMissing(item.staff.music) },
     { label: "제작사", value: joinOrMissing(item.studios) },
-    { label: "방영 기간", value: formatAiredRange(item) },
-    { label: "화수", value: item.episodes ? `${item.episodes}화` : "미정" },
     { label: "등급", value: item.isAdult ? "성인" : "일반" },
     { label: "성인 여부", value: item.isAdult ? "예" : "아니오" },
   ];
@@ -363,6 +427,37 @@ function buildStaffSummary(
     seriesComposition: uniqueStrings(summary.seriesComposition),
     characterDesign: uniqueStrings(summary.characterDesign),
     music: uniqueStrings(summary.music),
+  };
+}
+
+function mapAniListMediaToCandidate(media: AniListMedia, fallbackPopularity: number): ReleaseAiCandidate {
+  const staff = buildStaffSummary(media.staff?.edges ?? []);
+
+  return {
+    mediaId: media.id,
+    popularity: media.popularity ?? fallbackPopularity,
+    sourceType: media.source?.trim() || null,
+    isAdult: Boolean(media.isAdult),
+    titleNative: media.title?.native?.trim() || null,
+    titleEnglish: media.title?.english?.trim() || media.title?.userPreferred?.trim() || null,
+    titleRomaji: media.title?.romaji?.trim() || media.title?.userPreferred?.trim() || null,
+    synonyms: uniqueStrings(media.synonyms ?? []),
+    synopsisSeed: normalizeSynopsis(media.description),
+    posterUrl:
+      media.coverImage?.extraLarge ||
+      media.coverImage?.large ||
+      null,
+    bannerUrl: media.bannerImage || null,
+    genres: uniqueStrings(media.genres ?? []),
+    studios: extractStudioNames(media.studios?.nodes ?? []),
+    season: media.season ?? null,
+    seasonYear: media.seasonYear ?? null,
+    format: media.format?.trim() || null,
+    status: media.status?.trim() || null,
+    airedFrom: formatDateValue(media.startDate),
+    airedTo: formatDateValue(media.endDate),
+    episodes: media.episodes ?? null,
+    staff,
   };
 }
 
@@ -427,17 +522,6 @@ function normalizeSynopsis(value: string | null | undefined): string {
 function formatDateValue(value: { year?: number | null; month?: number | null; day?: number | null } | null | undefined): string | null {
   if (!value?.year || !value.month || !value.day) return null;
   return `${value.year}-${String(value.month).padStart(2, "0")}-${String(value.day).padStart(2, "0")}`;
-}
-
-function formatAiredRange(item: ReleaseAiCandidate): string {
-  if (item.airedFrom && item.airedTo) return `${item.airedFrom} ~ ${item.airedTo}`;
-  if (item.airedFrom) {
-    if (item.status?.toUpperCase() === "RELEASING") return `${item.airedFrom} ~ 방영 중`;
-    if (item.status?.toUpperCase() === "NOT_YET_RELEASED") return "방영 예정";
-    return `${item.airedFrom} ~ 미정`;
-  }
-  if (item.status?.toUpperCase() === "NOT_YET_RELEASED") return "방영 예정";
-  return "미정";
 }
 
 function joinOrMissing(values: string[]): string {

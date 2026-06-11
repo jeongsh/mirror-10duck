@@ -12,6 +12,7 @@ import {
   getCurrentCours,
   normalizeCours,
 } from "@/lib/otaku/cours";
+import { buildNamuwikiSeasonCategoryUrl } from "@/lib/otaku/namuwikiSeason";
 
 type AdminReleaseRow = {
   id: string;
@@ -26,6 +27,8 @@ type AdminReleaseRow = {
   release_date: string | null;
   official_works?: { title: string } | { title: string }[] | null;
 };
+
+type BulkReleaseStatus = "DRAFT" | "PUBLISHED";
 
 const UNASSIGNED = "__unassigned__";
 
@@ -53,8 +56,14 @@ function AdminReleasesInner() {
   const [batchMessage, setBatchMessage] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkStatusUpdating, setBulkStatusUpdating] = useState<BulkReleaseStatus | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const defaultNamuwikiUrl = useMemo(
+    () => (queryCours === UNASSIGNED ? "" : buildNamuwikiSeasonCategoryUrl(queryCours) ?? ""),
+    [queryCours],
+  );
+  const [namuwikiUrl, setNamuwikiUrl] = useState(defaultNamuwikiUrl);
 
   const fetchItems = async () => {
     setLoading(true);
@@ -81,6 +90,10 @@ function AdminReleasesInner() {
     setSelectedIds(new Set());
   }, [queryCours]);
 
+  useEffect(() => {
+    setNamuwikiUrl(defaultNamuwikiUrl);
+  }, [defaultNamuwikiUrl]);
+
   const coursTabs = useMemo(() => {
     const base = getCoursRange(4, 2);
     const extras = items.map((item) => item.cours).filter((value): value is string => Boolean(value));
@@ -101,11 +114,22 @@ function AdminReleasesInner() {
   }, [items]);
 
   const visibleItems = useMemo(() => {
-    if (queryCours === UNASSIGNED) {
-      return items.filter((item) => !item.cours);
-    }
-    return items.filter((item) => item.cours === queryCours);
+    const scopedItems =
+      queryCours === UNASSIGNED
+        ? items.filter((item) => !item.cours)
+        : items.filter((item) => item.cours === queryCours);
+
+    return sortAdminReleaseItems(scopedItems);
   }, [items, queryCours]);
+
+  const scheduleCheckItems = useMemo(
+    () =>
+      visibleItems
+        .filter((item) => item.status !== "HIDDEN")
+        .map((item) => ({ item, issue: getKoreanScheduleIssue(item) }))
+        .filter((entry) => entry.issue),
+    [visibleItems],
+  );
 
   const filteredItems = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -153,6 +177,10 @@ function AdminReleasesInner() {
       alert("분기를 먼저 선택해 주세요.");
       return;
     }
+    if (!namuwikiUrl.trim()) {
+      alert("나무위키 분기 분류 URL을 입력해 주세요.");
+      return;
+    }
 
     const accessToken = await getAccessToken();
     if (!accessToken) {
@@ -170,7 +198,7 @@ function AdminReleasesInner() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ cours: queryCours }),
+        body: JSON.stringify({ cours: queryCours, namuwikiUrl: namuwikiUrl.trim() }),
       });
 
       const payload = (await response.json().catch(() => null)) as
@@ -178,6 +206,9 @@ function AdminReleasesInner() {
             error?: string;
             totalCandidates?: number;
             insertedCount?: number;
+            skippedCount?: number;
+            anilistMatchedCount?: number;
+            aiFilledCount?: number;
           }
         | null;
 
@@ -186,7 +217,11 @@ function AdminReleasesInner() {
       }
 
       setBatchMessage(
-        `총 ${payload?.totalCandidates ?? 0}개 중 ${payload?.insertedCount ?? 0}개를 추가했습니다.`,
+        `총 ${payload?.totalCandidates ?? 0}개 / 신규 ${payload?.insertedCount ?? 0}개 / 스킵 ${
+          payload?.skippedCount ?? 0
+        }개로 처리했습니다. AniList 보강 ${payload?.anilistMatchedCount ?? 0}개, AI 소개 재작성 ${
+          payload?.aiFilledCount ?? 0
+        }개.`,
       );
       await fetchItems();
     } catch (error) {
@@ -246,6 +281,24 @@ function AdminReleasesInner() {
     }
   };
 
+  const handleBulkStatusUpdate = async (status: BulkReleaseStatus) => {
+    const ids = filteredIds.filter((id) => selectedIds.has(id));
+    if (ids.length === 0) return;
+
+    setBulkStatusUpdating(status);
+    try {
+      const { error } = await supabase.from("release_items").update({ status }).in("id", ids);
+      if (error) throw error;
+      setSelectedIds(new Set());
+      await fetchItems();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "알 수 없는 오류";
+      alert(`상태 일괄 변경 실패: ${message}`);
+    } finally {
+      setBulkStatusUpdating(null);
+    }
+  };
+
   const handleDeleteItem = async (item: AdminReleaseRow) => {
     const label = item.original_title || item.title;
     if (!confirm(`'${label}' 작품을 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) {
@@ -278,19 +331,18 @@ function AdminReleasesInner() {
         <div>
           <h2 className="text-xl font-bold">릴리즈 관리</h2>
           <p className="mt-1 text-sm text-gray-600">
-            분기를 선택한 뒤 AI 일괄 채우기를 누르면 무료 공개 데이터 기준 인기순으로 작품을 한 번에
-            등록합니다.
+            분기를 선택한 뒤 나무위키 분류 URL 기준으로 작품을 한 번에 등록합니다.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => void handleBatchFill()}
-            disabled={loading || batchRunning || queryCours === UNASSIGNED}
+            disabled={loading || batchRunning || queryCours === UNASSIGNED || !namuwikiUrl.trim()}
             className="inline-flex items-center gap-1 rounded border border-dashed border-emerald-400 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900 transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {batchRunning ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-            {batchRunning ? "AI 일괄 채우는 중" : "AI 일괄 채우기"}
+            {batchRunning ? "일괄 채우는 중" : "나무위키 일괄 채우기"}
           </button>
           <Link
             href={createHref}
@@ -306,6 +358,34 @@ function AdminReleasesInner() {
         <div className="rounded border border-dashed border-emerald-400 bg-emerald-50 p-3 text-sm text-emerald-900">
           {batchMessage}
         </div>
+      )}
+
+      {!loading && queryCours !== UNASSIGNED && scheduleCheckItems.length > 0 && (
+        <section className="rounded border border-dashed border-amber-400 bg-amber-50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-bold text-amber-950">한국 편성 확인 필요</h3>
+              <p className="mt-1 text-xs text-amber-800">
+                한국 방영/스트리밍 기준일이 없거나 일본 편성과 구분이 애매한 항목입니다.
+              </p>
+            </div>
+            <span className="rounded border border-dashed border-amber-500 bg-white px-2 py-1 text-xs font-bold text-amber-900">
+              {scheduleCheckItems.length}개
+            </span>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {scheduleCheckItems.map(({ item, issue }) => (
+              <Link
+                key={item.id}
+                href={`/admin/releases/${item.id}`}
+                className="inline-flex max-w-full items-center gap-2 rounded border border-dashed border-amber-300 bg-white px-2.5 py-1.5 text-xs text-amber-950 hover:bg-amber-100"
+              >
+                <span className="truncate font-semibold">{item.title}</span>
+                <span className="shrink-0 text-amber-700">{issue}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
       )}
 
       <section className="flex flex-col gap-2">
@@ -345,6 +425,17 @@ function AdminReleasesInner() {
             <span className="text-xs text-gray-500">({countByCours.unassigned})</span>
           </button>
         </div>
+        {queryCours !== UNASSIGNED && (
+          <label className="mt-2 flex flex-col gap-1 rounded border border-dashed border-gray-400 bg-white px-3 py-2 text-sm sm:flex-row sm:items-center">
+            <span className="shrink-0 text-xs font-semibold text-gray-500">나무위키 URL</span>
+            <input
+              value={namuwikiUrl}
+              onChange={(event) => setNamuwikiUrl(event.target.value)}
+              placeholder={defaultNamuwikiUrl}
+              className="min-w-0 flex-1 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
+            />
+          </label>
+        )}
       </section>
 
       <section className="rounded border border-dashed border-gray-500 bg-white/70 p-6">
@@ -415,8 +506,41 @@ function AdminReleasesInner() {
                 <span className="text-xs text-gray-500">{selectedIds.size}개 선택됨</span>
                 <button
                   type="button"
+                  onClick={() => void handleBulkStatusUpdate("DRAFT")}
+                  disabled={
+                    selectedIds.size === 0 ||
+                    bulkDeleting ||
+                    bulkStatusUpdating !== null ||
+                    deletingId !== null
+                  }
+                  className="inline-flex items-center gap-1 rounded border border-dashed border-gray-400 bg-white px-3 py-1.5 text-xs font-semibold text-gray-800 transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {bulkStatusUpdating === "DRAFT" && <Loader2 size={14} className="animate-spin" />}
+                  DRAFT로 변경
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleBulkStatusUpdate("PUBLISHED")}
+                  disabled={
+                    selectedIds.size === 0 ||
+                    bulkDeleting ||
+                    bulkStatusUpdating !== null ||
+                    deletingId !== null
+                  }
+                  className="inline-flex items-center gap-1 rounded border border-dashed border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {bulkStatusUpdating === "PUBLISHED" && <Loader2 size={14} className="animate-spin" />}
+                  PUBLISHED로 변경
+                </button>
+                <button
+                  type="button"
                   onClick={() => void handleBulkDelete()}
-                  disabled={selectedIds.size === 0 || bulkDeleting || deletingId !== null}
+                  disabled={
+                    selectedIds.size === 0 ||
+                    bulkDeleting ||
+                    bulkStatusUpdating !== null ||
+                    deletingId !== null
+                  }
                   className="inline-flex items-center gap-1 rounded border border-dashed border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {bulkDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
@@ -430,6 +554,7 @@ function AdminReleasesInner() {
               <thead className="border-b">
                 <tr>
                   <th className="w-10 p-3" />
+                  <th className="w-20 p-3 font-semibold">썸네일</th>
                   <th className="p-3 font-semibold">작품</th>
                   <th className="p-3 font-semibold">유형</th>
                   <th className="p-3 font-semibold">작품 허브</th>
@@ -441,53 +566,15 @@ function AdminReleasesInner() {
               </thead>
               <tbody className="divide-y divide-dashed">
                 {filteredItems.map((item) => (
-                  <tr
+                  <ReleaseTableRow
                     key={item.id}
-                    className={`transition-colors hover:bg-gray-100 ${selectedIds.has(item.id) ? "bg-violet-50/60" : ""}`}
-                  >
-                    <td className="p-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(item.id)}
-                        onChange={() => toggleSelectItem(item.id)}
-                        className="h-4 w-4 rounded border-gray-400"
-                      />
-                    </td>
-                    <td className="p-3">
-                      <div className="font-medium">{item.title}</div>
-                      <div className="text-xs text-gray-500">{item.original_title}</div>
-                    </td>
-                    <td className="p-3 text-gray-600">{getCategoryLabel(item.category)}</td>
-                    <td className="p-3 text-gray-600">{getOfficialWorkTitle(item.official_works)}</td>
-                    <td className="p-3 text-gray-600">{item.release_date ?? "미정"}</td>
-                    <td className="p-3 text-gray-600">
-                      {item.episode_count ? `${item.episode_count}화` : "미정"}
-                    </td>
-                    <td className="p-3 text-gray-600">{item.status}</td>
-                    <td className="p-3 text-right">
-                      <div className="flex justify-end gap-2">
-                        <Link href={`/releases/${item.id}`} className="text-gray-600 hover:underline">
-                          보기
-                        </Link>
-                        <Link href={`/admin/releases/${item.id}`} className="text-blue-600 hover:underline">
-                          수정
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() => void handleDeleteItem(item)}
-                          disabled={deletingId === item.id || bulkDeleting}
-                          className="inline-flex items-center gap-1 text-red-600 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {deletingId === item.id ? (
-                            <Loader2 size={14} className="animate-spin" />
-                          ) : (
-                            <Trash2 size={14} />
-                          )}
-                          삭제
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                    item={item}
+                    selected={selectedIds.has(item.id)}
+                    deleting={deletingId === item.id}
+                    bulkBusy={bulkDeleting || bulkStatusUpdating !== null}
+                    onToggleSelect={toggleSelectItem}
+                    onDelete={handleDeleteItem}
+                  />
                 ))}
               </tbody>
             </table>
@@ -499,6 +586,126 @@ function AdminReleasesInner() {
   );
 }
 
+function ReleaseTableRow({
+  item,
+  selected,
+  deleting,
+  bulkBusy,
+  onToggleSelect,
+  onDelete,
+}: {
+  item: AdminReleaseRow;
+  selected: boolean;
+  deleting: boolean;
+  bulkBusy: boolean;
+  onToggleSelect: (id: string) => void;
+  onDelete: (item: AdminReleaseRow) => void;
+}) {
+  const scheduleIssue = getKoreanScheduleIssue(item);
+
+  return (
+    <tr
+      className={`transition-colors hover:bg-gray-100 ${selected ? "bg-violet-50/60" : ""}`}
+    >
+      <td className="p-3">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggleSelect(item.id)}
+          className="h-4 w-4 rounded border-gray-400"
+        />
+      </td>
+      <td className="p-3">
+        <div className="h-[74px] w-[54px] overflow-hidden rounded border border-dashed border-gray-400 bg-gray-100">
+          {item.poster_url ? (
+            <img src={item.poster_url} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center px-1 text-center text-[10px] font-bold leading-3 text-gray-400">
+              NO IMAGE
+            </div>
+          )}
+        </div>
+      </td>
+      <td className="p-3">
+        <div className="font-medium">{item.title}</div>
+        <div className="text-xs text-gray-500">{item.original_title}</div>
+        {scheduleIssue && (
+          <div className="mt-1 inline-flex rounded border border-dashed border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">
+            {scheduleIssue}
+          </div>
+        )}
+      </td>
+      <td className="p-3 text-gray-600">{getCategoryLabel(item.category)}</td>
+      <td className="p-3 text-gray-600">{getOfficialWorkTitle(item.official_works)}</td>
+      <td className="p-3 text-gray-600">{item.release_date ?? "미정"}</td>
+      <td className="p-3 text-gray-600">
+        {item.episode_count ? `${item.episode_count}화` : "미정"}
+      </td>
+      <td className="p-3 text-gray-600">{item.status}</td>
+      <td className="p-3 text-right">
+        <div className="flex justify-end gap-2">
+          <Link href={`/releases/${item.id}`} className="text-gray-600 hover:underline">
+            보기
+          </Link>
+          <Link href={`/admin/releases/${item.id}`} className="text-blue-600 hover:underline">
+            수정
+          </Link>
+          <button
+            type="button"
+            onClick={() => void onDelete(item)}
+            disabled={deleting || bulkBusy}
+            className="inline-flex items-center gap-1 text-red-600 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {deleting ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Trash2 size={14} />
+            )}
+            삭제
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function sortAdminReleaseItems(items: AdminReleaseRow[]): AdminReleaseRow[] {
+  return [...items].sort((a, b) => {
+    const groupDiff = getTitleSortGroup(a.title) - getTitleSortGroup(b.title);
+    if (groupDiff !== 0) return groupDiff;
+
+    const aTitle = normalizeTitleForSort(a.title);
+    const bTitle = normalizeTitleForSort(b.title);
+    const locale = getTitleSortGroup(a.title) === 2 ? "ko-KR" : "en-US";
+    const titleDiff = aTitle.localeCompare(bTitle, locale, {
+      numeric: true,
+      sensitivity: "base",
+    });
+    if (titleDiff !== 0) return titleDiff;
+
+    const dateDiff = (a.release_date ?? "").localeCompare(b.release_date ?? "");
+    if (dateDiff !== 0) return dateDiff;
+
+    return a.id.localeCompare(b.id);
+  });
+}
+
+function getTitleSortGroup(title: string): number {
+  const head = getTitleSortHead(title);
+  if (/^[0-9]$/.test(head)) return 0;
+  if (/^[A-Za-z]$/.test(head)) return 1;
+  if (/^[가-힣ㄱ-ㅎㅏ-ㅣ]$/.test(head)) return 2;
+  return 3;
+}
+
+function normalizeTitleForSort(title: string): string {
+  return title.normalize("NFKC").trim().replace(/^[^0-9A-Za-z가-힣ㄱ-ㅎㅏ-ㅣ]+/, "");
+}
+
+function getTitleSortHead(title: string): string {
+  return normalizeTitleForSort(title).charAt(0);
+}
+
 function getCategoryLabel(category: string) {
   const key = category.toLowerCase() as keyof typeof CATEGORY_LABELS;
   return CATEGORY_LABELS[key] ?? category;
@@ -507,4 +714,9 @@ function getCategoryLabel(category: string) {
 function getOfficialWorkTitle(value: AdminReleaseRow["official_works"]) {
   if (Array.isArray(value)) return value[0]?.title ?? "-";
   return value?.title ?? "-";
+}
+
+function getKoreanScheduleIssue(item: AdminReleaseRow): string | null {
+  if (!item.release_date) return "출시일 없음";
+  return null;
 }
