@@ -123,3 +123,22 @@ export function weekdaySortKey(label: string): number {
   const i = order.indexOf(label);
   return i === -1 ? 99 : i;
 }
+
+/** 서울 기준 오늘 요일 (예: "금") */
+export function getTodayWeekdayKo(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Seoul",
+    weekday: "short",
+  }).formatToParts(now);
+  const weekday = parts.find((part) => part.type === "weekday")?.value;
+  const map: Record<string, string> = {
+    Sun: "일",
+    Mon: "월",
+    Tue: "화",
+    Wed: "수",
+    Thu: "목",
+    Fri: "금",
+    Sat: "토",
+  };
+  return weekday ? (map[weekday] ?? "오늘") : "오늘";
+}

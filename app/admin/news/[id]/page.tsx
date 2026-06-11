@@ -106,7 +106,7 @@ export default function AdminNewsEditPage({ params }: { params: Promise<{ id: st
   if (loading) return <div className="p-6 text-sm text-gray-500">로딩 중...</div>;
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6">
+    <div className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-6">
       <div className="flex items-center justify-between border-b border-dashed border-gray-500 pb-4">
         <div>
           <Link href="/admin/news" className="text-xs text-gray-500 hover:underline">

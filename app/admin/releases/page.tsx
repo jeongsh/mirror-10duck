@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2, Plus, Sparkles, Trash2 } from "lucide-react";
+import { Loader2, Plus, Search, Sparkles, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { CATEGORY_LABELS, type OtakuCategory } from "@/lib/otaku/hub";
 import {
@@ -52,6 +52,9 @@ function AdminReleasesInner() {
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchMessage, setBatchMessage] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const fetchItems = async () => {
     setLoading(true);
@@ -72,6 +75,11 @@ function AdminReleasesInner() {
   useEffect(() => {
     void fetchItems();
   }, []);
+
+  useEffect(() => {
+    setSearchQuery("");
+    setSelectedIds(new Set());
+  }, [queryCours]);
 
   const coursTabs = useMemo(() => {
     const base = getCoursRange(4, 2);
@@ -98,6 +106,33 @@ function AdminReleasesInner() {
     }
     return items.filter((item) => item.cours === queryCours);
   }, [items, queryCours]);
+
+  const filteredItems = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return visibleItems;
+
+    return visibleItems.filter((item) => {
+      const haystack = [
+        item.title,
+        item.original_title,
+        getOfficialWorkTitle(item.official_works),
+        item.status,
+        getCategoryLabel(item.category),
+        item.season,
+        item.release_date,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(query);
+    });
+  }, [visibleItems, searchQuery]);
+
+  const filteredIds = useMemo(() => filteredItems.map((item) => item.id), [filteredItems]);
+  const allFilteredSelected =
+    filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id));
+  const someFilteredSelected = filteredIds.some((id) => selectedIds.has(id));
 
   const createHref =
     queryCours === UNASSIGNED
@@ -162,6 +197,55 @@ function AdminReleasesInner() {
     }
   };
 
+  const toggleSelectItem = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllFiltered = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        for (const id of filteredIds) next.delete(id);
+      } else {
+        for (const id of filteredIds) next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = filteredIds.filter((id) => selectedIds.has(id));
+    if (ids.length === 0) return;
+
+    const tabLabel =
+      queryCours === UNASSIGNED ? "분기 미정" : formatCoursShort(queryCours);
+    if (
+      !confirm(
+        `${tabLabel} 탭에서 선택한 ${ids.length}개 릴리즈를 삭제할까요? 이 작업은 되돌릴 수 없습니다.`,
+      )
+    ) {
+      return;
+    }
+
+    setBulkDeleting(true);
+    try {
+      const { error } = await supabase.from("release_items").delete().in("id", ids);
+      if (error) throw error;
+      setSelectedIds(new Set());
+      await fetchItems();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "알 수 없는 오류";
+      alert(`일괄 삭제 실패: ${message}`);
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   const handleDeleteItem = async (item: AdminReleaseRow) => {
     const label = item.original_title || item.title;
     if (!confirm(`'${label}' 작품을 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) {
@@ -174,6 +258,11 @@ function AdminReleasesInner() {
       if (error) {
         throw error;
       }
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
       await fetchItems();
     } catch (error) {
       const message = error instanceof Error ? error.message : "알 수 없는 오류";
@@ -259,11 +348,28 @@ function AdminReleasesInner() {
       </section>
 
       <section className="rounded border border-dashed border-gray-500 bg-white/70 p-6">
-        <div className="mb-4 flex items-center justify-between gap-2">
-          <h3 className="text-sm font-bold text-gray-900">
-            {queryCours === UNASSIGNED ? "분기 미정 릴리즈 목록" : `${formatCoursShort(queryCours)} 릴리즈 목록`}
-          </h3>
-          <span className="text-xs text-gray-500">{visibleItems.length}개</span>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold text-gray-900">
+              {queryCours === UNASSIGNED ? "분기 미정 릴리즈 목록" : `${formatCoursShort(queryCours)} 릴리즈 목록`}
+            </h3>
+            <p className="mt-1 text-xs text-gray-500">
+              {searchQuery.trim()
+                ? `${filteredItems.length}개 검색됨 / ${visibleItems.length}개`
+                : `${visibleItems.length}개`}
+            </p>
+          </div>
+          {visibleItems.length > 0 ? (
+            <label className="flex min-w-[220px] flex-1 items-center gap-2 rounded border border-dashed border-gray-400 bg-white px-3 py-2 text-sm sm:max-w-sm">
+              <Search size={16} className="shrink-0 text-gray-400" />
+              <input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="제목, 원제, 상태 검색"
+                className="min-w-0 flex-1 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
+              />
+            </label>
+          ) : null}
         </div>
 
         {loading ? (
@@ -283,11 +389,47 @@ function AdminReleasesInner() {
               {queryCours === UNASSIGNED ? "신작 추가" : `${formatCoursShort(queryCours)} 신작 추가`}
             </Link>
           </div>
+        ) : filteredItems.length === 0 ? (
+          <div className="rounded border border-dashed border-gray-400 bg-white p-6 text-sm text-gray-500">
+            검색 결과가 없습니다.
+          </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-dashed border-gray-300 bg-gray-50 px-3 py-2">
+              <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={allFilteredSelected}
+                  ref={(node) => {
+                    if (node) node.indeterminate = someFilteredSelected && !allFilteredSelected;
+                  }}
+                  onChange={toggleSelectAllFiltered}
+                  className="h-4 w-4 rounded border-gray-400"
+                />
+                <span className="font-medium">
+                  {allFilteredSelected ? "전체 해제" : "전체 선택"}
+                  {searchQuery.trim() ? " (검색 결과)" : ""}
+                </span>
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-gray-500">{selectedIds.size}개 선택됨</span>
+                <button
+                  type="button"
+                  onClick={() => void handleBulkDelete()}
+                  disabled={selectedIds.size === 0 || bulkDeleting || deletingId !== null}
+                  className="inline-flex items-center gap-1 rounded border border-dashed border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {bulkDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                  선택 삭제
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="border-b">
                 <tr>
+                  <th className="w-10 p-3" />
                   <th className="p-3 font-semibold">작품</th>
                   <th className="p-3 font-semibold">유형</th>
                   <th className="p-3 font-semibold">작품 허브</th>
@@ -298,8 +440,19 @@ function AdminReleasesInner() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-dashed">
-                {visibleItems.map((item) => (
-                  <tr key={item.id} className="transition-colors hover:bg-gray-100">
+                {filteredItems.map((item) => (
+                  <tr
+                    key={item.id}
+                    className={`transition-colors hover:bg-gray-100 ${selectedIds.has(item.id) ? "bg-violet-50/60" : ""}`}
+                  >
+                    <td className="p-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(item.id)}
+                        onChange={() => toggleSelectItem(item.id)}
+                        className="h-4 w-4 rounded border-gray-400"
+                      />
+                    </td>
                     <td className="p-3">
                       <div className="font-medium">{item.title}</div>
                       <div className="text-xs text-gray-500">{item.original_title}</div>
@@ -322,7 +475,7 @@ function AdminReleasesInner() {
                         <button
                           type="button"
                           onClick={() => void handleDeleteItem(item)}
-                          disabled={deletingId === item.id}
+                          disabled={deletingId === item.id || bulkDeleting}
                           className="inline-flex items-center gap-1 text-red-600 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {deletingId === item.id ? (
@@ -338,6 +491,7 @@ function AdminReleasesInner() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </section>

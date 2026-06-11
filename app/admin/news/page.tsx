@@ -53,7 +53,7 @@ export default function AdminNewsPage() {
         <div>
           <h2 className="text-xl font-bold">뉴스 관리</h2>
           <p className="mt-1 text-sm text-gray-600">
-            운영자가 직접 작성하는 뉴스 카드와 상세 본문을 관리합니다.
+            URL 기반 AI 초안 또는 직접 작성한 뉴스 카드와 상세 본문을 관리합니다.
           </p>
         </div>
         <Link

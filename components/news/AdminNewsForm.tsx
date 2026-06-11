@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { ImageIcon, Loader2, Upload, X } from "lucide-react";
 import type { OtakuCategory } from "@/lib/otaku/hub";
 import CommunityEditor from "@/components/community/editor/CommunityEditor";
+import AdminNewsUrlDraft, { applyNewsDraftToForm } from "@/components/news/AdminNewsUrlDraft";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthUser } from "@/lib/supabase/useAuthUser";
 
@@ -87,8 +88,10 @@ export function NewsForm({
   return (
     <form
       onSubmit={onSubmit}
-      className="flex flex-col gap-4 rounded border border-dashed border-gray-500 bg-white/70 p-6"
+      className="flex min-w-0 w-full flex-col gap-4 overflow-hidden rounded border border-dashed border-gray-500 bg-white/70 p-6"
     >
+      <AdminNewsUrlDraft onApply={(draft) => applyNewsDraftToForm(draft, setForm)} />
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <label className="flex flex-col gap-1">
           <span className="text-sm font-semibold">유형 *</span>
@@ -171,7 +174,7 @@ export function NewsForm({
                   className="inline-flex items-center gap-1 rounded border border-gray-300 bg-gray-100 px-3 py-2 text-sm hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {uploadingThumbnail ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-                  업로드
+                  파일 업로드
                 </button>
                 {form.thumbnailUrl && (
                   <button
@@ -184,9 +187,17 @@ export function NewsForm({
                   </button>
                 )}
               </div>
-              <p className="truncate text-xs text-gray-500">
-                {form.thumbnailUrl || "뉴스 목록과 상세 상단에 표시됩니다."}
-              </p>
+              <label className="flex min-w-0 flex-col gap-1">
+                <span className="text-xs font-semibold text-gray-500">URL로 입력</span>
+                <input
+                  type="url"
+                  value={form.thumbnailUrl}
+                  onChange={(event) => set("thumbnailUrl", event.target.value)}
+                  placeholder="https://example.com/thumbnail.jpg"
+                  className="min-w-0 rounded border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+                />
+              </label>
+              <p className="text-xs text-gray-500">뉴스 목록과 상세 상단에 표시됩니다.</p>
             </div>
           </div>
         </div>

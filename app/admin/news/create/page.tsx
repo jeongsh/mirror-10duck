@@ -45,11 +45,11 @@ export default function CreateNewsPage() {
   };
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6">
+    <div className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-6">
       <div className="border-b border-dashed border-gray-500 pb-4">
         <h2 className="text-xl font-bold">새 뉴스 추가</h2>
         <p className="mt-1 text-sm text-gray-600">
-          운영자가 직접 작성하는 뉴스 본문과 목록 정보를 등록합니다.
+          영문 뉴스 URL로 AI 초안을 만들거나, 직접 뉴스 본문과 목록 정보를 등록합니다.
         </p>
       </div>
 
