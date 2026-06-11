@@ -14,6 +14,23 @@ import {
 import { formatCommunityDate } from "@/lib/utils/formatDate";
 import { Board, CommunityPost, postAggregateDefaults } from "@/types/community";
 
+type HotContentType =
+  | "post"
+  | "topic_event"
+  | "topic_seasonal"
+  | "topic_poll"
+  | "topic_viral"
+  | "topic_sourced";
+
+const HOT_CONTENT_TYPE_LABELS: Record<HotContentType, string> = {
+  post: "게시글",
+  topic_event: "이벤트 떡밥",
+  topic_seasonal: "분기 떡밥",
+  topic_poll: "투표 떡밥",
+  topic_viral: "바이럴 떡밥",
+  topic_sourced: "공식 소식",
+};
+
 function buildPostHref(post: CommunityPost, boardSlugById: Map<string, string>) {
   if (!post.board_id) return "/board";
   const slug = boardSlugById.get(post.board_id);
@@ -96,6 +113,7 @@ export default function HotPage() {
         <h1 className="text-xl font-bold text-gray-900">실시간 베스트 게시판</h1>
         <p className="mt-2 text-sm text-gray-600">
           추천 5점, 댓글 3점, 조회 0.2점으로 계산해 {REALTIME_BEST_MIN_SCORE}점 이상인 게시글을 누적합니다.
+          이후 오늘의 떡밥 카드도 투표, 댓글, 공유, 저장, 조회 기준으로 같은 목록에 붙일 수 있게 타입을 구분합니다.
         </p>
       </header>
 
@@ -116,10 +134,13 @@ export default function HotPage() {
                 <li key={post.id} className="transition-colors hover:bg-white">
                   <Link
                     href={buildPostHref(post, boardSlugById)}
-                    className="grid gap-2 px-4 py-3 sm:grid-cols-[44px_96px_minmax(0,1fr)_120px_72px] sm:items-center"
+                    className="grid gap-2 px-4 py-3 sm:grid-cols-[44px_84px_96px_minmax(0,1fr)_120px_72px] sm:items-center"
                   >
                     <span className="text-sm font-bold tabular-nums text-gray-500">
                       #{index + 1}
+                    </span>
+                    <span className="w-fit border border-dashed border-gray-300 bg-white px-2 py-1 text-xs font-bold text-gray-600">
+                      {HOT_CONTENT_TYPE_LABELS.post}
                     </span>
                     <span className="w-fit border border-dashed border-gray-300 bg-gray-50 px-2 py-1 text-xs text-gray-500">
                       {board?.name ?? "게시판"}

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import HomeTopicSections from "@/components/topics/HomeTopicSections";
 import { supabase } from "@/lib/supabase/client";
 import {
   REALTIME_BEST_FETCH_LIMIT,
@@ -103,6 +104,8 @@ export default function HomeContent() {
 
   return (
     <section className="flex w-full flex-col gap-6">
+      <HomeTopicSections />
+
       <div className="border border-dashed border-gray-500 bg-white/70 p-4">
         <div className="mb-4 flex items-end justify-between border-b border-dashed border-gray-400 pb-2">
           <h2 className="text-xl font-bold text-gray-800">실시간 베스트</h2>

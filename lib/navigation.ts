@@ -18,7 +18,7 @@ const PRIMARY_NAV_ITEMS_BASE: NavItem[] = [
   { href: "/board", label: "채널", matchPrefix: null },
   { href: "/hot", label: "실시간 베스트", matchPrefix: null },
   { href: "/feed", label: "피드", matchPrefix: null },
-  { href: "/news", label: "소식", matchPrefix: null },
+  { href: "/topics", label: "오늘의 떡밥", matchPrefix: "/topics" },
   { href: "/season/current", label: "이번 분기", matchPrefix: "/season" },
   { href: "/events", label: "이벤트", matchPrefix: "/events" },
 ];
