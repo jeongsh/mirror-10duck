@@ -30,19 +30,29 @@ export default function GlobalNavigation() {
     const nav = navRef.current;
     if (!nav) return;
 
-    const syncHeaderHeight = () => {
+    const syncLayoutMetrics = () => {
+      const headerHeight = nav.offsetHeight;
       document.documentElement.style.setProperty(
         "--layout-header-height",
-        `${nav.offsetHeight}px`,
+        `${headerHeight}px`,
+      );
+      document.documentElement.style.setProperty(
+        "--layout-rnb-height",
+        `${window.innerHeight - headerHeight}px`,
       );
     };
 
-    syncHeaderHeight();
+    syncLayoutMetrics();
 
-    const observer = new ResizeObserver(syncHeaderHeight);
+    const observer = new ResizeObserver(syncLayoutMetrics);
     observer.observe(nav);
 
-    return () => observer.disconnect();
+    window.addEventListener("resize", syncLayoutMetrics);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", syncLayoutMetrics);
+    };
   }, []);
 
   useEffect(() => {

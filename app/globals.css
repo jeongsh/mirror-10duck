@@ -28,6 +28,7 @@
   --layout-shell-pad-left: 1rem;
   --layout-shell-pad-right: 1rem;
   --layout-ad-height: min(720px, calc(100dvh - var(--layout-header-height) - var(--layout-main-pt)));
+  --layout-rnb-height: calc(100dvh - var(--layout-header-height));
   --viral-ad-left: calc(var(--layout-shell-offset) + var(--layout-shell-pad-left));
   --viral-ad-top: calc(var(--layout-header-height) + var(--layout-main-pt));
   --viral-ad-right-left: calc(
@@ -39,6 +40,20 @@
   :root {
     --layout-shell-pad-left: var(--layout-gutter);
     --layout-shell-pad-right: 0px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .layout-rnb-aside {
+    position: sticky;
+    top: var(--layout-header-height);
+    height: var(--layout-rnb-height);
+    min-height: 480px;
+  }
+
+  .layout-rnb-panel {
+    height: 100%;
+    min-height: 0;
   }
 }
 

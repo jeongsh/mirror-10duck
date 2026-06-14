@@ -14,12 +14,12 @@ export default function RightSidebar({ characterSlot }: RightSidebarProps) {
   return (
     <aside
       className={[
-        "z-10 hidden shrink-0",
-        "lg:sticky lg:top-[calc(var(--layout-header-height)+var(--layout-main-pt))] lg:block lg:w-[var(--layout-right-width)] lg:self-start lg:pt-6",
+        "layout-rnb-aside z-10 hidden shrink-0",
+        "lg:block lg:w-[var(--layout-right-width)] lg:self-start",
       ].join(" ")}
       aria-label="[Character zone]"
     >
-      <div className="relative flex h-[var(--layout-ad-height)] min-h-[480px] flex-col overflow-hidden border border-dashed border-gray-400 bg-gray-100/40">
+      <div className="layout-rnb-panel relative flex flex-col overflow-hidden border border-dashed border-gray-400 bg-gray-100/40">
         {/* 배경 장식 placeholder */}
         <div className="pointer-events-none absolute inset-0 opacity-40" aria-hidden>
           <div className="absolute left-6 top-8 h-2 w-2 rounded-full bg-gray-300" />
