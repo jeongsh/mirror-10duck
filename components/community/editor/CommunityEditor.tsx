@@ -79,10 +79,18 @@ interface Props {
   onChange: (content: string) => void;
   userId?: string;
   allowMedia?: boolean;
+  moderateImages?: boolean;
   placeholder?: string;
 }
 
-export default function CommunityEditor({ content, onChange, userId, allowMedia = true, placeholder }: Props) {
+export default function CommunityEditor({
+  content,
+  onChange,
+  userId,
+  allowMedia = true,
+  moderateImages = true,
+  placeholder,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [uploadingDropImage, setUploadingDropImage] = useState(false);
   const [imageSizeOverlay, setImageSizeOverlay] = useState<{
@@ -156,7 +164,7 @@ export default function CommunityEditor({ content, onChange, userId, allowMedia 
     setUploadingDropImage(true);
     try {
       for (const file of files) {
-        await uploadAndInsertEditorImage({ editor, file, userId });
+        await uploadAndInsertEditorImage({ editor, file, userId, moderateImages });
       }
     } catch (error) {
       alert("이미지 업로드 실패: " + getPostMediaErrorMessage(error, "알 수 없는 오류"));
@@ -309,7 +317,7 @@ export default function CommunityEditor({ content, onChange, userId, allowMedia 
 
   return (
     <div ref={containerRef} className="relative flex flex-col border border-dashed border-gray-500 bg-white tiptap-container">
-      <Toolbar editor={editor} userId={userId} allowMedia={allowMedia} />
+      <Toolbar editor={editor} userId={userId} allowMedia={allowMedia} moderateImages={moderateImages} />
       {uploadingDropImage ? (
         <div className="border-b border-dashed border-amber-300 bg-amber-50 px-4 py-2 text-xs text-amber-800">
           이미지 업로드 중...

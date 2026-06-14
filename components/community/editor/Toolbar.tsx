@@ -28,9 +28,10 @@ interface Props {
   editor: Editor | null;
   userId?: string;
   allowMedia?: boolean;
+  moderateImages?: boolean;
 }
 
-export default function Toolbar({ editor, userId, allowMedia = true }: Props) {
+export default function Toolbar({ editor, userId, allowMedia = true, moderateImages = true }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [selectedImageType, setSelectedImageType] = useState<"imageResize" | "image" | null>(null);
@@ -113,7 +114,7 @@ export default function Toolbar({ editor, userId, allowMedia = true }: Props) {
 
     setUploadingImage(true);
     try {
-      await uploadAndInsertEditorImage({ editor, file, userId });
+      await uploadAndInsertEditorImage({ editor, file, userId, moderateImages });
     } catch (error) {
       alert("이미지 업로드 실패: " + getPostMediaErrorMessage(error, "알 수 없는 오류"));
     } finally {

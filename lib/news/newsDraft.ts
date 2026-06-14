@@ -1,6 +1,7 @@
 import type { OtakuCategory } from "@/lib/otaku/hub";
 
-export type NewsNameMapping = {  original: string;
+export type NewsNameMapping = {
+  original: string;
   koreanOfficial: string;
   type: "work" | "character" | "nickname" | "other";
   namuwikiMatched?: boolean;
@@ -43,7 +44,7 @@ export function normalizeNameMappings(value: unknown): NewsNameMapping[] {
       const row = item as Record<string, unknown>;
       const original = stringValue(row.original);
       const koreanOfficial = stringValue(row.koreanOfficial);
-      if (!original || !koreanOfficial) return null;
+      if (!original) return null;
       const mapping: NewsNameMapping = {
         original,
         koreanOfficial,

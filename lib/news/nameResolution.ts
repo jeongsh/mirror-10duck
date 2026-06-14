@@ -64,7 +64,7 @@ function escapeRegExp(value: string): string {
 }
 
 function replaceWholeTerm(text: string, from: string, to: string): string {
-  if (!from.trim() || from === to) return text;
+  if (!from.trim() || !to.trim() || from === to) return text;
   const pattern = new RegExp(escapeRegExp(from), "gi");
   return text.replace(pattern, to);
 }

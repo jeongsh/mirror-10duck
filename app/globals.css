@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
-@import "overlayscrollbars/styles/overlayscrollbars.css";
 
 @theme {
   --font-sans: var(--font-pretendard), "Pretendard Variable", "Pretendard", -apple-system,
@@ -22,7 +21,7 @@
   --layout-live2d-width: 320px;
   --layout-column-gap: 32px;
   --layout-header-height: 57px;
-  --layout-main-pt: 1.5rem; /* lg:pt-6 — 스크롤바 시작 위치와 동기화 */
+  --layout-main-pt: 1.5rem; /* lg:pt-6 — LNB/RNB sticky top과 동기화 */
 
   /* MainLayoutClient shell — 바이럴 광고 좌표와 동기화 */
   --layout-shell-offset: max(0px, calc((100vw - var(--layout-max)) / 2));
@@ -94,13 +93,6 @@ body {
   }
 }
 
-@media (min-width: 1024px) {
-  body:has([data-layout-chrome]) {
-    overflow: hidden;
-    height: 100dvh;
-  }
-}
-
 /* 바이럴 — 페이지가 자체 배경(크림·그라데이션 등)을 전폭으로 깔도록 body 회색 제거 */
 body:has([data-layout-viral]) {
   background: transparent;
@@ -156,50 +148,4 @@ body:has([data-layout-viral]) {
   .viral-ad-slot {
     display: block;
   }
-}
-
-/* OverlayScrollbars — .os-scrollbar 기본값(--os-size:0)보다 specificity 높게 */
-.os-theme-layout-main.os-scrollbar {
-  box-sizing: border-box;
-  --os-size: 16px;
-  --os-padding-perpendicular: 5px;
-  --os-padding-axis: 0;
-  --os-track-border-radius: 9999px;
-  --os-track-bg: rgb(156 163 175 / 0.2);
-  --os-track-bg-hover: rgb(156 163 175 / 0.28);
-  --os-track-bg-active: rgb(156 163 175 / 0.34);
-  --os-handle-border-radius: 9999px;
-  --os-handle-min-size: 56px;
-  --os-handle-max-size: none;
-  --os-handle-perpendicular-size: 100%;
-  --os-handle-perpendicular-size-hover: 100%;
-  --os-handle-perpendicular-size-active: 100%;
-  --os-handle-interactive-area-offset: 8px;
-  --os-handle-bg: rgb(75 85 99 / 0.82);
-  --os-handle-bg-hover: rgb(55 65 81 / 0.92);
-  --os-handle-bg-active: rgb(31 41 55 / 0.96);
-}
-
-.os-theme-layout-main.os-scrollbar-vertical .os-scrollbar-handle {
-  box-shadow:
-    0 1px 3px rgb(0 0 0 / 0.14),
-    inset 0 1px 0 rgb(255 255 255 / 0.25);
-  transition:
-    background-color 0.2s ease,
-    width 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.os-theme-layout-main.os-scrollbar-vertical .os-scrollbar-handle:hover {
-  box-shadow:
-    0 2px 8px rgb(0 0 0 / 0.18),
-    inset 0 1px 0 rgb(255 255 255 / 0.3);
-}
-
-.os-theme-layout-main.os-scrollbar.os-scrollbar-vertical {
-  top: var(--layout-main-pt);
-}
-
-.os-theme-layout-main.os-scrollbar-vertical .os-scrollbar-track {
-  transition: background-color 0.2s ease;
 }

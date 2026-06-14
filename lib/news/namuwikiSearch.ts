@@ -5,6 +5,25 @@ const SUBPAGE_SUFFIX_PATTERN =
   /\/(?:코믹스|애니메이션|등장인물|라이트\s*노벨|웹(?:툰|소)|소설|TV\s*애니메이션|OVA|극장판)$/;
 
 const PREFERRED_SUBPAGE_KEYWORDS = ["애니메이션", "라이트 노벨", "코믹스", "웹툰", "웹소", "소설"];
+const BLOCKED_TITLE_PREFIXES = ["사용자:", "틀:", "파일:", "분류:"];
+const ENGLISH_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "are",
+  "at",
+  "by",
+  "for",
+  "from",
+  "in",
+  "is",
+  "of",
+  "on",
+  "or",
+  "the",
+  "to",
+  "with",
+]);
 
 export type NamuwikiSearchHit = {
   fullTitle: string;
@@ -36,7 +55,7 @@ function tokenizeEnglish(value: string): string[] {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .split(" ")
-    .filter((token) => token.length > 1);
+    .filter((token) => token.length > 1 && !ENGLISH_STOP_WORDS.has(token));
 }
 
 function containsHangul(value: string): boolean {
@@ -81,6 +100,17 @@ export function isSameNamuwikiTitle(a: string, b: string): boolean {
   return normalizeTitleKey(a) === normalizeTitleKey(b);
 }
 
+function isBlockedNamuwikiTitle(title: string): boolean {
+  const decoded = decodeHtmlEntities(title.trim());
+  return BLOCKED_TITLE_PREFIXES.some((prefix) => decoded.startsWith(prefix));
+}
+
+function hasBlockedNamuwikiNamespace(hit: NamuwikiSearchHit): boolean {
+  if (isBlockedNamuwikiTitle(hit.fullTitle) || isBlockedNamuwikiTitle(hit.shortTitle)) return true;
+  const decodedHref = decodeURIComponent(hit.href);
+  return BLOCKED_TITLE_PREFIXES.some((prefix) => decodedHref.includes(`/w/${prefix}`));
+}
+
 function isLikelyWorkTitleCandidate(title: string, workTitle?: string): boolean {
   if (!workTitle) return false;
   if (isSameNamuwikiTitle(title, workTitle)) return true;
@@ -100,8 +130,18 @@ function hasOriginalNameEvidence(hit: NamuwikiSearchHit, original: string): bool
     return key.length > 0 && haystack.includes(key);
   }
 
-  const haystack = normalizeForMatch(`${hit.fullTitle} ${hit.snippet}`);
-  return tokens.some((token) => haystack.includes(token));
+  return hasEnoughEnglishTokenEvidence(hit, tokens);
+}
+
+function hasEnoughEnglishTokenEvidence(hit: NamuwikiSearchHit, tokens: string[]): boolean {
+  if (tokens.length === 0) return true;
+
+  const haystack = normalizeForMatch(`${hit.fullTitle} ${hit.snippet} ${decodeURIComponent(hit.href)}`);
+  const matchedCount = tokens.filter((token) => haystack.includes(token)).length;
+  const requiredCount =
+    tokens.length <= 2 ? tokens.length : Math.max(2, Math.ceil(tokens.length * 0.7));
+
+  return matchedCount >= requiredCount;
 }
 
 function hasWorkContextEvidence(hit: NamuwikiSearchHit, workTitle?: string): boolean {
@@ -120,10 +160,42 @@ function hasWorkContextEvidence(hit: NamuwikiSearchHit, workTitle?: string): boo
   return hit.href.includes("%EB%93%B1%EC%9E%A5%EC%9D%B8%EB%AC%BC") || hit.fullTitle.includes("등장인물");
 }
 
-function scoreNamuwikiHit(hit: NamuwikiSearchHit, query: string): number {
+function hasEnoughEnglishTitleEvidence(hit: NamuwikiSearchHit, tokens: string[]): boolean {
+  if (tokens.length === 0) return true;
+
+  const titleHaystack = normalizeForMatch(`${hit.fullTitle} ${hit.shortTitle} ${decodeURIComponent(hit.href)}`);
+  const matchedCount = tokens.filter((token) => titleHaystack.includes(token)).length;
+  const requiredCount =
+    tokens.length <= 2 ? tokens.length : Math.max(2, Math.ceil(tokens.length * 0.7));
+
+  return matchedCount >= requiredCount;
+}
+
+function hasExactEnglishTitleMatch(hit: NamuwikiSearchHit, query: string): boolean {
+  const queryKey = normalizeForMatch(query);
+  const hrefTitle = decodeURIComponent(hit.href).replace(/^\/w\//, "");
+
+  return [hit.fullTitle, hit.shortTitle, hrefTitle].some(
+    (candidate) => normalizeForMatch(candidate) === queryKey,
+  );
+}
+
+function scoreNamuwikiHit(
+  hit: NamuwikiSearchHit,
+  query: string,
+  options?: { requireTitleEvidence?: boolean },
+): number {
   const queryTokens = tokenizeEnglish(query);
   const haystack = normalizeForMatch(`${hit.fullTitle} ${hit.snippet}`);
   let score = 0;
+
+  if (hasBlockedNamuwikiNamespace(hit)) return -100;
+  if (!hasEnoughEnglishTokenEvidence(hit, queryTokens)) return -100;
+  if (options?.requireTitleEvidence && !hasEnoughEnglishTitleEvidence(hit, queryTokens)) {
+    return -100;
+  }
+
+  if (hasExactEnglishTitleMatch(hit, query)) score += 30;
 
   if (containsHangul(hit.shortTitle)) score += 4;
 
@@ -150,7 +222,7 @@ function pickBestNamuwikiHit(hits: NamuwikiSearchHit[], query: string): Namuwiki
   if (hits.length === 0) return null;
 
   const ranked = [...hits]
-    .map((hit) => ({ hit, score: scoreNamuwikiHit(hit, query) }))
+    .map((hit) => ({ hit, score: scoreNamuwikiHit(hit, query, { requireTitleEvidence: true }) }))
     .sort((a, b) => b.score - a.score);
 
   const best = ranked[0];
@@ -210,6 +282,29 @@ async function fetchNamuwikiHtml(path: string): Promise<string | null> {
   }
 }
 
+function extractNamuwikiDocumentTitle(html: string): string | null {
+  const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  if (!match) return null;
+
+  const title = decodeHtmlEntities(stripHtmlTags(match[1] ?? "").replace(/\s+/g, " ").trim())
+    .replace(/\s+-\s+나무위키\s*$/, "")
+    .trim();
+  const shortTitle = extractShortNamuwikiTitle(title);
+
+  if (!shortTitle || isBlockedNamuwikiTitle(shortTitle)) return null;
+  return shortTitle;
+}
+
+async function resolveNamuwikiHitTitle(hit: NamuwikiSearchHit): Promise<string | null> {
+  const html = await fetchNamuwikiHtml(hit.href);
+  const documentTitle = html ? extractNamuwikiDocumentTitle(html) : null;
+  const fallbackTitle = extractShortNamuwikiTitle(hit.shortTitle);
+  const title = documentTitle ?? fallbackTitle;
+
+  if (!title || isBlockedNamuwikiTitle(title)) return null;
+  return title;
+}
+
 export async function searchNamuwiki(query: string): Promise<NamuwikiSearchHit[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];
@@ -223,7 +318,7 @@ export async function resolveWorkTitleFromNamuwiki(englishTitle: string): Promis
   const hits = await searchNamuwiki(englishTitle);
   const best = pickBestNamuwikiHit(hits, englishTitle);
   if (!best?.shortTitle) return null;
-  return best.shortTitle;
+  return resolveNamuwikiHitTitle(best);
 }
 
 export async function resolveNameFromNamuwiki(
@@ -244,8 +339,10 @@ export async function resolveNameFromNamuwiki(
     const hits = await searchNamuwiki(query);
     const best = pickBestCharacterHit(hits, original, context?.workTitle);
     if (!best?.shortTitle) continue;
-    if (isLikelyWorkTitleCandidate(best.shortTitle, context?.workTitle)) continue;
-    return best.shortTitle;
+    const resolvedTitle = await resolveNamuwikiHitTitle(best);
+    if (!resolvedTitle) continue;
+    if (isLikelyWorkTitleCandidate(resolvedTitle, context?.workTitle)) continue;
+    return resolvedTitle;
   }
 
   return null;

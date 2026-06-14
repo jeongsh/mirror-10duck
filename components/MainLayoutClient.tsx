@@ -6,7 +6,6 @@ import { getLayoutChromeMode } from "@/lib/layoutChrome";
 import DailyLoginXp from "./DailyLoginXp";
 import LeftSidebar from "./LeftSidebar";
 import Live2DClientOnly from "./Live2DClientOnly";
-import MainScrollArea from "./MainScrollArea";
 import RightSidebar from "./RightSidebar";
 import ViralLayoutClient from "./ViralLayoutClient";
 
@@ -16,9 +15,8 @@ const SHELL_CLASS = [
 ].join(" ");
 
 const GRID_CLASS = [
-  "grid grid-cols-1 items-stretch",
+  "grid grid-cols-1 items-start",
   "lg:grid-cols-[var(--layout-left-width)_minmax(0,1fr)_var(--layout-right-width)] lg:gap-x-[var(--layout-column-gap)]",
-  "lg:h-[calc(100dvh-var(--layout-header-height))] lg:overflow-hidden",
   "min-[1920px]:grid-cols-[var(--layout-left-width)_var(--layout-main-width)_var(--layout-right-width)]",
 ].join(" ");
 
@@ -55,12 +53,9 @@ export default function MainLayoutClient({ children }: { children: React.ReactNo
       <DailyLoginXp />
       <div className={GRID_CLASS}>
         <LeftSidebar />
-        <MainScrollArea
-          className="min-h-0 min-w-0 w-full lg:h-full"
-          mobileClassName="min-h-0 min-w-0 w-full pb-24"
-        >
+        <div className="min-w-0 w-full pb-24 lg:pb-4">
           <div className="lg:pt-6 lg:pb-4 lg:pr-4">{children}</div>
-        </MainScrollArea>
+        </div>
         {isDesktop ? <RightSidebar characterSlot={<Live2DClientOnly variant="desktop" />} /> : null}
       </div>
       {!isDesktop ? <Live2DClientOnly variant="mobile" /> : null}

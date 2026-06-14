@@ -18,17 +18,48 @@ export function getImageSize(file: File) {
   });
 }
 
+async function uploadDirectEditorImage(file: File): Promise<string> {
+  const fileExt = file.name.split(".").pop() || "jpg";
+  const filePath = `editor-images/${crypto.randomUUID()}.${fileExt}`;
+  const { error } = await supabase.storage.from("post-assets").upload(filePath, file);
+
+  if (error) throw error;
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from("post-assets").getPublicUrl(filePath);
+
+  return publicUrl;
+}
+
 export async function uploadAndInsertEditorImage(params: {
   editor: Editor;
   file: File;
   userId?: string;
+  moderateImages?: boolean;
 }): Promise<void> {
-  const { editor, file, userId } = params;
+  const { editor, file, userId, moderateImages = true } = params;
   if (!file.type.startsWith("image/")) {
     throw new Error("이미지 파일만 업로드할 수 있습니다.");
   }
 
   const imageSize = await getImageSize(file);
+  const initialWidth = imageSize.width > 0 ? Math.min(imageSize.width, 760) : 760;
+  const imageAttrs = {
+    width: initialWidth,
+    containerStyle: `width: ${initialWidth}px; height: auto; cursor: pointer; margin: 0.5rem auto;`,
+    wrapperStyle: "display: flex; margin: 0;",
+  };
+
+  if (!moderateImages) {
+    const publicUrl = await uploadDirectEditorImage(file);
+    editor.chain().focus().setImage({
+      src: publicUrl,
+      ...imageAttrs,
+    } as any).run();
+    return;
+  }
+
   const resolvedUserId = userId ?? (await supabase.auth.getUser()).data.user?.id;
   if (!resolvedUserId) {
     throw new Error("이미지를 업로드하려면 로그인이 필요합니다.");
@@ -42,13 +73,9 @@ export async function uploadAndInsertEditorImage(params: {
     height: imageSize.height,
   });
 
-  const initialWidth = imageSize.width > 0 ? Math.min(imageSize.width, 760) : 760;
-
   editor.chain().focus().setImage({
     src: asset.previewUrl,
-    width: initialWidth,
-    containerStyle: `width: ${initialWidth}px; height: auto; cursor: pointer; margin: 0.5rem auto;`,
-    wrapperStyle: "display: flex; margin: 0;",
+    ...imageAttrs,
     mediaAssetId: asset.id,
     mediaStatus: asset.scanStatus,
     mediaBucket: asset.bucketId,

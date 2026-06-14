@@ -143,6 +143,7 @@ export function NewsForm({
           onChange={(content) => set("body", content)}
           userId={authUser?.id ?? ""}
           allowMedia={true}
+          moderateImages={false}
           placeholder="내용을 작성해 주세요."
         />
       </div>
