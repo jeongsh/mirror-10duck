@@ -3,12 +3,18 @@
 import {
   BadgeCheck,
   BarChart3,
+  CalendarDays,
+  Heart,
   Image as ImageIcon,
   ListFilter,
   Loader2,
+  MapPin,
   Smile,
+  Users,
+  X,
 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import FeedMediaGrid from "@/components/community/feed/FeedMediaGrid";
 import StickerPicker from "@/components/stickers/StickerPicker";
 import { insertAtContentEditable } from "@/lib/stickers/insertAtCursor";
@@ -29,6 +35,13 @@ import {
 
 const MAX_FEED_LENGTH = 280;
 const MAX_MEDIA_COUNT = 4;
+const MOCK_EVENT = {
+  id: "e02d23ce-10f5-4773-b84c-52507367d928",
+  title: "코믹월드 SUMMER 2026",
+  startsAt: "2026.07.18 - 07.19",
+  location: "일산 킨텍스 제1전시장",
+  imageUrl: "https://comicw.net/data/item/1775781342/16_7ISc7L2U7Ys7Iqk7YSw_7I2464Sk7J28.png",
+};
 
 type MediaDraft = {
   id: string;
@@ -62,11 +75,13 @@ export default function FeedComposer({
   autoFocus = false,
   showReplyControl = true,
 }: FeedComposerProps) {
+  const router = useRouter();
   const [content, setContent] = useState("");
   const [media, setMedia] = useState<MediaDraft[]>([]);
   const [focused, setFocused] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [mockPickerType, setMockPickerType] = useState<"wish" | "recruit" | null>(null);
   const [replyPolicy, setReplyPolicy] = useState<ReplyPolicy>("everyone");
   const [replyMenuOpen, setReplyMenuOpen] = useState(false);
   const [restoreCaret, setRestoreCaret] = useState<number | null>(null);
@@ -118,6 +133,10 @@ export default function FeedComposer({
     );
     setRestoreCaret(cursor);
     setContent(next);
+  };
+
+  const openMockPicker = (type: "wish" | "recruit") => {
+    setMockPickerType(type);
   };
 
   const addMediaFiles = (files: File[]) => {
@@ -372,6 +391,18 @@ export default function FeedComposer({
         <button type="button" disabled className={iconButtonClass} title="GIF">
           <span className="text-[10px] font-black">GIF</span>
         </button>
+        <AttachmentToolButton
+          label="위시"
+          icon={<Heart size={15} />}
+          onClick={() => openMockPicker("wish")}
+          disabled={disabled || loading}
+        />
+        <AttachmentToolButton
+          label="모집"
+          icon={<Users size={15} />}
+          onClick={() => openMockPicker("recruit")}
+          disabled={disabled || loading}
+        />
         <button type="button" disabled className={iconButtonClass} title="Grok">
           <Smile size={18} />
         </button>
@@ -414,6 +445,144 @@ export default function FeedComposer({
           {message}
         </p>
       ) : null}
+
+      {mockPickerType ? (
+        <MockEventPickerModal
+          type={mockPickerType}
+          onClose={() => setMockPickerType(null)}
+          onOpenEvent={() => router.push(`/events/${MOCK_EVENT.id}`)}
+        />
+      ) : null}
     </form>
+  );
+}
+
+function MockEventPickerModal({
+  type,
+  onClose,
+  onOpenEvent,
+}: {
+  type: "wish" | "recruit";
+  onClose: () => void;
+  onOpenEvent: () => void;
+}) {
+  const isWish = type === "wish";
+  const cards = [
+    {
+      id: `${type}-event-main`,
+      eyebrow: isWish ? "위시 이벤트" : "모집 이벤트",
+      description: isWish ? "관심 이벤트로 담아둘 항목" : "동행이나 공구 모집으로 이어질 항목",
+    },
+    {
+      id: `${type}-event-sub`,
+      eyebrow: isWish ? "가고 싶음" : "동행 모집",
+      description: isWish ? "일정 확인 후 위시로 저장할 이벤트" : "함께 갈 사람을 찾는 모집 카드",
+    },
+  ];
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
+      onClick={(event) => {
+        event.stopPropagation();
+        onClose();
+      }}
+    >
+      <div
+        className="flex max-h-[86vh] w-full max-w-xl flex-col overflow-hidden rounded-[8px] border border-gray-200 bg-white shadow-xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+          <div>
+            <p className="text-[11px] font-bold uppercase text-gray-400">
+              {isWish ? "Wishlist" : "Recruit"}
+            </p>
+            <h2 className="text-sm font-bold text-gray-950">
+              {isWish ? "위시 카드 선택" : "모집 카드 선택"}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:bg-gray-100"
+            title="닫기"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="grid gap-2 overflow-y-auto p-3">
+          {cards.map((card) => (
+            <button
+              key={card.id}
+              type="button"
+              onClick={onOpenEvent}
+              className="group flex min-w-0 items-center gap-3 rounded-[8px] border border-gray-200 bg-white p-2 text-left hover:border-gray-900 hover:bg-gray-50"
+            >
+              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-[6px] border border-gray-200 bg-gray-100">
+                <img
+                  src={MOCK_EVENT.imageUrl}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 flex items-center gap-2">
+                  <span
+                    className={`rounded-[6px] px-2 py-0.5 text-[11px] font-bold ${
+                      isWish ? "bg-rose-50 text-rose-700" : "bg-sky-50 text-sky-700"
+                    }`}
+                  >
+                    {card.eyebrow}
+                  </span>
+                </div>
+                <p className="line-clamp-1 text-sm font-bold text-gray-950 group-hover:underline">
+                  {MOCK_EVENT.title}
+                </p>
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-gray-500">
+                  <span className="flex items-center gap-1">
+                    <CalendarDays size={13} />
+                    {MOCK_EVENT.startsAt}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <MapPin size={13} />
+                    {MOCK_EVENT.location}
+                  </span>
+                </div>
+                <p className="mt-1 line-clamp-1 text-xs text-gray-500">{card.description}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AttachmentToolButton({
+  label,
+  icon,
+  onClick,
+  disabled,
+}: {
+  label: string;
+  icon: ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
+      disabled={disabled}
+      className="flex h-9 items-center gap-1.5 border border-dashed border-gray-300 bg-white px-3 text-xs font-bold text-gray-700 hover:bg-gray-100 disabled:opacity-40"
+      title={`${label} 카드`}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
